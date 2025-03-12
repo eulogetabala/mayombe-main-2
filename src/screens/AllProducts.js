@@ -1,0 +1,392 @@
+import React, { useState, useEffect, useLayoutEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  Image,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform,
+} from 'react-native';
+import { Ionicons } from "@expo/vector-icons";
+import ProductModal from '../components/ProductModal';
+import { useLanguage } from '../context/LanguageContext';
+import { translations } from '../translations';
+
+
+const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+
+const AllProducts = ({ navigation }) => {
+  const { currentLanguage } = useLanguage();
+  const t = translations[currentLanguage];
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+  }, [navigation]);
+
+  const handleProductPress = (product) => {
+    setSelectedProduct(product);
+    setModalVisible(true);
+  };
+
+  const handleAddToCart = (product) => {
+    console.log('Produit ajouté au panier:', product);
+  };
+
+  const normalizeAndTranslateIngredient = (ingredientName) => {
+    const normalized = ingredientName?.toLowerCase()
+      .replace(/[éèêë]/g, 'e')
+      .replace(/[àâä]/g, 'a')
+      .replace(/[ïî]/g, 'i')
+      .replace(/[ôö]/g, 'o')
+      .replace(/[ûüù]/g, 'u')
+      .replace(/[^a-z]/g, '');
+    return t.ingredients[normalized] || ingredientName;
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/products-list`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok && Array.isArray(data)) {
+        const mappedProducts = data.map((product) => {
+          const hasValidImage = product.image_url && 
+            product.image_url.startsWith('products/');
+
+          const imageUrl = hasValidImage
+            ? `https://www.api-mayombe.mayombe-app.com/public/storage/${product.image_url}`
+            : null;
+
+          return {
+            id: product.id,
+            name: product.name || product.libelle || "",
+            price: product.price || "",
+            description: product.description || "",
+            imageUrl: imageUrl,
+            hasValidImage: hasValidImage,
+            image: hasValidImage 
+              ? { uri: imageUrl }
+              : require('../../assets/images/3.jpg'),
+            rating: product.rating || 4.5,
+            numberOfRatings: product.reviews_count || Math.floor(Math.random() * 50) + 10,
+            inStock: product.status === 1,
+            isNew: product.is_new || false,
+            discount: product.discount || null,
+            oldPrice: product.old_price || null
+          };
+        });
+
+        setProducts(mappedProducts);
+      }
+    } catch (error) {
+      // console.error('Erreur lors du chargement des produits:', error);
+      setError(t.products.loadError);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderProduct = ({ item }) => (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => handleProductPress(item)}
+    >
+      <Image 
+        source={item.hasValidImage ? { uri: item.imageUrl } : require('../../assets/images/3.jpg')}
+        style={styles.productImage}
+        defaultSource={require('../../assets/images/3.jpg')}
+      />
+      {item.discount && (
+        <View style={styles.discountBadge}>
+          <Text style={styles.discountText}>
+            -{item.discount}%
+          </Text>
+        </View>
+      )}
+      {item.isNew && (
+        <View style={styles.newBadge}>
+          <Text style={styles.newText}>{t.products.new}</Text>
+        </View>
+      )}
+      <View style={styles.productInfo}>
+        <Text style={styles.productName}>{item.name}</Text>
+        <View style={styles.priceContainer}>
+          <Text style={styles.productPrice}>{`${item.price} ${t.products.currency}`}</Text>
+          {item.oldPrice && (
+            <Text style={styles.oldPrice}>{`${item.oldPrice} ${t.products.currency}`}</Text>
+          )}
+        </View>
+        {item.rating && (
+          <View style={styles.ratingContainer}>
+            <Ionicons name="star" size={14} color="#FFD700" />
+            <Text style={styles.ratingText}>
+              {item.rating} ({item.numberOfRatings})
+            </Text>
+          </View>
+        )}
+        {item.ingredients && item.ingredients.length > 0 && (
+          <Text style={styles.ingredients} numberOfLines={1}>
+            {item.ingredients.join(', ')}
+          </Text>
+        )}
+      </View>
+      <TouchableOpacity
+        style={[
+          styles.addButton,
+          !item.inStock && styles.addButtonDisabled
+        ]}
+        onPress={() => handleProductPress(item)}
+        disabled={!item.inStock}
+      >
+        <Ionicons name="add" size={20} color="#FFF" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FF9800" />
+        <Text style={styles.loadingText}>{t.products.loading}</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
+          <Text style={styles.retryButtonText}>{t.home.retry}</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#000" />
+          <Text style={styles.backText}>{t.common.cancel}</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t.products.allProducts}</Text>
+      </View>
+      <FlatList
+        data={products}
+        renderItem={renderProduct}
+        keyExtractor={(item) => item.id.toString()}
+        numColumns={2}
+        contentContainerStyle={styles.productGrid}
+        removeClippedSubviews={true}
+        initialNumToRender={6}
+        maxToRenderPerBatch={10}
+        windowSize={11}
+        ListFooterComponent={<View style={{ height: Platform.OS === 'android' ? 80 : 30 }} />}
+      />
+      <ProductModal
+        visible={modalVisible}
+        product={selectedProduct}
+        onClose={() => setModalVisible(false)}
+        onAddToCart={handleAddToCart}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  header: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Platform.OS === 'ios' ? 50 : 35,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backText: {
+    fontSize: 16,
+    color: '#000',
+    marginLeft: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: 'Montserrat-Bold',
+    color: '#333',
+    marginLeft: 16,
+    flex: 1,
+  },
+  productGrid: {
+    padding: 10,
+    paddingBottom: Platform.OS === 'android' ? 70 : 20,
+  },
+  card: {
+    flex: 1,
+    margin: 6,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    maxWidth: '48%',
+  },
+  productImage: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+    marginBottom: 8,
+    resizeMode: 'cover',
+  },
+  productInfo: {
+    padding: 6,
+  },
+  productName: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+    fontFamily: 'Montserrat-Bold',
+  },
+  productPrice: {
+    fontSize: 14,
+    color: '#4CAF50',
+    fontWeight: 'bold',
+    fontFamily: 'Montserrat',
+  },
+  discountBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 16,
+    zIndex: 1,
+  },
+  discountText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: 'Montserrat-Bold',
+  },
+  addButton: {
+    position: 'absolute',
+    right: 6,
+    bottom: 6,
+    backgroundColor: '#4CAF50',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#FF6B6B',
+    marginBottom: 10,
+  },
+  retryButton: {
+    backgroundColor: '#FF9800',
+    padding: 10,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: '#FFF',
+  },
+  ingredients: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Montserrat',
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  oldPrice: {
+    fontSize: 12,
+    color: '#999',
+    textDecorationLine: 'line-through',
+    fontFamily: 'Montserrat-Regular',
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  ratingText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Montserrat-Regular',
+  },
+  newBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 16,
+    zIndex: 1,
+  },
+  newText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: 'Montserrat-Bold',
+  },
+});
+
+export default AllProducts; 
