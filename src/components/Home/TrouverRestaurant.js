@@ -306,8 +306,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   title: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    
     color: '#333',
     marginBottom: 6,
     fontFamily: 'Montserrat-Bold',

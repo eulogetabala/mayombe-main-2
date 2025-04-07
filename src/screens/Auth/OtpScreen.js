@@ -12,73 +12,142 @@ import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
+const formatPhoneNumber = (phone) => {
+  // Nettoyer le numéro de téléphone (enlever les espaces, tirets, etc.)
+  let cleanNumber = phone.replace(/[\s-]/g, '');
+  
+  // Si le numéro commence déjà par un +, on le garde tel quel
+  if (cleanNumber.startsWith('+')) {
+    return cleanNumber;
+  }
+
+  // Si le numéro commence par 00, on remplace par +
+  if (cleanNumber.startsWith('00')) {
+    return '+' + cleanNumber.substring(2);
+  }
+
+  // Pour les numéros congolais sans indicatif
+  if (cleanNumber.startsWith('0')) {
+    cleanNumber = cleanNumber.substring(1);
+  }
+  
+  // Si le numéro commence par 242, on ajoute juste le +
+  if (cleanNumber.startsWith('242')) {
+    return '+' + cleanNumber;
+  }
+  
+  // Par défaut, on ajoute l'indicatif du Congo
+  return '+242' + cleanNumber;
+};
+
 export default function OtpScreen({ navigation, route }) {
-  const phoneNumber = route?.params?.phoneNumber || 'Numéro inconnu';
+  const rawPhoneNumber = route?.params?.phoneNumber || 'Numéro inconnu';
+  const phoneNumber = formatPhoneNumber(rawPhoneNumber);
 
   const [otp, setOtp] = useState(['', '', '', '']); // 4 champs pour OTP
   const [timer, setTimer] = useState(59); // Timer pour le renvoi
-  const inputRefs = useRef([]); // Utilisation de useRef pour gérer les références
+  const [isResending, setIsResending] = useState(false);
+  const inputRefs = useRef([]);
 
   useEffect(() => {
     if (timer > 0) {
       const interval = setInterval(() => setTimer((prev) => prev - 1), 1000);
-      return () => clearInterval(interval); // Nettoyer l'intervalle
+      return () => clearInterval(interval);
     }
   }, [timer]);
 
   const handleInputChange = (text, index) => {
+    // Accepter uniquement les chiffres
+    if (!/^\d*$/.test(text)) return;
+
     const newOtp = [...otp];
     newOtp[index] = text;
     setOtp(newOtp);
 
-    // Passer automatiquement au champ suivant
     if (text && index < otp.length - 1) {
       inputRefs.current[index + 1]?.focus();
     }
-
-    // Revenir au champ précédent si l'utilisateur supprime
     if (!text && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
   const handleActivateAccount = async () => {
-    const enteredOtp = otp.join(''); // Combine les 4 champs OTP
+    const enteredOtp = otp.join('');
     if (enteredOtp.length < 4) {
       Alert.alert('Erreur', 'Veuillez entrer un code OTP complet.');
       return;
     }
 
     try {
+      console.log('Tentative d\'activation avec le numéro:', phoneNumber);
       const response = await fetch(
         'https://www.api-mayombe.mayombe-app.com/public/api/activate-account',
         {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
           },
-          body: JSON.stringify({ otp: enteredOtp }),
+          body: JSON.stringify({ 
+            otp: enteredOtp,
+            phone: phoneNumber
+          }),
         }
       );
 
       const data = await response.json();
+      console.log('Réponse activation:', data);
 
       if (response.ok) {
         Alert.alert('Succès', 'Compte activé avec succès !');
-        navigation.navigate('Home'); // Redirige vers la page de connexion
+        navigation.navigate('Home');
       } else {
-        Alert.alert('Erreur', data.message || 'Activation échouée.');
+        console.error('Erreur activation:', data);
+        Alert.alert('Erreur', data.message || 'Code OTP invalide ou expiré.');
       }
     } catch (error) {
+      console.error('Erreur activation:', error);
       Alert.alert('Erreur', 'Impossible de se connecter au serveur.');
-      console.error(error);
     }
   };
 
-  const handleResendCode = () => {
-    setTimer(59);
-    // Logique pour renvoyer le code OTP
-    Alert.alert('Code renvoyé', 'Un nouveau code OTP a été envoyé.');
+  const handleResendCode = async () => {
+    if (isResending) return;
+    
+    setIsResending(true);
+    try {
+      console.log('Tentative de renvoi du code au numéro:', phoneNumber);
+      const response = await fetch(
+        'https://www.api-mayombe.mayombe-app.com/public/api/resend-otp',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({ 
+            phone: phoneNumber
+          }),
+        }
+      );
+
+      const data = await response.json();
+      console.log('Réponse renvoi:', data);
+
+      if (response.ok) {
+        setTimer(59);
+        Alert.alert('Succès', 'Un nouveau code OTP a été envoyé.');
+      } else {
+        console.error('Erreur renvoi:', data);
+        Alert.alert('Erreur', data.message || 'Impossible de renvoyer le code.');
+      }
+    } catch (error) {
+      console.error('Erreur renvoi:', error);
+      Alert.alert('Erreur', 'Impossible de se connecter au serveur.');
+    } finally {
+      setIsResending(false);
+    }
   };
 
   return (

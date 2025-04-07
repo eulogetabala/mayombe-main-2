@@ -71,7 +71,7 @@ const LoginScreen = ({ navigation }) => {
 
     try {
       const response = await fetch(
-        "http://www.api-mayombe.mayombe-app.com/public/api/login",
+        "https://www.api-mayombe.mayombe-app.com/public/api/login",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

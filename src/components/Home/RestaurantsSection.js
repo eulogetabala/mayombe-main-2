@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Bold',
     color: '#333',
     marginBottom: 4,
-    fontWeight: 'bold',
+    
   },
   infoRow: {
     flexDirection: 'row',

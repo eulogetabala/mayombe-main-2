@@ -5,6 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 
+const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+
 const ProfileScreen = ({ navigation }) => {
   const [userData, setUserData] = useState({
     name: 'Utilisateur',
@@ -23,18 +25,32 @@ const ProfileScreen = ({ navigation }) => {
     try {
       const userToken = await AsyncStorage.getItem('userToken');
       if (userToken) {
-        const response = await fetch('http://www.api-mayombe.mayombe-app.com/public/api/user', {
+        console.log('Tentative de récupération des données utilisateur...');
+        const response = await fetch(`${API_BASE_URL}/user`, {
           headers: {
             'Authorization': `Bearer ${userToken}`,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
           },
         });
-        const data = await response.json();
-        if (response.ok) {
-          setUserData(data);
+        
+        if (!response.ok) {
+          console.error('Erreur API:', response.status);
+          throw new Error(`Erreur HTTP: ${response.status}`);
         }
+
+        const data = await response.json();
+        console.log('Données utilisateur reçues:', data);
+        setUserData(data);
       }
     } catch (error) {
-      console.error('Erreur:', error);
+      console.error('Erreur lors du chargement des données utilisateur:', error);
+      // Gérer l'erreur de manière appropriée
+      setUserData({
+        name: 'Erreur de chargement',
+        phone: 'Non disponible',
+        email: 'Non disponible',
+      });
     }
   };
 

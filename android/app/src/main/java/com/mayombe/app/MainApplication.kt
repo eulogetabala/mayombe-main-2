@@ -1,4 +1,4 @@
-package com.thprojet.mayombedriver
+package com.mayombe.app
 
 import android.app.Application
 import android.content.res.Configuration

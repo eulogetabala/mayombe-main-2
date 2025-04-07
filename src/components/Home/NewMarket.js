@@ -252,8 +252,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
     color: '#333',
     fontFamily: "Montserrat-Bold",
   },
@@ -296,6 +295,7 @@ const styles = StyleSheet.create({
     top: -20,
     right: 25,
     zIndex: 1,
+    fontFamily: "Montserrat-Bold",
   },
   priceText: {
     color: '#fff',
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat-Bold",
   },
   productName: {
-    fontWeight: 'bold',
+   
     fontSize: 14,
     color: '#333',
     marginVertical: 5,

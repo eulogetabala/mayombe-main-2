@@ -1,4 +1,4 @@
-package com.thprojet.mayombedriver
+package com.mayombe.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

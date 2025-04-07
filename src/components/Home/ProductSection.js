@@ -17,8 +17,74 @@ import { useCart } from '../../context/CartContext';
 import { useRefresh } from '../../context/RefreshContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { translations } from '../../translations';
+import { withRefreshAndLoading } from '../common/withRefreshAndLoading';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+const STORAGE_URL = "https://www.api-mayombe.mayombe-app.com/storage";
+
+const ProductSectionContent = ({ 
+  products, 
+  handleProductPress, 
+  handleAddToCart,
+  navigation,
+  t
+}) => {
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>{t.products.popular}</Text>
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('AllProducts')}
+          style={styles.viewAllContainer}
+        >
+          <Text style={styles.viewAllText}>{t.home.seeAll}</Text>
+          <Ionicons name="chevron-forward" size={15} color="#EB9A07" />
+        </TouchableOpacity>
+      </View>
+      <FlatList
+        data={products}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyExtractor={item => item.id.toString()}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.card}
+            onPress={() => handleProductPress(item)}
+          >
+            <View style={styles.imageWrapper}>
+              <Image
+                source={item.hasValidImage ? { uri: item.imageUrl } : require('../../../assets/images/2.jpg')}
+                style={styles.productImage}
+                defaultSource={require('../../../assets/images/2.jpg')}
+              />
+            </View>
+            <View style={styles.productInfo}>
+              <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+              <Text style={styles.productPrice}>{item.price}</Text>
+              {item.discount && (
+                <View style={styles.discountBadge}>
+                  <Text style={styles.discountText}>-{item.discount}%</Text>
+                </View>
+              )}
+              {item.isNew && (
+                <View style={styles.newBadge}>
+                  <Text style={styles.newText}>{t.products.new}</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={[styles.addButton, !item.inStock && styles.addButtonDisabled]}
+                onPress={() => handleAddToCart(item)}
+                disabled={!item.inStock}
+              >
+                <Ionicons name="add" size={24} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+};
 
 const ProductSection = ({ listMode = "vertical" }) => {
   const navigation = useNavigation();
@@ -31,13 +97,43 @@ const ProductSection = ({ listMode = "vertical" }) => {
   const refresh = useRefresh();
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
-  const [imageErrorTimestamps, setImageErrorTimestamps] = useState({});
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
   useEffect(() => {
     if (refresh?.refreshTimestamp) {
       fetchProducts();
     }
   }, [refresh?.refreshTimestamp]);
+
+  const handleImageLoad = (productId) => {
+    console.log(`Image chargée avec succès pour le produit ${productId}`);
+    setProducts(currentProducts =>
+      currentProducts.map(product =>
+        product.id === productId
+          ? { ...product, isLoading: false }
+          : product
+      )
+    );
+  };
+
+  const handleImageError = (productId) => {
+    console.log(`Erreur de chargement d'image pour le produit ${productId}`);
+    setProducts(currentProducts => 
+      currentProducts.map(product => 
+        product.id === productId
+          ? {
+              ...product,
+              hasValidImage: false,
+              isLoading: false,
+              imageUrl: null // Réinitialiser l'URL en cas d'erreur
+            }
+          : product
+      )
+    );
+  };
 
   const handleProductPress = (product) => {
     setSelectedProduct(product);
@@ -62,183 +158,120 @@ const ProductSection = ({ listMode = "vertical" }) => {
     return t.ingredients[normalized] || ingredientName;
   };
 
+  const validateImageUrl = (url) => {
+    if (!url) {
+      console.log("URL d'image manquante");
+      return false;
+    }
+    
+    // Vérifie si l'URL commence par 'products/' ou est une URL complète
+    const isValidPath = url.startsWith('products/');
+    const isValidUrl = url.startsWith('http://') || url.startsWith('https://');
+    
+    if (!isValidPath && !isValidUrl) {
+      console.log(`Format d'URL invalide: ${url}`);
+      return false;
+    }
+    
+    return true;
+  };
+
+  const constructImageUrl = (imageUrl) => {
+    if (!imageUrl) return null;
+
+    try {
+      // Si c'est déjà une URL complète
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        return imageUrl;
+      }
+
+      // Si c'est un chemin relatif
+      if (imageUrl.startsWith('products/')) {
+        // Enlever 'products/' du début si présent
+        const cleanPath = imageUrl.replace(/^products\//, '');
+        const url = `${STORAGE_URL}/products/${cleanPath}`;
+        console.log(`URL d'image construite: ${url}`);
+        return url;
+      }
+
+      console.log(`Format d'URL non reconnu: ${imageUrl}`);
+      return null;
+    } catch (error) {
+      console.error(`Erreur lors de la construction de l'URL de l'image: ${error}`);
+      return null;
+    }
+  };
+
   const fetchProducts = async () => {
     try {
+      console.log("Début du chargement des produits...");
       const response = await fetch(`${API_BASE_URL}/products-list`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
-        },
+          'Content-Type': 'application/json',
+        }
       });
 
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+
       const data = await response.json();
+      console.log("Données brutes reçues:", data);
 
-      if (response.ok && Array.isArray(data)) {
-        const mappedProducts = data.map((product) => {
-          const hasValidImage = product.image_url && 
-            product.image_url.startsWith('products/');
-
-          const imageUrl = hasValidImage
-            ? `https://www.api-mayombe.mayombe-app.com/public/storage/${product.image_url}`
-            : null;
-
-          console.log("URL construite pour", product.name, ":", imageUrl);
-
-          return {
-            id: product.id,
-            name: product.name || product.libelle || t.products.noName,
-            price: product.price ? `${product.price} ${t.products.currency}` : t.products.priceNotAvailable,
-            description: product.desc || t.products.noDescription,
-            ingredients: product.ingredients?.map(ing => normalizeAndTranslateIngredient(ing)) || [],
-            imageUrl: imageUrl,
-            hasValidImage: hasValidImage,
-            discount: product.discount || null,
-            oldPrice: product.old_price,
-            isNew: product.is_new,
-            inStock: product.in_stock,
-            rating: product.rating,
-            numberOfRatings: product.number_of_ratings,
-          };
-        });
-
-        console.log("\n=== Résumé ===");
-        console.log("Nombre de produits mappés:", mappedProducts.length);
-        console.log("Produits avec images valides:", 
-          mappedProducts.filter(p => p.hasValidImage).length);
-
-        setProducts(mappedProducts);
-      } else {
+      if (!Array.isArray(data)) {
+        console.error("Format de données invalide:", data);
         throw new Error(t.products.invalidData);
       }
+
+      const mappedProducts = data.map(product => {
+        const hasValidImage = product.image_url && 
+          product.image_url.startsWith('products/');
+
+        const imageUrl = hasValidImage
+          ? `https://www.api-mayombe.mayombe-app.com/public/storage/${product.image_url}`
+          : null;
+
+        return {
+          id: product.id,
+          name: product.name || product.libelle || t.products.noName,
+          price: product.price ? `${product.price} ${t.products.currency}` : t.products.priceNotAvailable,
+          description: product.desc || t.products.noDescription,
+          ingredients: product.ingredients?.map(ing => normalizeAndTranslateIngredient(ing)) || [],
+          imageUrl: imageUrl,
+          hasValidImage: hasValidImage,
+          image: hasValidImage 
+            ? { uri: imageUrl }
+            : require('../../../assets/images/2.jpg'),
+          discount: product.discount || null,
+          oldPrice: product.old_price,
+          isNew: product.is_new,
+          inStock: product.status === 1,
+          rating: product.rating,
+          numberOfRatings: product.number_of_ratings,
+        };
+      });
+
+      console.log(`${mappedProducts.length} produits chargés avec leurs images`);
+      setProducts(mappedProducts);
+      setLoading(false);
     } catch (error) {
-      console.error("\n=== ERREUR ===");
-      console.error("Type d'erreur:", error.name);
-      console.error("Message d'erreur:", error.message);
-      console.error("Stack trace:", error.stack);
+      console.error("Erreur lors du chargement des produits:", error);
       setError(t.products.loadError);
-    } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF9800" />
-        <Text>{t.products.loading}</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
-          <Text style={styles.retryText}>{t.products.retry}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{t.products.popular}</Text>
-          <TouchableOpacity 
-            onPress={() => navigation.navigate('AllProducts')}
-            style={styles.viewAllContainer}
-          >
-            <Text style={styles.viewAllText}>{t.home.seeAll}</Text>
-            <Ionicons name="chevron-forward" size={15} color="#EB9A07" />
-          </TouchableOpacity>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {products.map((product) => {
-            const imageUri = product.imageUrl + (product.id in imageErrorTimestamps ? `?t=${imageErrorTimestamps[product.id]}` : '');
-
-            return (
-              <TouchableOpacity
-                key={product.id}
-                style={styles.card}
-                onPress={() => handleProductPress(product)}
-              >
-                {product.hasValidImage ? (
-                  <Image 
-                    source={{ uri: imageUri }}
-                    style={styles.productImage}
-                    defaultSource={require('../../../assets/images/3.jpg')}
-                    onError={(e) => {
-                      // console.log(`Erreur de chargement pour ${product.name}:`, e.nativeEvent.error);
-                      setImageErrorTimestamps(prev => ({
-                        ...prev,
-                        [product.id]: new Date().getTime()
-                      }));
-                    }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Image 
-                    source={require('../../../assets/images/3.jpg')}
-                    style={styles.productImage}
-                    resizeMode="cover"
-                  />
-                )}
-                {product.discount && (
-                  <View style={styles.discountBadge}>
-                    <Text style={styles.discountText}>
-                      {t.products.discountPercent.replace('{percent}', product.discount)}
-                    </Text>
-                  </View>
-                )}
-                {product.isNew && (
-                  <View style={styles.newBadge}>
-                    <Text style={styles.newText}>{t.products.new}</Text>
-                  </View>
-                )}
-                <View style={styles.productInfo}>
-                  <Text style={styles.productName}>{product.name}</Text>
-                  <View style={styles.priceContainer}>
-                    <Text style={styles.productPrice}>
-                      {`${product.price} ${t.products.currency}`}
-                    </Text>
-                    {product.oldPrice && (
-                      <Text style={styles.oldPrice}>
-                        {`${product.oldPrice} ${t.products.currency}`}
-                      </Text>
-                    )}
-                  </View>
-                  {product.rating && (
-                    <View style={styles.ratingContainer}>
-                      <Ionicons name="star" size={14} color="#FFD700" />
-                      <Text style={styles.ratingText}>
-                        {product.rating} ({product.numberOfRatings})
-                      </Text>
-                    </View>
-                  )}
-                  {product.ingredients && product.ingredients.length > 0 && (
-                    <Text style={styles.ingredients} numberOfLines={1}>
-                      {product.ingredients.join(', ')}
-                    </Text>
-                  )}
-                </View>
-                <TouchableOpacity
-                  style={[
-                    styles.addButton,
-                    !product.inStock && styles.addButtonDisabled
-                  ]}
-                  onPress={() => handleProductPress(product)}
-                  disabled={!product.inStock}
-                >
-                  <Ionicons name="add" size={20} color="#FFF" />
-                </TouchableOpacity>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
+      <ProductSectionContent
+        products={products}
+        handleProductPress={handleProductPress}
+        handleAddToCart={handleAddToCart}
+        navigation={navigation}
+        t={t}
+      />
       <ProductModal
         visible={modalVisible}
         product={selectedProduct}
@@ -251,7 +284,7 @@ const ProductSection = ({ listMode = "vertical" }) => {
 
 const styles = StyleSheet.create({
   container: { 
-    marginTop: 30,
+    marginTop: 10,
     paddingVertical: 15,
     backgroundColor: '#fff',
   },
@@ -265,7 +298,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     color: "#333",
-    fontFamily: "Montserrat-Bold",
+   fontFamily: "Montserrat-Bold",
   },
   card: {
     width: 200,
@@ -444,6 +477,24 @@ const styles = StyleSheet.create({
     color: '#666',
     fontFamily: "Montserrat-Regular",
   },
+  imageWrapper: {
+    position: 'relative',
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  imageLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
-export default ProductSection;
+export default withRefreshAndLoading(ProductSection, {
+  skeletonType: 'product',
+  skeletonCount: 3,
+  scrollEnabled: false
+});

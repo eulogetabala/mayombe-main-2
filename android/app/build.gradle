@@ -86,9 +86,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.thprojet.mayombedriver'
+    namespace 'com.mayombe.app'
     defaultConfig {
-        applicationId 'com.thprojet.mayombedriver'
+        applicationId 'com.mayombe.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -123,6 +123,11 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+    sourceSets {
+        main {
+            assets.srcDirs += ['../assets/fonts']
+        }
     }
 }
 

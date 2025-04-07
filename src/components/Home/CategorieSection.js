@@ -122,7 +122,11 @@ const CategorieSection = () => {
             color="#51A905"
           />
         </View>
-        <Text numberOfLines={2} style={styles.categoryText}>
+        <Text 
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          style={styles.categoryText}
+        >
           {category.name || ''}
         </Text>
       </Animatable.View>
@@ -206,19 +210,21 @@ const styles = StyleSheet.create({
   },
   categoriesContainer: {
     paddingLeft: 15,
+    paddingRight: 15,
   },
   category: {
     marginRight: 20,
     alignItems: 'center',
-    width: width * 0.18,
+    width: width * 0.22,
     height: width * 0.28,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    paddingVertical: 5,
   },
   iconWrapper: {
     alignItems: 'center',
     width: '100%',
-    flex: 1,
-    justifyContent: 'center',
+    height: '100%',
+    justifyContent: 'flex-start',
   },
   iconBackground: {
     width: width * 0.15,
@@ -235,13 +241,14 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     color: '#333',
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Montserrat-Medium',
     textAlign: 'center',
     marginTop: 4,
     width: '100%',
-    height: 32,
-    lineHeight: 16,
+    height: 20,
+    lineHeight: 20,
+    paddingHorizontal: 2,
   },
   loadingContainer: {
     height: width * 0.3,
@@ -258,7 +265,7 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     marginBottom: 10,
     textAlign: 'center',
-    fontFamily: "Montserrat",
+    fontFamily: "Montserrat-Regular",
   },
   retryButton: {
     backgroundColor: '#EB9A07',

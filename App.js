@@ -103,14 +103,19 @@ export default function App() {
 
         await Promise.all([
           Font.loadAsync({
-            Montserrat: require("./assets/fonts/Montserrat-Regular.ttf"),
-            MontserratBlack: require("./assets/fonts/Montserrat-Black.ttf"),
-            MontserratBold: require("./assets/fonts/Montserrat-Bold.ttf"),
+            'Montserrat-Regular': require("./assets/fonts/Montserrat-Regular.ttf"),
+            'Montserrat-Bold': require("./assets/fonts/Montserrat-Bold.ttf"),
+            'Montserrat-Medium': require("./assets/fonts/Montserrat-Medium.ttf"),
+            'Montserrat-SemiBold': require("./assets/fonts/Montserrat-SemiBold.ttf"),
+            'Montserrat-Light': require("./assets/fonts/Montserrat-Light.ttf"),
+            'Montserrat-ExtraLight': require("./assets/fonts/Montserrat-ExtraLight.ttf"),
+            'Montserrat-Thin': require("./assets/fonts/Montserrat-Thin.ttf"),
+            'Montserrat-Black': require("./assets/fonts/Montserrat-Black.ttf"),
           }),
           new Promise((resolve) => setTimeout(resolve, 2000)),
         ]);
       } catch (error) {
-        console.error("App preparation error:", error);
+        console.error("Erreur de chargement des polices:", error);
       } finally {
         setIsAppReady(true);
         await SplashScreen.hideAsync();

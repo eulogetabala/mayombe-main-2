@@ -20,12 +20,13 @@ const BASE_URL = "https://www.api-mayombe.mayombe-app.com";
 
 const RestaurantDetails = ({ route, navigation }) => {
   const { restaurant } = route.params;
-  const [activeCategory, setActiveCategory] = useState('repas');
-  const [products, setProducts] = useState([]);
+  const [subMenus, setSubMenus] = useState([]);
+  const [menuData, setMenuData] = useState({});
+  const [selectedSubMenu, setSelectedSubMenu] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedProduct, setSelectedProduct] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const { addToCart } = useCart();
 
   useLayoutEffect(() => {
@@ -44,121 +45,187 @@ const RestaurantDetails = ({ route, navigation }) => {
     }
   };
 
-  const fetchMenus = async () => {
+  const constructImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    return `${BASE_URL}/public/storage/${imagePath}`;
+  };
+
+  const fetchData = async () => {
     try {
       setLoading(true);
-      const today = new Date();
-      const jour = today.toISOString().split('T')[0];
-
-      const subMenuIds = [2, 3];
-      const allMenus = [];
-      const seenMenuIds = new Set(); // Pour tracker les menus déjà vus
-
-      for (const subMenuId of subMenuIds) {
-        const url = `${API_BASE_URL}/get-menu-by-resto?jour=${jour}&sub_menu_id=${subMenuId}&resto_id=${restaurant.id}`;
-        
-        const response = await fetch(url, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-
-        const data = await response.json();
-        
-        if (Array.isArray(data)) {
-          // Filtrer les doublons avant d'ajouter au tableau
-          const uniqueMenus = data.filter(menu => {
-            if (seenMenuIds.has(menu.id)) {
-              return false;
-            }
-            seenMenuIds.add(menu.id);
-            return true;
-          });
-          allMenus.push(...uniqueMenus);
-        }
-      }
-
-      console.log('Premier menu brut:', allMenus[0]);
-
-      const mappedProducts = allMenus.map(menu => {
-        let imageUrl = null;
-        if (menu.cover) {
-          if (menu.cover.startsWith('http')) {
-            imageUrl = menu.cover;
-          } else {
-            const cleanCover = menu.cover.replace(/^menus\//, '');
-            imageUrl = `${BASE_URL}/public/storage/menus/${cleanCover}`;
-          }
-        }
-
-        console.log('URL finale construite:', imageUrl);
-
-        return {
-          id: menu.id,
-          name: menu.libelle || "Sans nom",
-          description: menu.description || "Aucune description",
-          price: menu.prix || "0",
-          image: imageUrl ? { uri: imageUrl } : require('../../assets/images/2.jpg'),
-          category: menu.category,
-          sub_menu_id: menu.sub_menu_id,
-          restaurant_id: menu.resto_id,
-          complements: menu.complements?.map(complement => {
-            let complementImageUrl = null;
-            if (complement.cover) {
-              if (complement.cover.startsWith('http')) {
-                complementImageUrl = complement.cover;
-              } else {
-                const cleanCover = complement.cover.replace(/^complements\//, '');
-                complementImageUrl = `${BASE_URL}/public/storage/complements/${cleanCover}`;
-              }
-            }
-
-            return {
-              id: complement.id,
-              name: complement.libelle || "Sans nom",
-              description: complement.description || "",
-              price: complement.prix || "0",
-              image: complementImageUrl ? { uri: complementImageUrl } : require('../../assets/images/2.jpg'),
-              status: complement.status,
-              created_at: complement.created_at,
-              updated_at: complement.updated_at
-            };
-          }) || [],
-          status: menu.status,
-          created_at: menu.created_at,
-          updated_at: menu.updated_at
-        };
-      });
-
-      console.log('URL de la première image:', mappedProducts[0]?.image?.uri);
-      setProducts(mappedProducts);
       
-      if (mappedProducts.length > 0) {
-        setSelectedProduct(mappedProducts[0]);
+      // 1. D'abord, récupérer la liste des sous-menus
+      const subMenuListUrl = `${API_BASE_URL}/submenu-list`;
+      console.log("URL submenu-list:", subMenuListUrl);
+      
+      const subMenuResponse = await fetch(subMenuListUrl);
+      const subMenuData = await subMenuResponse.json();
+      console.log("Données submenu-list reçues:", subMenuData);
+      
+      if (Array.isArray(subMenuData)) {
+        setSubMenus(subMenuData);
+        
+        // 2. Si nous avons des sous-menus, récupérer les détails du menu
+        if (subMenuData.length > 0) {
+          setSelectedSubMenu(subMenuData[0].id);
+          
+          // Appel au deuxième endpoint pour chaque sous-menu
+          const menuDetailsUrl = `${API_BASE_URL}/get-menu-by-resto?resto_id=${restaurant.id}&sub_menu_id=${subMenuData[0].id}`;
+          console.log("URL menu details:", menuDetailsUrl);
+          
+          const menuResponse = await fetch(menuDetailsUrl);
+          const menuDetails = await menuResponse.json();
+          console.log("Détails du menu reçus:", menuDetails);
+          
+          setMenuData(prevData => ({
+            ...prevData,
+            [subMenuData[0].id]: menuDetails
+          }));
+        }
+      } else {
+        throw new Error('Format de données submenu-list incorrect');
       }
-
     } catch (error) {
-      console.error('Erreur lors de la récupération des menus:', error);
-      setError('Impossible de charger les menus');
+      console.error('Erreur lors de la récupération des données:', error);
+      setError(`Erreur: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchMenus();
+    fetchData();
   }, [restaurant.id]);
+
+  const handleSubMenuSelect = async (subMenuId) => {
+    try {
+      setSelectedSubMenu(subMenuId);
+      
+      if (!menuData[subMenuId]) {
+        const menuDetailsUrl = `${API_BASE_URL}/get-menu-by-resto?resto_id=${restaurant.id}&sub_menu_id=${subMenuId}`;
+        const response = await fetch(menuDetailsUrl);
+        const menuDetails = await response.json();
+        
+        setMenuData(prevData => ({
+          ...prevData,
+          [subMenuId]: menuDetails
+        }));
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du menu:', error);
+    }
+  };
+
+  const renderSubMenuTabs = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.subMenuTabsContainer}
+    >
+      {subMenus.map((subMenu) => (
+        <TouchableOpacity
+          key={subMenu.id}
+          style={[
+            styles.subMenuTab,
+            selectedSubMenu === subMenu.id && styles.activeSubMenuTab
+          ]}
+          onPress={() => handleSubMenuSelect(subMenu.id)}
+        >
+          <Text
+            style={[
+              styles.subMenuTabText,
+              selectedSubMenu === subMenu.id && styles.activeSubMenuTabText
+            ]}
+          >
+            {subMenu.libelle}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  );
+
+  const renderProducts = () => {
+    if (!selectedSubMenu || !menuData[selectedSubMenu]) return null;
+
+    const products = menuData[selectedSubMenu];
+    return (
+      <View style={styles.productsContainer}>
+        {products.map(product => (
+          <TouchableOpacity
+            key={product.id}
+            style={styles.productCard}
+            onPress={() => {
+              setSelectedProduct(product);
+              setModalVisible(true);
+            }}
+          >
+            <Image
+              source={
+                product.cover
+                  ? {
+                      uri: `${BASE_URL}/public/storage/${product.cover}`,
+                      headers: {
+                        'Accept': 'image/*',
+                        'Cache-Control': 'no-cache'
+                      }
+                    }
+                  : require('../../assets/images/2.jpg')
+              }
+              style={styles.productImage}
+              defaultSource={require('../../assets/images/2.jpg')}
+            />
+            <View style={styles.productContent}>
+              <View>
+                <Text style={styles.productName} numberOfLines={1}>
+                  {product.libelle}
+                </Text>
+                <Text style={styles.productDescription} numberOfLines={2}>
+                  {product.description || "Aucune description"}
+                </Text>
+              </View>
+              <View style={styles.productFooter}>
+                <Text style={styles.productPrice}>
+                  {product.prix} FCFA
+                </Text>
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setSelectedProduct(product);
+                    setModalVisible(true);
+                  }}
+                >
+                  <Ionicons name="add" size={20} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
 
   const renderHeader = () => (
     <View style={styles.header}>
       <Image 
         source={
           restaurant.cover 
-            ? { uri: restaurant.cover }
+            ? { 
+                uri: constructImageUrl(restaurant.cover),
+                headers: {
+                  'Accept': 'image/*',
+                  'Cache-Control': 'no-cache'
+                }
+              }
             : require('../../assets/images/2.jpg')
         } 
-        style={styles.coverImage} 
+        style={styles.coverImage}
+        defaultSource={require('../../assets/images/2.jpg')}
+        onError={(e) => {
+          console.log("Erreur de chargement de l'image du restaurant:", e.nativeEvent.error);
+          console.log("URL de l'image du restaurant:", constructImageUrl(restaurant.cover));
+        }}
       />
       <View style={styles.headerOverlay} />
       <TouchableOpacity
@@ -190,40 +257,18 @@ const RestaurantDetails = ({ route, navigation }) => {
         <Ionicons name="location-outline" size={16} color="#666" />
         <Text style={styles.address}>{restaurant.address}</Text>
       </View>
+      <View style={styles.contactContainer}>
+        <Ionicons name="call-outline" size={16} color="#666" />
+        <Text style={styles.contactText}>{restaurant.phone}</Text>
+      </View>
+      {restaurant.website && (
+        <View style={styles.websiteContainer}>
+          <Ionicons name="globe-outline" size={16} color="#666" />
+          <Text style={styles.websiteText}>{restaurant.website}</Text>
+        </View>
+      )}
     </View>
   );
-
-  const renderSubMenuTabs = () => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.subMenuTabsContainer}
-    >
-      {products.map((product) => (
-        <TouchableOpacity
-          key={product.id}
-          style={[
-            styles.subMenuTab,
-            selectedProduct?.sub_menu_id === product.sub_menu_id && styles.activeSubMenuTab
-          ]}
-          onPress={() => setSelectedProduct(product)}
-        >
-          <Text
-            style={[
-              styles.subMenuTabText,
-              selectedProduct?.sub_menu_id === product.sub_menu_id && styles.activeSubMenuTabText
-            ]}
-          >
-            {product.name}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
-  );
-
-  const filteredProducts = selectedProduct 
-    ? products.filter(p => p.sub_menu_id === selectedProduct.sub_menu_id)
-    : products;
 
   const handleAddToCart = (product) => {
     try {
@@ -233,7 +278,7 @@ const RestaurantDetails = ({ route, navigation }) => {
         ? parseFloat(product.price.replace(/[^\d.-]/g, ''))
         : product.price || 0;
 
-      const complementsTotal = product.selectedComplements?.reduce((sum, complement) => 
+      const complementsTotal = product.complements?.reduce((sum, complement) => 
         sum + (parseFloat(complement.price) || 0), 0) || 0;
         
       const productToAdd = {
@@ -243,7 +288,7 @@ const RestaurantDetails = ({ route, navigation }) => {
         price: basePrice,
         image: product.image,
         quantity: product.quantity || 1,
-        complements: product.selectedComplements || [],
+        complements: product.complements || [],
         restaurant: restaurant.name,
         totalPrice: (basePrice * (product.quantity || 1)) + complementsTotal,
       };
@@ -259,98 +304,30 @@ const RestaurantDetails = ({ route, navigation }) => {
     }
   };
 
-  const handleProductPress = (product) => {
-    console.log('Produit sélectionné avec compléments:', product);
-    setSelectedProduct(product);
-    setModalVisible(true);
-  };
-
-  const renderProductCard = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.productCard} 
-      activeOpacity={0.7}
-      onPress={() => handleProductPress(item)}
-    >
-      <Image 
-        source={item.image} 
-        style={styles.productImage}
-        defaultSource={require('../../assets/images/2.jpg')}
-        onError={() => {
-          const updatedProducts = products.map(p => 
-            p.id === item.id 
-              ? {...p, image: require('../../assets/images/2.jpg')} 
-              : p
-          );
-          setProducts(updatedProducts);
-        }}
-      />
-      <View style={styles.productContent}>
-        <View>
-          <Text style={styles.productName} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text style={styles.productDescription} numberOfLines={2}>
-            {item.description}
-          </Text>
-        </View>
-        <View style={styles.productFooter}>
-          <Text style={styles.productPrice}>
-            {item.price} FCFA
-          </Text>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleProductPress(item);
-            }}
-          >
-            <Ionicons name="add" size={20} color="#FFF" />
-          </TouchableOpacity>
-        </View>
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
       </View>
-    </TouchableOpacity>
-  );
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <FlatList
-        data={filteredProducts}
-        renderItem={renderProductCard}
-        keyExtractor={item => item.id.toString()}
-        contentContainerStyle={styles.productsContainer}
-        ListHeaderComponent={() => (
-          <>
-            {renderHeader()}
-            {renderInfo()}
-            {renderSubMenuTabs()}
-          </>
-        )}
-        ListEmptyComponent={
-          loading ? (
-            <View style={styles.centerContent}>
-              <ActivityIndicator size="large" color="#FF9800" />
-            </View>
-          ) : error ? (
-            <View style={styles.centerContent}>
-              <Text style={styles.errorText}>{error}</Text>
-              <TouchableOpacity 
-                style={styles.retryButton}
-                onPress={() => {
-                  // Implement retry logic
-                }}
-              >
-                <Text style={styles.retryText}>Réessayer</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.comingSoonContainer}>
-              <Text style={styles.comingSoonText}>
-                Aucun menu disponible
-              </Text>
-            </View>
-          )
-        }
-      />
+      <ScrollView>
+        {renderHeader()}
+        {renderInfo()}
+        {renderSubMenuTabs()}
+        {renderProducts()}
+      </ScrollView>
       <RestaurantProductModal
         visible={modalVisible}
         product={selectedProduct}
@@ -396,6 +373,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+    backgroundColor: '#f5f5f5',
   },
   backButton: {
     position: 'absolute',
@@ -454,6 +432,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Montserrat',
   },
+  contactContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  contactText: {
+    color: '#666',
+    fontSize: 14,
+    fontFamily: 'Montserrat',
+  },
+  websiteContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  websiteText: {
+    color: '#666',
+    fontSize: 14,
+    fontFamily: 'Montserrat',
+  },
   categoryTabsContainer: {
     backgroundColor: '#fff',
     paddingVertical: 12,
@@ -495,6 +495,7 @@ const styles = StyleSheet.create({
     width: 110,
     height: '100%',
     resizeMode: 'cover',
+    backgroundColor: '#f5f5f5',
   },
   productContent: {
     flex: 1,
@@ -586,6 +587,26 @@ const styles = StyleSheet.create({
   activeSubMenuTabText: {
     color: '#FF9800',
     fontFamily: 'Montserrat-Bold',
+  },
+  complementsInfo: {
+    fontSize: 12,
+    fontFamily: 'Montserrat',
+    color: '#51A905',
+    marginTop: 4,
+  },
+  loader: {
+    marginTop: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
 });
 

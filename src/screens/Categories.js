@@ -5,10 +5,8 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  ActivityIndicator,
   StatusBar,
   Platform,
-  ScrollView,
   Image,
   Dimensions,
 } from 'react-native';
@@ -17,45 +15,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { CommonActions } from '@react-navigation/native';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
+import { withRefreshAndLoading } from '../components/common/withRefreshAndLoading';
+import { useRefresh } from '../context/RefreshContext';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
-const Categories = ({ navigation }) => {
-  const { currentLanguage } = useLanguage();
-  const t = translations[currentLanguage];
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
+const CategoriesContent = ({ categories, navigation, t }) => {
   const windowWidth = Dimensions.get('window').width;
-  const cardWidth = (windowWidth - 56) / 2; // 56 = padding total (16 * 3 + 8)
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerShown: false,
-    });
-  }, [navigation]);
-
-  const fetchCategories = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/categories`);
-      const data = await response.json();
-
-      if (response.ok && Array.isArray(data)) {
-        setCategories(data);
-      } else {
-        throw new Error('Format de données invalide');
-      }
-    } catch (error) {
-      setError('Impossible de charger les catégories');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const cardWidth = (windowWidth - 56) / 2;
 
   const renderCategory = ({ item }) => (
     <TouchableOpacity
@@ -84,26 +51,6 @@ const Categories = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF9800" />
-        <Text style={styles.loadingText}>{t.categories.loading}</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{t.categories.error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchCategories}>
-          <Text style={styles.retryButtonText}>{t.home.retry}</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -124,6 +71,77 @@ const Categories = ({ navigation }) => {
         columnWrapperStyle={styles.row}
       />
     </SafeAreaView>
+  );
+};
+
+const Categories = ({ navigation }) => {
+  const { currentLanguage } = useLanguage();
+  const t = translations[currentLanguage];
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const refresh = useRefresh();
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    if (refresh?.refreshTimestamp) {
+      fetchCategories();
+    }
+  }, [refresh?.refreshTimestamp]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+  }, [navigation]);
+
+  const fetchCategories = async () => {
+    try {
+      console.log("Début du chargement des catégories...");
+      const response = await fetch(`${API_BASE_URL}/categories`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        }
+      });
+
+      const data = await response.json();
+      console.log("Réponse de l'API catégories:", data);
+
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+
+      if (!Array.isArray(data)) {
+        console.error("Format de données invalide:", data);
+        throw new Error('Le format des données reçues est invalide');
+      }
+
+      const formattedCategories = data.map(category => ({
+        id: category.id,
+        libelle: category.libelle || t.categories.unnamed,
+        image_url: category.image_url,
+      }));
+
+      console.log(`${formattedCategories.length} catégories chargées avec succès`);
+      setCategories(formattedCategories);
+    } catch (error) {
+      console.error("Erreur lors du chargement des catégories:", error);
+      setError(t.categories.loadError || 'Impossible de charger les catégories');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <CategoriesContent 
+      categories={categories}
+      navigation={navigation}
+      t={t}
+    />
   );
 };
 
@@ -239,4 +257,8 @@ const styles = StyleSheet.create({
   },
 });
 
-export default Categories;
+export default withRefreshAndLoading(Categories, {
+  skeletonType: 'category',
+  skeletonCount: 6,
+  scrollEnabled: true
+});
