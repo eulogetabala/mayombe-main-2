@@ -7,18 +7,28 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  SafeAreaView,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from '@react-navigation/native';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+const { width } = Dimensions.get('window');
+const scaleFont = (size) => Math.round(size * (width / 375));
 
 const AllRestaurants = ({ route, navigation }) => {
   const cityId = route?.params?.city;
+  const cityName = route?.params?.cityName;
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // Désactiver le header pour cet écran
+    navigation.setOptions({
+      headerShown: false
+    });
     fetchRestaurants();
   }, []);
 
@@ -32,17 +42,27 @@ const AllRestaurants = ({ route, navigation }) => {
       const data = await response.json();
 
       if (response.ok && Array.isArray(data)) {
-        const mappedRestaurants = data.map(restaurant => ({
+        // Filtrer les restaurants actifs
+        const activeRestaurants = data.filter(restaurant => restaurant.statut === "actif");
+
+        const mappedRestaurants = activeRestaurants.map(restaurant => ({
           id: restaurant.id,
           name: restaurant.libelle || restaurant.name,
+          address: restaurant.adresse || "Adresse non disponible",
           rating: restaurant.rating || 4.5,
           reviews: restaurant.reviews || Math.floor(Math.random() * 150) + 50,
-          image: require("../../assets/images/2.jpg"),
-          cuisine: restaurant.cuisine || "Bons plats pour vous ",
+          image: restaurant.cover && typeof restaurant.cover === 'string'
+            ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
+            : require("../../assets/images/2.jpg"),
+          cuisine: restaurant.cuisine || "Cuisine africaine",
           deliveryTime: "20-30",
+          minOrder: "5000",
+          isOpen: true,
         }));
 
-        setRestaurants(mappedRestaurants);
+        // Trier les restaurants par ID décroissant (les plus récents en premier)
+        const sortedRestaurants = mappedRestaurants.sort((a, b) => b.id - a.id);
+        setRestaurants(sortedRestaurants);
       } else {
         throw new Error('Format de données invalide');
       }
@@ -57,18 +77,32 @@ const AllRestaurants = ({ route, navigation }) => {
     <TouchableOpacity
       style={styles.restaurantCard}
       onPress={() => navigation.navigate('RestaurantDetails', { restaurant: item })}
+      activeOpacity={0.7}
     >
-      <Image source={item.image} style={styles.restaurantImage} />
+      <View style={styles.imageContainer}>
+        <Image source={item.image} style={styles.restaurantImage} />
+        <View style={styles.overlay} />
+        <View style={styles.badgeContainer}>
+          <Text style={[styles.badge, item.isOpen ? styles.open : styles.closed]}>
+            {item.isOpen ? 'Ouvert' : 'Fermé'}
+          </Text>
+        </View>
+      </View>
       <View style={styles.cardContent}>
         <Text style={styles.restaurantName} numberOfLines={1}>{item.name}</Text>
-        
-        <View style={styles.ratingContainer}>
-          <Ionicons name="star" size={14} color="#FFD700" />
-          <Text style={styles.rating}>{item.rating}</Text>
-          <Text style={styles.reviews}>({item.reviews})</Text>
-        </View>
-
         <Text style={styles.cuisineType} numberOfLines={1}>{item.cuisine}</Text>
+        
+        <View style={styles.infoRow}>
+          <View style={styles.ratingContainer}>
+            <Ionicons name="star" size={scaleFont(14)} color="#FFD700" />
+            <Text style={styles.rating}>{item.rating}</Text>
+            <Text style={styles.reviews}>({item.reviews})</Text>
+          </View>
+          <View style={styles.deliveryContainer}>
+            <Ionicons name="time-outline" size={scaleFont(14)} color="#FF9800" />
+            <Text style={styles.deliveryTime}>{item.deliveryTime} min</Text>
+          </View>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -93,17 +127,29 @@ const AllRestaurants = ({ route, navigation }) => {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>
+          {cityName ? `Restaurants à ${cityName}` : 'Tous les restaurants'}
+        </Text>
+      </View>
+
       <FlatList
-        key={`list-${2}`}
         data={restaurants}
         renderItem={renderRestaurantItem}
         keyExtractor={item => item.id.toString()}
         numColumns={2}
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
       />
-    </View>
+    </SafeAreaView>
   );
 };
 
@@ -112,68 +158,135 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    fontFamily: 'Montserrat-Bold',
+  },
   listContainer: {
     padding: 8,
   },
   row: {
     justifyContent: 'space-between',
+    paddingHorizontal: 8,
   },
   restaurantCard: {
-    backgroundColor: '#fff',
-    marginBottom: 12,
-    marginHorizontal: 2,
-    borderRadius: 12,
-    width: '47%',
-    elevation: 8,
+    width: (width - 48) / 2,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.1,
     shadowRadius: 3.84,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+    overflow: 'hidden',
+  },
+  imageContainer: {
+    position: 'relative',
+    height: 120,
   },
   restaurantImage: {
     width: '100%',
-    height: 120,
+    height: '100%',
     resizeMode: 'cover',
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.1)',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    fontSize: 12,
+    fontFamily: 'Montserrat-Bold',
+  },
+  open: {
+    backgroundColor: '#4CAF50',
+    color: '#fff',
+  },
+  closed: {
+    backgroundColor: '#FF6B6B',
+    color: '#fff',
   },
   cardContent: {
-    padding: 8,
-    backgroundColor: '#fff',
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    padding: 12,
   },
   restaurantName: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
     fontFamily: 'Montserrat-Bold',
   },
+  cuisineType: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    fontFamily: 'Montserrat',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginBottom: 4,
+    backgroundColor: '#FFF9E6',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   rating: {
-    fontSize: 12,
-    color: '#333',
+    marginLeft: 4,
+    fontSize: 14,
+    color: '#FFA000',
     fontFamily: 'Montserrat-Bold',
   },
   reviews: {
-    fontSize: 12,
-    color: '#999',
-    fontFamily: 'Montserrat',
-  },
-  cuisineType: {
+    marginLeft: 4,
     fontSize: 12,
     color: '#666',
     fontFamily: 'Montserrat',
-    marginBottom: 4,
+  },
+  deliveryContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  deliveryTime: {
+    marginLeft: 4,
+    fontSize: 14,
+    color: '#FF9800',
+    fontFamily: 'Montserrat',
   },
   loadingContainer: {
     flex: 1,
@@ -204,4 +317,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AllRestaurants; 
+export default AllRestaurants;

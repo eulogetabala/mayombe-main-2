@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   FlatList,
   RefreshControl,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from '@react-navigation/native';
@@ -22,6 +23,7 @@ import { translations } from '../../translations';
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const BASE_URL = "https://www.api-mayombe.mayombe-app.com/public";
 const { width } = Dimensions.get('window');
+const scaleFont = (size) => Math.round(size * (width / 375));
 
 const RestaurantsSection = () => {
   const navigation = useNavigation();
@@ -30,16 +32,42 @@ const RestaurantsSection = () => {
   const [error, setError] = useState(null);
   const [userCity, setUserCity] = useState(null);
   const [cities, setCities] = useState({});
+  const [userLocation, setUserLocation] = useState(null);
   const { addToCart } = useCart();
   const refresh = useRefresh();
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
 
   useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setUserLocation(null);
+        return;
+      }
+      let location = await Location.getCurrentPositionAsync({});
+      setUserLocation(location.coords);
+    })();
+  }, []);
+
+  useEffect(() => {
     if (refresh?.refreshTimestamp) {
       fetchRestaurants();
     }
   }, [refresh?.refreshTimestamp]);
+
+  // Calcul de la distance (Haversine)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Rayon de la Terre en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(2);
+  };
 
   const fetchCities = async () => {
     try {
@@ -71,22 +99,46 @@ const RestaurantsSection = () => {
       console.log("Données des restaurants reçues:", data);
 
       if (response.ok && Array.isArray(data)) {
-        const mappedRestaurants = data.map(restaurant => ({
-          id: restaurant.id,
-          name: restaurant.name,
-          address: restaurant.adresse,
-          phone: restaurant.phone,
-          website: restaurant.website,
-          ville_id: restaurant.ville_id,
-          ville: cities[restaurant.ville_id] || "Ville inconnue",
-          rating: 4.8,
-          reviews: Math.floor(Math.random() * 150) + 100,
-          image: require("../../../assets/images/2.jpg"),
-          
-          deliveryTime: "20-30",
-          minOrder: "2000",
-          isOpen: true,
-        }));
+        const mappedRestaurants = data.map(restaurant => {
+          // Calcul distance si possible
+          let distance = null;
+          if (
+            userLocation &&
+            restaurant.altitude &&
+            restaurant.longitude &&
+            !isNaN(parseFloat(restaurant.altitude)) &&
+            !isNaN(parseFloat(restaurant.longitude))
+          ) {
+            const lat = parseFloat(restaurant.altitude);
+            const lon = parseFloat(restaurant.longitude);
+            if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+              distance = calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                lat,
+                lon
+              );
+            }
+          }
+          return {
+            id: restaurant.id,
+            name: restaurant.name,
+            address: restaurant.adresse,
+            phone: restaurant.phone,
+            website: restaurant.website,
+            ville_id: restaurant.ville_id,
+            ville: cities[restaurant.ville_id] || "Ville inconnue",
+           
+            reviews: Math.floor(Math.random() * 150) + 100,
+            image: restaurant.cover
+              ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
+              : require("../../../assets/images/2.jpg"),
+            deliveryTime: "20-30",
+            minOrder: "2000",
+            isOpen: true,
+            distance: distance,
+          };
+        });
 
         console.log("Restaurants mappés:", mappedRestaurants);
 
@@ -133,45 +185,91 @@ const RestaurantsSection = () => {
 
   const fetchMenuByResto = async (restoId) => {
     try {
-      const today = new Date();
-      const jour = today.toISOString().split('T')[0];
-
-      const url = `${API_BASE_URL}/get-menu-by-resto?jour=${jour}&sub_menu_id=1&resto_id=${restoId}`;
+      console.log(`Récupération du menu pour le restaurant ID: ${restoId}`);
       
-      console.log('URL de la requête:', url);
-      console.log('Restaurant ID:', restoId);
-      console.log('Date du jour:', jour);
+      // Récupérer d'abord la liste des sous-menus disponibles
+      const submenuUrl = `${API_BASE_URL}/submenu-list`;
+      console.log('URL submenu-list:', submenuUrl);
       
-      const response = await fetch(url, {
+      const submenuResponse = await fetch(submenuUrl, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
         }
       });
-
-      const data = await response.json();
-      console.log('Réponse du menu:', data);
-
-      if (response.ok) {
-        if (!Array.isArray(data)) {
-          console.log('La réponse n\'est pas un tableau:', data);
-          return [];
+      
+      const submenuData = await submenuResponse.json();
+      console.log('Données submenu-list reçues:', JSON.stringify(submenuData, null, 2));
+      
+      // Si nous avons des sous-menus, essayer de récupérer le menu pour chaque sous-menu
+      if (Array.isArray(submenuData) && submenuData.length > 0) {
+        let allMenuItems = [];
+        
+        // Essayer avec le premier sous-menu d'abord
+        const firstSubmenuId = submenuData[0].id;
+        const menuUrl = `${API_BASE_URL}/get-menu-by-resto?debut=2025/04/15&fin=2025/06/22&sub_menu_id=${firstSubmenuId}&resto_id=${restoId}`;
+        
+        console.log('URL menu details:', menuUrl);
+        
+        const menuResponse = await fetch(menuUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          }
+        });
+        
+        const menuData = await menuResponse.json();
+        console.log('Détails du menu reçus:', JSON.stringify(menuData, null, 2));
+        
+        if (Array.isArray(menuData) && menuData.length > 0) {
+          // Si nous avons des données pour le premier sous-menu, les ajouter
+          allMenuItems = [...menuData];
         }
-
-        const menuWithImages = data.map(item => ({
-          ...item,
-          cover: item.cover ? `${BASE_URL}/storage/${item.cover}` : null,
-          complements: item.complements?.map(complement => ({
-            ...complement,
-            cover: complement.cover ? `${BASE_URL}/storage/${complement.cover}` : null
-          }))
-        }));
-
-        console.log('Menu transformé:', menuWithImages);
-        return menuWithImages;
-      } else {
-        throw new Error('Erreur lors de la récupération du menu');
+        
+        // Si nous n'avons pas de données pour le premier sous-menu, essayer les autres
+        if (allMenuItems.length === 0 && submenuData.length > 1) {
+          for (let i = 1; i < submenuData.length; i++) {
+            const submenuId = submenuData[i].id;
+            const additionalMenuUrl = `${API_BASE_URL}/get-menu-by-resto?debut=2025/04/15&fin=2025/06/22&sub_menu_id=${submenuId}&resto_id=${restoId}`;
+            
+            console.log(`Essai avec sous-menu ${submenuId}:`, additionalMenuUrl);
+            
+            const additionalMenuResponse = await fetch(additionalMenuUrl, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+              }
+            });
+            
+            const additionalMenuData = await additionalMenuResponse.json();
+            
+            if (Array.isArray(additionalMenuData) && additionalMenuData.length > 0) {
+              allMenuItems = [...allMenuItems, ...additionalMenuData];
+              break; // Arrêter dès qu'on trouve des données
+            }
+          }
+        }
+        
+        // Transformer les données du menu avec les images
+        if (allMenuItems.length > 0) {
+          const menuWithImages = allMenuItems.map(item => ({
+            ...item,
+            cover: item.cover ? `${BASE_URL}/storage/${item.cover}` : null,
+            complements: item.complements?.map(complement => ({
+              ...complement,
+              cover: complement.cover ? `${BASE_URL}/storage/${complement.cover}` : null
+            }))
+          }));
+          
+          console.log('Menu transformé avec succès:', menuWithImages.length, 'éléments');
+          return menuWithImages;
+        }
       }
+      
+      // Si nous n'avons pas trouvé de menu, retourner un tableau vide
+      console.log('Aucun menu trouvé pour ce restaurant');
+      return [];
+      
     } catch (error) {
       console.error('Erreur détaillée:', error);
       setError('Impossible de charger le menu du restaurant');
@@ -181,54 +279,39 @@ const RestaurantsSection = () => {
 
   const renderRestaurantItem = ({ item: restaurant }) => (
     <TouchableOpacity
-      style={styles.restaurantCard}
+      style={styles.card}
       onPress={async () => {
-        console.log("Restaurant sélectionné:", restaurant);
         const menuData = await fetchMenuByResto(restaurant.id);
-        console.log("Menu avant navigation:", menuData);
         navigation.navigate('RestaurantDetails', { 
           restaurant,
           menuData
         });
       }}
-      activeOpacity={0.7}
+      activeOpacity={0.85}
     >
       <View style={styles.imageContainer}>
         <Image source={restaurant.image} style={styles.restaurantImage} />
-        <View style={styles.badgesContainer}>
-          <View style={styles.deliveryBadge}>
-            <Ionicons name="time-outline" size={12} color="#FFF" />
-            <Text style={styles.deliveryTime}>{restaurant.deliveryTime} min</Text>
-          </View>
-          <View style={styles.ratingBadge}>
-            <Ionicons name="star" size={12} color="#FFD700" />
-            <Text style={styles.ratingText}>{restaurant.rating}</Text>
-          </View>
+        <View style={styles.overlay} />
+        <View style={styles.badgeContainer}>
+          <Text style={[styles.badge, restaurant.isOpen ? styles.open : styles.closed]}>
+            {restaurant.isOpen ? 'Ouvert' : 'Fermé'}
+          </Text>
         </View>
       </View>
-
-      <View style={styles.cardContent}>
-        <Text style={styles.restaurantName} numberOfLines={1}>
-          {restaurant.name}
-        </Text>
-
+      <View style={styles.content}>
+        <Text style={styles.restaurantName} numberOfLines={1}>{restaurant.name}</Text>
+        <Text style={styles.restaurantAddress} numberOfLines={1}>{restaurant.address}</Text>
         <View style={styles.infoRow}>
-          <Text style={styles.cuisineType} numberOfLines={1}>
-            {restaurant.cuisine}
-          </Text>
-          <Text style={styles.dot}>•</Text>
-          <Text style={styles.reviews}>{restaurant.reviews} avis</Text>
-        </View>
-
-        <View style={styles.footer}>
-          <View style={styles.minOrderContainer}>
-            <Text style={styles.minOrderLabel}>Commande min.</Text>
-            <Text style={styles.minOrderPrice}>{restaurant.minOrder} FCFA</Text>
-          </View>
-          <View style={styles.deliveryInfo}>
-            <Ionicons name="location-outline" size={12} color="#666" />
-            <Text style={styles.deliveryDistance}>1.2 km</Text>
-          </View>
+          <Ionicons name="star" size={scaleFont(14)} color="#FFD700" />
+          <Text style={styles.rating}>{restaurant.rating}</Text>
+          {restaurant.distance && (
+            <>
+              <Ionicons name="walk-outline" size={scaleFont(14)} color="#51A905" style={styles.infoIcon} />
+              <Text style={styles.distance}>{restaurant.distance} km</Text>
+            </>
+          )}
+          <Ionicons name="time-outline" size={scaleFont(14)} color="#FF9800" style={styles.infoIcon} />
+          <Text style={styles.deliveryTime}>{restaurant.deliveryTime} min</Text>
         </View>
       </View>
     </TouchableOpacity>
@@ -236,7 +319,7 @@ const RestaurantsSection = () => {
 
   const ListHeader = () => (
     <View style={styles.headerContainer}>
-      <Text style={styles.title} numberOfLines={1}>{t.home.nearbyRestaurants}</Text>
+      <Text style={styles.title} numberOfLines={1}>Restaurants disponibles</Text>
       <TouchableOpacity 
         style={styles.viewAllContainer}
         onPress={() => navigation.navigate('AllRestaurants')}
@@ -246,28 +329,6 @@ const RestaurantsSection = () => {
       </TouchableOpacity>
     </View>
   );
-
-  const getLocationDetails = async (latitude, longitude) => {
-    try {
-      const reverseGeocode = await Location.reverseGeocodeAsync({
-        latitude,
-        longitude
-      });
-      
-      if (reverseGeocode && reverseGeocode[0]) {
-        const address = reverseGeocode[0];
-        return {
-          city: address.city,
-          region: address.region,
-          country: address.country
-        };
-      }
-      return null;
-    } catch (error) {
-      console.error('Erreur de géocodage:', error);
-      return null;
-    }
-  };
 
   if (loading) {
     return (
@@ -352,127 +413,103 @@ const styles = StyleSheet.create({
     fontFamily: "Montserrat-Bold",
     marginRight: 2,
   },
-  restaurantCard: {
-    width: '48%',
+  card: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    marginBottom: 16,
+    borderRadius: 18,
+    marginBottom: 18,
+    marginHorizontal: 4,
     overflow: 'hidden',
-    elevation: 3,
+    elevation: 7,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    width: '48%',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   imageContainer: {
     position: 'relative',
     width: '100%',
-    height: 120,
+    aspectRatio: 1.3,
     backgroundColor: '#f5f5f5',
   },
   restaurantImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
   },
-  badgesContainer: {
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.13)',
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+  },
+  badgeContainer: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    top: 10,
+    right: 10,
+    zIndex: 2,
   },
-  deliveryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 8,
+  badge: {
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    gap: 4,
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  deliveryTime: {
-    color: '#FFF',
     fontSize: 11,
-    fontFamily: 'Montserrat-Medium',
+    fontFamily: 'Montserrat-Bold',
+    color: '#fff',
+    overflow: 'hidden',
   },
-  ratingText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontFamily: 'Montserrat-Medium',
+  open: {
+    backgroundColor: '#51A905',
   },
-  cardContent: {
+  closed: {
+    backgroundColor: '#FF4B4B',
+  },
+  content: {
     padding: 12,
+    alignItems: 'flex-start',
   },
   restaurantName: {
-    fontSize: 14,
+    fontSize: scaleFont(15),
     fontFamily: 'Montserrat-Bold',
     color: '#333',
+    marginBottom: 2,
+  },
+  restaurantAddress: {
+    fontSize: scaleFont(12),
+    color: '#666',
+    fontFamily: 'Montserrat',
     marginBottom: 4,
-    
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     marginBottom: 8,
   },
-  cuisineType: {
-    flex: 1,
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'Montserrat',
+  infoIcon: {
+    marginLeft: 6,
   },
-  dot: {
-    fontSize: 12,
-    color: '#666',
-    marginHorizontal: 4,
+  rating: {
+    fontSize: scaleFont(12),
+    color: '#FFD700',
+    fontFamily: 'Montserrat-Bold',
+    marginLeft: 2,
   },
-  reviews: {
-    fontSize: 12,
-    color: '#666',
-    fontFamily: 'Montserrat',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-  },
-  minOrderContainer: {
-    flex: 1,
-  },
-  minOrderLabel: {
-    fontSize: 10,
-    color: '#999',
-    fontFamily: 'Montserrat',
-  },
-  minOrderPrice: {
-    fontSize: 13,
+  distance: {
+    fontSize: scaleFont(12),
     color: '#51A905',
     fontFamily: 'Montserrat-Bold',
+    marginLeft: 2,
   },
-  deliveryInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  deliveryDistance: {
-    fontSize: 11,
-    color: '#666',
-    fontFamily: 'Montserrat-Medium',
+  deliveryTime: {
+    fontSize: scaleFont(12),
+    color: '#FF9800',
+    fontFamily: 'Montserrat-Bold',
+    marginLeft: 2,
   },
   loadingContainer: {
     padding: 20,

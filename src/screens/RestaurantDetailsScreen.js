@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCart } from '../context/CartContext';
 import RestaurantProductModal from '../components/RestaurantProductModal';
+import * as Location from 'expo-location';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
 const RestaurantDetails = ({ route, navigation }) => {
-  const { restaurant, subMenus: initialSubMenus, initialMenus } = route.params;
+  const { restaurant: initialRestaurant, subMenus: initialSubMenus, initialMenus } = route.params;
+  const [restaurant, setRestaurant] = useState(initialRestaurant || {});
   const [activeCategory, setActiveCategory] = useState('repas');
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +31,9 @@ const RestaurantDetails = ({ route, navigation }) => {
   const [subMenus, setSubMenus] = useState(initialSubMenus || []);
   const [selectedSubMenu, setSelectedSubMenu] = useState(initialSubMenus?.[0] || null);
   const [menus, setMenus] = useState(initialMenus || []);
+  const [userLocation, setUserLocation] = useState(null);
+  const [distance, setDistance] = useState(null);
+  const [validDates, setValidDates] = useState({ debut: null, fin: null });
 
   useEffect(() => {
     if (restaurant?.id) {
@@ -41,6 +46,78 @@ const RestaurantDetails = ({ route, navigation }) => {
       fetchMenusByResto();
     }
   }, [selectedSubMenu]);
+
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setUserLocation(null);
+        return;
+      }
+      let location = await Location.getCurrentPositionAsync({});
+      setUserLocation(location.coords);
+    })();
+  }, []);
+
+  useEffect(() => {
+    const logDebug = () => {
+      console.log('[DEBUG DISTANCE] altitude:', restaurant.altitude, 'longitude:', restaurant.longitude, 'userLocation:', userLocation);
+    };
+    logDebug();
+    if (
+      userLocation &&
+      restaurant &&
+      restaurant.altitude &&
+      restaurant.longitude &&
+      !isNaN(parseFloat(restaurant.altitude)) &&
+      !isNaN(parseFloat(restaurant.longitude))
+    ) {
+      const lat = parseFloat(restaurant.altitude);
+      const lon = parseFloat(restaurant.longitude);
+      // Vérifier que les coordonnées sont plausibles
+      const plausible = lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+      console.log('[DEBUG DISTANCE] lat:', lat, 'lon:', lon, 'plausible:', plausible);
+      if (plausible) {
+        const dist = calculateDistance(
+          parseFloat(userLocation.latitude),
+          parseFloat(userLocation.longitude),
+          lat,
+          lon
+        );
+        setDistance(dist);
+      } else {
+        setDistance(null);
+      }
+    } else {
+      setDistance(null);
+    }
+  }, [userLocation, restaurant]);
+
+  // Nouvelle récupération des détails du restaurant
+  useEffect(() => {
+    const fetchRestaurantDetails = async () => {
+      if (!initialRestaurant?.id) return;
+      try {
+        const response = await fetch(`${API_BASE_URL}/resto`);
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          const found = data.find(r => r.id === initialRestaurant.id);
+          if (found) {
+            setRestaurant({ ...found, ...initialRestaurant }); // merge pour garder image custom si besoin
+          }
+        }
+      } catch (e) {
+        // fallback : garder l'initial
+        setRestaurant(initialRestaurant);
+      }
+    };
+    fetchRestaurantDetails();
+  }, [initialRestaurant]);
+
+  // Masquer le header natif
+  useLayoutEffect(() => {
+    navigation.setOptions({ headerShown: false });
+  }, [navigation]);
 
   const fetchSubMenus = async () => {
     try {
@@ -72,18 +149,10 @@ const RestaurantDetails = ({ route, navigation }) => {
     }
   };
 
-  const fetchMenusByResto = async () => {
+  // Fonction pour récupérer les dates valides
+  const fetchValidDates = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
-      const today = new Date();
-      const formattedDate = today.toISOString().split('T')[0];
-      
-      const url = `${API_BASE_URL}/get-menu-by-resto?jour=${formattedDate}&sub_menu_id=${selectedSubMenu.id}`;
-      console.log('Appel API Menu URL:', url);
-
-      const response = await fetch(url, {
+      const response = await fetch(`${API_BASE_URL}/valid-dates`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -96,31 +165,123 @@ const RestaurantDetails = ({ route, navigation }) => {
       }
 
       const data = await response.json();
+      console.log('Dates valides reçues:', data);
+      
+      if (data && data.debut && data.fin) {
+        setValidDates({
+          debut: data.debut,
+          fin: data.fin
+        });
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des dates:', error);
+      // En cas d'erreur, utiliser des dates par défaut
+      setValidDates({
+        debut: '2025/06/17',
+        fin: '2025/08/31'
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchValidDates();
+  }, []);
+
+  const fetchMenusByResto = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const url = `${API_BASE_URL}/get-menu-by-resto?debut=${validDates.debut}&fin=${validDates.fin}&sub_menu_id=${selectedSubMenu.id}&resto_id=${restaurant.id}`;
+      console.log('Appel API Menu URL:', url);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        }
+      });
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Type de contenu non-JSON reçu:', contentType);
+        throw new Error('La réponse du serveur n\'est pas au format JSON');
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Réponse d\'erreur du serveur:', errorText);
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+
+      const data = await response.json();
       console.log('Menus reçus:', data);
 
       if (Array.isArray(data)) {
-        const mappedProducts = data.map(menu => ({
-          id: menu.id,
-          name: menu.name || menu.libelle || "Sans nom",
-          description: menu.description || "Aucune description",
-          price: menu.prix || menu.price || "0",
-          image: menu.image_url ? { uri: menu.image_url } : require('../../assets/images/2.jpg'),
-          category: menu.category || menu.categorie,
-          sub_menu_id: menu.sub_menu_id,
-          restaurant_id: menu.restaurant_id,
-          status: menu.status,
-          created_at: menu.created_at,
-          updated_at: menu.updated_at
-        }));
+        const mappedProducts = data.map(menu => {
+          console.log('Menu reçu:', menu);
+          const imageUrl = menu.cover && typeof menu.cover === 'string'
+            ? `https://www.mayombe-app.com/uploads_admin/${menu.cover}`
+            : null;
+          console.log('URL image menu:', imageUrl);
+          return {
+            id: menu.id,
+            name: menu.name || menu.libelle || "Sans nom",
+            description: menu.description || "Aucune description",
+            price: menu.prix || menu.price || "0",
+            image: imageUrl
+              ? { uri: imageUrl }
+              : require('../../assets/images/2.jpg'),
+            category: menu.category || menu.categorie,
+            sub_menu_id: menu.sub_menu_id,
+            restaurant_id: menu.restaurant_id,
+            status: menu.status,
+            created_at: menu.created_at,
+            updated_at: menu.updated_at
+          };
+        });
 
+        console.log('Produits mappés:', mappedProducts);
         setProducts(mappedProducts);
+      } else {
+        console.warn('Les données reçues ne sont pas un tableau:', data);
+        setProducts([]);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des menus:', error);
       setError('Impossible de charger les menus');
+      Alert.alert(
+        'Erreur',
+        'Impossible de charger les menus du restaurant. Veuillez réessayer plus tard.',
+        [{ text: 'OK' }]
+      );
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fonction de calcul de distance (Haversine)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Rayon de la Terre en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(2);
+  };
+
+  // Calcul de la durée estimée de livraison selon la distance
+  const getEstimatedDeliveryTime = () => {
+    if (!distance) return '...';
+    // Exemple : 5 min de base + 2 min par km
+    const base = 5;
+    const perKm = 2;
+    const estimated = Math.round(base + perKm * parseFloat(distance));
+    return `${estimated} min`;
   };
 
   const renderHeader = () => (
@@ -150,13 +311,23 @@ const RestaurantDetails = ({ route, navigation }) => {
         </View>
         <View style={styles.deliveryInfo}>
           <Ionicons name="time-outline" size={16} color="#666" />
-          <Text style={styles.deliveryTime}>{restaurant.deliveryTime} min</Text>
+          <Text style={styles.deliveryTime}>{getEstimatedDeliveryTime()}</Text>
         </View>
       </View>
       <View style={styles.addressContainer}>
         <Ionicons name="location-outline" size={16} color="#666" />
-        <Text style={styles.address}>{restaurant.address}</Text>
+        <Text style={styles.address}>{restaurant.adresse || 'Adresse non disponible'}</Text>
       </View>
+      <View style={styles.addressContainer}>
+        <Ionicons name="call-outline" size={16} color="#666" />
+        <Text style={styles.address}>{restaurant.phone || 'Téléphone non disponible'}</Text>
+      </View>
+      {distance && (
+        <View style={styles.addressContainer}>
+          <Ionicons name="walk-outline" size={16} color="#666" />
+          <Text style={styles.address}>Distance : {distance} km</Text>
+        </View>
+      )}
     </View>
   );
 
@@ -188,38 +359,50 @@ const RestaurantDetails = ({ route, navigation }) => {
     </ScrollView>
   );
 
-  const handleAddToCart = (product) => {
+  const handleAddToCart = async (product) => {
     try {
       console.log('Produit à ajouter avec compléments:', product);
+      console.log('ID du produit:', product.id);
+      console.log('Type de l\'ID:', typeof product.id);
       
       // S'assurer que le prix est un nombre
       const basePrice = typeof product.price === 'string' 
         ? parseFloat(product.price.replace(/[^\d.-]/g, ''))
         : product.price || 0;
 
-      const complementsTotal = product.complements?.reduce((sum, complement) => 
-        sum + (complement.price || 0), 0) || 0;
+      // Calculer le prix total des compléments
+      const complementsTotal = product.selectedComplements?.reduce((sum, complement) => 
+        sum + (parseFloat(complement.price) || 0), 0) || 0;
         
       const productToAdd = {
         id: product.id,
         name: product.name,
         basePrice: basePrice,
-        price: basePrice, // Stocker le prix comme un nombre
+        price: basePrice,
         image: product.image,
         quantity: product.quantity || 1,
-        complements: product.complements || [],
+        complements: product.selectedComplements || [],
         restaurant: restaurant.name,
-        totalPrice: basePrice * (product.quantity || 1) + complementsTotal,
+        totalPrice: (basePrice + complementsTotal) * (product.quantity || 1),
+        productKey: `${product.id}-${product.selectedComplements?.map(c => c.id).join('-') || ''}`,
+        isMenu: true,
+        menu_id: product.id,
+        product_id: null, // S'assurer que product_id est null pour les menus
+        type: 'menu' // Ajouter un type explicite
       };
 
       console.log('Produit formaté pour le panier:', productToAdd);
       
-      addToCart(productToAdd);
-      setModalVisible(false);
-      Alert.alert('Succès', 'Produit ajouté au panier !');
+      const success = await addToCart(productToAdd);
+      if (success) {
+        setModalVisible(false);
+        Alert.alert('Succès', 'Menu ajouté au panier !');
+      } else {
+        throw new Error('Impossible d\'ajouter le menu au panier');
+      }
     } catch (error) {
       console.error('Erreur lors de l\'ajout au panier:', error);
-      Alert.alert('Erreur', 'Impossible d\'ajouter le produit au panier');
+      Alert.alert('Erreur', error.message || 'Impossible d\'ajouter le menu au panier');
     }
   };
 

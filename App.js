@@ -24,17 +24,20 @@ import CategorieList from "./src/screens/CategorieList";
 import Categories from "./src/screens/Categories";
 import TopRatedRestaurants from "./src/screens/TopRatedRestaurants";
 import OrderSuccess from './src/screens/OrderSuccess';
+import OrderTracking from './src/screens/OrderTracking';
 import LanguageSelectionScreen from "./src/screens/LanguageSelectionScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import { useNavigation } from '@react-navigation/native';
 import ProductSection from "./src/components/Home/ProductSection";
 import AllProducts from "./src/screens/AllProducts";
 import BottomTabNavigator from './src/navigation/BottomTabNavigator';
+import ListeLivreursScreen from './src/screens/ListeLivreursScreen';
+import AllRestaurants from './src/screens/AllRestaurants';
 
 SplashScreen.preventAutoHideAsync();
 const Stack = createNativeStackNavigator();
 
-const AppNavigator = ({ initialRoute }) => {
+const  AppNavigator = ({ initialRoute }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
@@ -72,6 +75,21 @@ const AppNavigator = ({ initialRoute }) => {
       <Stack.Screen 
         name="OrderSuccess" 
         component={OrderSuccess} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="OrderTracking" 
+        component={OrderTracking}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="ListeLivreurs" 
+        component={ListeLivreursScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="AllRestaurants" 
+        component={AllRestaurants}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

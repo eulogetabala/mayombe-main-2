@@ -58,6 +58,7 @@ const AllProducts = ({ navigation }) => {
 
   const fetchProducts = async () => {
     try {
+      console.log("Début du chargement des produits...");
       const response = await fetch(`${API_BASE_URL}/products-list`, {
         method: 'GET',
         headers: {
@@ -66,40 +67,59 @@ const AllProducts = ({ navigation }) => {
         }
       });
 
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+
       const data = await response.json();
+      console.log("Données brutes reçues:", data);
 
-      if (response.ok && Array.isArray(data)) {
-        const mappedProducts = data.map((product) => {
-          const hasValidImage = product.image_url && 
-            product.image_url.startsWith('products/');
+      if (!Array.isArray(data)) {
+        console.error("Format de données invalide:", data);
+        throw new Error(t.products.invalidData);
+      }
 
-          const imageUrl = hasValidImage
-            ? `https://www.api-mayombe.mayombe-app.com/public/storage/${product.image_url}`
-            : null;
+      const mappedProducts = data.map(product => {
+        const isValidImage = product.image_url && 
+          typeof product.image_url === 'string' && 
+          product.image_url.startsWith('products/') && 
+          product.image_url !== 'image_url' && 
+          product.image_url !== 'test.jpg';
 
-          return {
-            id: product.id,
-            name: product.name || product.libelle || "",
-            price: product.price || "",
-            description: product.description || "",
-            imageUrl: imageUrl,
-            hasValidImage: hasValidImage,
-            image: hasValidImage 
-              ? { uri: imageUrl }
-              : require('../../assets/images/3.jpg'),
-            rating: product.rating || 4.5,
-            numberOfRatings: product.reviews_count || Math.floor(Math.random() * 50) + 10,
-            inStock: product.status === 1,
-            isNew: product.is_new || false,
-            discount: product.discount || null,
-            oldPrice: product.old_price || null
-          };
+        const imageUrl = isValidImage
+          ? `https://www.mayombe-app.com/uploads_admin/${product.image_url}`
+          : null;
+
+        console.log('[DEBUG IMAGE PRODUIT]', {
+          name: product.name,
+          image_url: product.image_url,
+          isValidImage,
+          imageUrl
         });
 
-        setProducts(mappedProducts);
-      }
+        return {
+          id: product.id,
+          name: product.name || product.libelle || "",
+          price: product.price || "",
+          description: product.description || "",
+          imageUrl: imageUrl,
+          hasValidImage: isValidImage,
+          image: isValidImage 
+            ? { uri: imageUrl }
+            : require('../../assets/images/3.jpg'),
+          rating: product.rating || 4.5,
+          numberOfRatings: product.reviews_count || Math.floor(Math.random() * 50) + 10,
+          inStock: product.status === 1,
+          isNew: product.is_new || false,
+          discount: product.discount || null,
+          oldPrice: product.old_price || null
+        };
+      });
+
+      console.log(`${mappedProducts.length} produits chargés avec leurs images`);
+      setProducts(mappedProducts);
     } catch (error) {
-      // console.error('Erreur lors du chargement des produits:', error);
+      console.error("Erreur lors du chargement des produits:", error);
       setError(t.products.loadError);
     } finally {
       setLoading(false);

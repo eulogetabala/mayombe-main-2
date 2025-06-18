@@ -84,14 +84,18 @@ const TrouverRestaurant = ({ navigation }) => {
       const data = await response.json();
 
       if (response.ok && Array.isArray(data)) {
-        const mappedRestaurants = data.map(restaurant => ({
+        // Trier les restaurants du plus récent au plus ancien (par id décroissant)
+        const sortedData = data.sort((a, b) => b.id - a.id);
+        const mappedRestaurants = sortedData.map(restaurant => ({
           id: restaurant.id,
           name: restaurant.name || "Nom non disponible",
           address: restaurant.adresse || "Adresse non disponible",
           phone: restaurant.phone || "Téléphone non disponible",
           rating: 4.8,
           reviews: Math.floor(Math.random() * 150) + 100,
-          image: require("../../../assets/images/2.jpg"),
+          image: restaurant.cover && typeof restaurant.cover === 'string'
+            ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
+            : require("../../../assets/images/2.jpg"),
           minOrder: "5000",
         }));
 
@@ -270,7 +274,7 @@ const TrouverRestaurant = ({ navigation }) => {
             />
           </>
         )}
-        data={restaurants[selectedCity] || []}
+        data={(restaurants[selectedCity] || []).slice(0, 4)}
         renderItem={renderRestaurantCard}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}

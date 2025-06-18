@@ -1,40 +1,9 @@
 {
-  "cli": {
-    "version": ">= 5.9.1",
-    "appVersionSource": "remote"
-  },
   "build": {
     "development": {
-      "developmentClient": true,
-      "distribution": "internal",
-      "android": {
-        "gradleCommand": ":app:assembleDebug",
-        "buildType": "apk",
-        "cache": {
-          "key": "gradle-{{ hashFiles('android/build.gradle') }}"
-        }
-      }
-    },
-    "preview": {
-      "distribution": "internal",
-      "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease",
-        "cache": {
-          "key": "gradle-preview-{{ hashFiles('android/build.gradle') }}"
-        }
-      }
-    },
-    "production": {
-      "android": {
-        "buildType": "app-bundle",
-        "cache": {
-          "key": "gradle-production-{{ hashFiles('android/build.gradle') }}"
-        }
+      "ios": {
+        "simulator": true
       }
     }
-  },
-  "submit": {
-    "production": {}
   }
 }

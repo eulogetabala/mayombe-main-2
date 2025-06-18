@@ -56,11 +56,15 @@ const ProductSectionContent = ({
                 source={item.hasValidImage ? { uri: item.imageUrl } : require('../../../assets/images/2.jpg')}
                 style={styles.productImage}
                 defaultSource={require('../../../assets/images/2.jpg')}
+                onError={e => console.log('Erreur chargement image', item.imageUrl, e.nativeEvent)}
               />
             </View>
             <View style={styles.productInfo}>
               <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.productPrice}>{item.price}</Text>
+              <View style={styles.priceContainer}>
+                <Text style={styles.productPrice}>{item.price}</Text>
+                <Text style={styles.uniteText}>{item.unite}</Text>
+              </View>
               {item.discount && (
                 <View style={styles.discountBadge}>
                   <Text style={styles.discountText}>-{item.discount}%</Text>
@@ -218,7 +222,11 @@ const ProductSection = ({ listMode = "vertical" }) => {
       }
 
       const data = await response.json();
-      console.log("Données brutes reçues:", data);
+      console.log("=== STRUCTURE COMPLÈTE DU PREMIER PRODUIT ===");
+      if (data && data.length > 0) {
+        console.log(JSON.stringify(data[0], null, 2));
+      }
+      console.log("=== FIN DE LA STRUCTURE ===");
 
       if (!Array.isArray(data)) {
         console.error("Format de données invalide:", data);
@@ -226,24 +234,32 @@ const ProductSection = ({ listMode = "vertical" }) => {
       }
 
       const mappedProducts = data.map(product => {
-        const hasValidImage = product.image_url && 
-          product.image_url.startsWith('products/');
-
-        const imageUrl = hasValidImage
-          ? `https://www.api-mayombe.mayombe-app.com/public/storage/${product.image_url}`
+        const isValidImage = product.image_url && typeof product.image_url === 'string' && product.image_url.startsWith('products/') && product.image_url !== 'image_url' && product.image_url !== 'test.jpg';
+        const imageUrl = isValidImage
+          ? `https://www.mayombe-app.com/uploads_admin/${product.image_url}`
           : null;
-
+        const defaultImage = require('../../../assets/images/2.jpg');
+        console.log('[DEBUG PRODUIT COMPLET]', {
+          name: product.name,
+          image_url: product.image_url,
+          isValidImage,
+          imageUrl,
+          defaultImage,
+          unite_vente: product.unite_vente,
+          all_fields: product
+        });
         return {
           id: product.id,
           name: product.name || product.libelle || t.products.noName,
           price: product.price ? `${product.price} ${t.products.currency}` : t.products.priceNotAvailable,
+          unite: product.unite || "",
           description: product.desc || t.products.noDescription,
           ingredients: product.ingredients?.map(ing => normalizeAndTranslateIngredient(ing)) || [],
           imageUrl: imageUrl,
-          hasValidImage: hasValidImage,
-          image: hasValidImage 
+          hasValidImage: isValidImage,
+          image: isValidImage 
             ? { uri: imageUrl }
-            : require('../../../assets/images/2.jpg'),
+            : defaultImage,
           discount: product.discount || null,
           oldPrice: product.old_price,
           isNew: product.is_new,
@@ -333,25 +349,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    paddingRight: 44,
   },
   productName: { 
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "bold",
     color: '#333',
-    marginBottom: 6,
+    marginBottom: 4,
     fontFamily: "Montserrat-Bold",
   },
   priceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
+    gap: 4,
+    marginTop: 2,
   },
   productPrice: { 
-    fontSize: 16,
+    fontSize: 14,
     color: '#51A905',
     fontWeight: 'bold',
     fontFamily: "Montserrat-Bold",
+  },
+  uniteText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: "Montserrat-Regular",
+    marginLeft: 2,
   },
   discountBadge: {
     position: "absolute",
@@ -387,12 +410,12 @@ const styles = StyleSheet.create({
   },
   addButton: {
     position: 'absolute',
-    right: 8,
-    bottom: 8,
+    right: -18,
+    bottom: 2,
     backgroundColor: '#51A905',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',

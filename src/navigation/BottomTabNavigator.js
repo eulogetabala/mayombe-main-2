@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
 import CartScreen from '../screens/CartScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import RestaurantDetails from '../screens/RestaurantDetails';
+import RestaurantDetailsScreen from '../screens/RestaurantDetailsScreen';
 import RestaurantList from '../screens/RestaurantList';
 import TopRatedRestaurants from '../screens/TopRatedRestaurants';
 import CategorieList from '../screens/CategorieList';
@@ -19,6 +19,7 @@ import AllRestaurants from '../screens/AllRestaurants';
 import AllProducts from '../screens/AllProducts';
 import MapScreen from '../screens/MapScreen';
 import ProcessPayment from '../screens/ProcessPayment';
+import ListeLivreursScreen from '../screens/ListeLivreursScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -35,27 +36,10 @@ function CartStack() {
         }}
       />
       <Stack.Screen 
-        name="Order" 
-        component={OrderScreen}
-        options={{
-          title: "Commander",
-          headerTitleStyle: {
-            fontFamily: 'Montserrat-Bold',
-          },
-        }}
-      />
-      <Stack.Screen 
-        name="Payment" 
+        name="PaymentScreen" 
         component={PaymentScreen}
         options={{
           title: "Paiement",
-          headerShown: false
-        }}
-      />
-      <Stack.Screen 
-        name="OrderSuccess" 
-        component={OrderSuccess}
-        options={{
           headerShown: false
         }}
       />
@@ -64,6 +48,13 @@ function CartStack() {
         component={ProcessPayment}
         options={{
           title: "Traitement du paiement",
+          headerShown: false
+        }}
+      />
+      <Stack.Screen 
+        name="OrderSuccess" 
+        component={OrderSuccess}
+        options={{
           headerShown: false
         }}
       />
@@ -81,7 +72,7 @@ function HomeStackScreen() {
       />
       <Stack.Screen 
         name="RestaurantDetails" 
-        component={RestaurantDetails}
+        component={RestaurantDetailsScreen}
         options={{
           title: "Détails du restaurant",
           headerTitleStyle: {
@@ -150,23 +141,32 @@ const BottomTabNavigator = () => {
         tabBarActiveTintColor: '#51A905',
         tabBarInactiveTintColor: 'gray',
         tabBarStyle: {
-          height: 60,
-          paddingBottom: 5,
-          paddingTop: 5,
+          height: 65,
+          paddingBottom: 8,
+          paddingTop: 8,
           position: 'absolute',
           backgroundColor: '#fff',
-          borderTopWidth: 1,
-          borderTopColor: '#eee',
+          borderTopWidth: 0,
           elevation: 8,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.1,
           shadowRadius: 3,
+          borderTopLeftRadius: 20,
+          borderTopRightRadius: 20,
+          marginHorizontal: 10,
+          marginBottom: Platform.OS === 'android' ? 0 : 20,
         },
         tabBarLabelStyle: {
           fontFamily: 'Montserrat',
           fontSize: 12,
           marginBottom: Platform.OS === 'android' ? 5 : 0,
+        },
+        tabBarItemStyle: {
+          padding: 5,
+        },
+        tabBarIconStyle: {
+          marginBottom: -3,
         },
       }}
     >

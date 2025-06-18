@@ -11,9 +11,17 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.thprojet.mayombeclient"
+      "bundleIdentifier": "com.thprojet.mayombeclient",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.",
+        "NSLocationAlwaysUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -28,8 +36,7 @@
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE"
-      ],
-      "buildType": "apk"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

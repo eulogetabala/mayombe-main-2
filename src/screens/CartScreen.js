@@ -1,19 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, SafeAreaView, Platform, StatusBar, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, SafeAreaView, ScrollView, Platform, StatusBar, Alert, ActivityIndicator, Dimensions } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
+import useCartSharing from '../hooks/useCartSharing';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+const { width, height } = Dimensions.get('window');
 
-const CartScreen = ({ navigation }) => {
+const CartScreen = ({ navigation, route }) => {
   const { cartItems, setCartItems, removeFromCart, updateQuantity, calculateCartTotal } = useCart();
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
   const [totalAmount, setTotalAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Utiliser le hook de partage de panier
+  const { isSharing, shareCart, loadSharedCart } = useCartSharing(cartItems, setCartItems, formatPrice);
 
   useEffect(() => {
     loadCartItems();
@@ -27,6 +32,13 @@ const CartScreen = ({ navigation }) => {
     const total = calculateCartTotal();
     setTotalAmount(total);
   }, [cartItems]);
+
+  // Vérifier si nous avons reçu un panier partagé
+  useEffect(() => {
+    if (route.params?.sharedCartId) {
+      loadSharedCart(route.params.sharedCartId);
+    }
+  }, [route.params?.sharedCartId]);
 
   const loadCartItems = async () => {
     try {
@@ -68,7 +80,6 @@ const CartScreen = ({ navigation }) => {
     return isNaN(numPrice) ? 0 : numPrice;
   };
 
-  // Nouvelle fonction pour créer une commande via l'API
   const createOrder = async () => {
     if (cartItems.length === 0) {
       Alert.alert("Erreur", "Votre panier est vide");
@@ -78,11 +89,9 @@ const CartScreen = ({ navigation }) => {
     setIsSubmitting(true);
 
     try {
-      // Récupérer le token d'authentification
       const userToken = await AsyncStorage.getItem('userToken');
       
       if (!userToken) {
-        // Si l'utilisateur n'est pas connecté, rediriger vers la page de connexion
         Alert.alert(
           "Connexion requise",
           "Vous devez être connecté pour passer une commande",
@@ -98,28 +107,37 @@ const CartScreen = ({ navigation }) => {
         return;
       }
 
-      // Formater les données selon le format requis par l'API
-      const items = cartItems.map(item => {
-        // Déterminer si c'est un menu ou un produit
-        const isMenu = item.type === 'menu';
-        
+      // Formatage et validation des articles
+      const formattedItems = cartItems.map(item => {
+        // S'assurer que l'ID est un nombre
+        const itemId = parseInt(item.id);
+        if (isNaN(itemId)) {
+          throw new Error(`ID invalide pour l'article: ${item.name}`);
+        }
+
+        // S'assurer que le prix est un nombre
+        const price = formatPrice(item.unitPrice);
+        if (isNaN(price)) {
+          throw new Error(`Prix invalide pour l'article: ${item.name}`);
+        }
+
         return {
-          item_type: isMenu ? "menu" : "product",
-          menu_id: isMenu ? item.id : null,
-          product_id: !isMenu ? item.id : null,
-          quantity: item.quantity,
-          price_at_order: formatPrice(item.unitPrice)
+          item_type: item.type === 'menu' ? "menu" : "product",
+          menu_id: item.type === 'menu' ? itemId : null,
+          product_id: item.type !== 'menu' ? itemId : null,
+          quantity: parseInt(item.quantity),
+          price_at_order: price
         };
       });
 
-      // Préparer le corps de la requête
       const requestBody = {
-        items: items
+        items: formattedItems,
+        total_amount: formatPrice(totalAmount),
+        delivery_fee: 1000
       };
 
-      console.log("Envoi de la commande:", JSON.stringify(requestBody));
+      console.log("Données de la commande:", JSON.stringify(requestBody, null, 2));
 
-      // Appel à l'API avec le token d'authentification
       const response = await fetch(`${API_BASE_URL}/create-order`, {
         method: 'POST',
         headers: {
@@ -130,24 +148,23 @@ const CartScreen = ({ navigation }) => {
         body: JSON.stringify(requestBody)
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error("Réponse du serveur:", responseText);
+        throw new Error("Format de réponse invalide");
+      }
 
-      if (response.ok) {
-        console.log("Commande créée avec succès:", data);
-        
-        // Vider le panier après une commande réussie
-        await AsyncStorage.removeItem('cart');
-        setCartItems([]);
-        
-        // Naviguer vers l'écran de commande avec les détails
-        navigation.navigate('Order', { 
-          cartItems, 
-          totalAmount,
-          orderId: data.order_id || data.id
+      if (!response.ok) {
+        console.error("Erreur serveur:", {
+          status: response.status,
+          data: data
         });
-      } else {
+        
         if (response.status === 401) {
-          // Token expiré ou invalide
           Alert.alert(
             "Session expirée",
             "Votre session a expiré. Veuillez vous reconnecter.",
@@ -158,15 +175,52 @@ const CartScreen = ({ navigation }) => {
               }
             ]
           );
-        } else {
-          throw new Error(data.message || "Erreur lors de la création de la commande");
+          return;
         }
+
+        throw new Error(data?.message || `Erreur du serveur (${response.status})`);
       }
+
+      const orderId = data.order_id || data.id;
+      if (!orderId) {
+        throw new Error("ID de commande manquant dans la réponse");
+      }
+
+      // Sauvegarder les détails avant de vider le panier
+      const orderDetails = {
+        items: [...cartItems],
+        subtotal: totalAmount,
+        deliveryFee: 1000,
+        total: totalAmount + 1000,
+        orderId: orderId
+      };
+
+      // Vider complètement le panier
+      await AsyncStorage.removeItem('cart');
+      setCartItems([]);
+
+      navigation.navigate('PaymentScreen', { 
+        orderDetails,
+        onPaymentSuccess: async () => {
+          try {
+            await AsyncStorage.removeItem('cart');
+            setCartItems([]);
+          } catch (error) {
+            console.error("Erreur lors du nettoyage du panier:", error);
+          }
+        }
+      });
+
     } catch (error) {
-      console.error("Erreur de création de commande:", error);
+      console.error("Erreur détaillée:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
       Alert.alert(
         "Erreur",
-        "Impossible de créer la commande. Veuillez réessayer plus tard."
+        "Une erreur est survenue lors de la création de la commande. Veuillez vérifier vos articles et réessayer."
       );
     } finally {
       setIsSubmitting(false);
@@ -265,38 +319,71 @@ const CartScreen = ({ navigation }) => {
             <Text style={styles.emptyText}>{t.cart.empty}</Text>
           </View>
         ) : (
-          <>
+          <View style={styles.mainContainer}>
             <FlatList
               data={cartItems}
               renderItem={renderItem}
               keyExtractor={(item) => item.productKey}
               contentContainerStyle={styles.listContainer}
               showsVerticalScrollIndicator={false}
-            />
+              ListFooterComponent={() => (
+                <>
+                  <View style={styles.summaryContainer}>
+                    <Text style={styles.summaryTitle}>Récapitulatif</Text>
+                    <View style={styles.priceRow}>
+                      <Text style={styles.priceLabel}>Sous-total</Text>
+                      <Text style={styles.priceValue}>{formatPrice(totalAmount)} FCFA</Text>
+                    </View>
+                    <View style={styles.priceRow}>
+                      <Text style={styles.priceLabel}>Frais de livraison</Text>
+                      <Text style={styles.priceValue}>1000 FCFA</Text>
+                    </View>
+                    <View style={[styles.priceRow, styles.totalRow]}>
+                      <Text style={styles.totalLabel}>Total</Text>
+                      <Text style={styles.totalValue}>{formatPrice(totalAmount + 1000)} FCFA</Text>
+                    </View>
+                  </View>
 
-            <View style={styles.footer}>
-              <View style={styles.totalContainer}>
-                <Text style={styles.totalLabel}>{t.cart.total}</Text>
-                <Text style={styles.totalAmount}>
-                  {formatPrice(totalAmount)} FCFA
-                </Text>
-              </View>
-              <TouchableOpacity 
-                style={[
-                  styles.checkoutButton,
-                  isSubmitting && styles.disabledButton
-                ]}
-                onPress={createOrder}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.checkoutButtonText}>{t.cart.checkout}</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </>
+                  <View style={styles.footer}>
+                    <View style={styles.buttonContainer}>
+                      <TouchableOpacity 
+                        style={[
+                          styles.checkoutButton,
+                          isSubmitting && styles.disabledButton
+                        ]}
+                        onPress={createOrder}
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <Text style={styles.checkoutButtonText}>Choisir le mode de paiement</Text>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        style={[
+                          styles.shareButton,
+                          isSharing && styles.disabledButton
+                        ]}
+                        onPress={shareCart}
+                        disabled={isSharing}
+                      >
+                        {isSharing ? (
+                          <ActivityIndicator color="#fff" size="small" />
+                        ) : (
+                          <>
+                            <Ionicons name="share-social" size={20} color="#fff" style={styles.buttonIcon} />
+                            <Text style={styles.shareButtonText}>Partager le panier</Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </>
+              )}
+            />
+          </View>
         )}
       </View>
     </SafeAreaView>
@@ -312,6 +399,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+    paddingHorizontal: width * 0.05,
   },
   header: {
     flexDirection: 'row',
@@ -356,10 +444,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+    width: width * 0.9,
   },
   itemImage: {
-    width: 80,
-    height: 80,
+    width: width * 0.2,
+    height: width * 0.2,
     borderRadius: 8,
   },
   itemDetails: {
@@ -397,39 +486,38 @@ const styles = StyleSheet.create({
   },
   footer: {
     padding: 15,
-    paddingBottom: Platform.OS === 'ios' ? 25 : 85,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
     backgroundColor: '#fff',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     elevation: 10,
     zIndex: 1000,
   },
-  totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  buttonContainer: {
+    flexDirection: 'column',
+    gap: 10,
+  },
+  shareButton: {
+    backgroundColor: '#FF6B00',
+    borderRadius: 25,
+    padding: 15,
     alignItems: 'center',
-    marginBottom: 15,
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
-  totalLabel: {
-    fontSize: 18,
-    color: '#333',
+  shareButtonText: {
+    color: '#fff',
+    fontSize: 16,
     fontFamily: "Montserrat-Bold",
   },
-  totalAmount: {
-    fontSize: 20,
-    color: '#51A905',
-    fontFamily: "Montserrat-Bold",
+  buttonIcon: {
+    marginRight: 8,
   },
   checkoutButton: {
     backgroundColor: '#51A905',
     borderRadius: 25,
     padding: 15,
-    
     alignItems: 'center',
+    width: '100%',
   },
   checkoutButtonText: {
     color: '#fff',
@@ -494,6 +582,60 @@ const styles = StyleSheet.create({
   disabledButton: {
     backgroundColor: '#A0A0A0',
     opacity: 0.7,
+  },
+  mainContainer: {
+    flex: 1,
+  },
+  summaryContainer: {
+    backgroundColor: '#fff',
+    padding: 15,
+    marginBottom: 15,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: '#333',
+    fontFamily: 'Montserrat-Bold',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  priceLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontFamily: 'Montserrat',
+  },
+  priceValue: {
+    fontSize: 14,
+    color: '#333',
+    fontFamily: 'Montserrat-Bold',
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    marginTop: 8,
+    paddingTop: 12,
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    fontFamily: 'Montserrat-Bold',
+  },
+  totalValue: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#51A905',
+    fontFamily: 'Montserrat-Bold',
   },
 });
 

@@ -16,7 +16,7 @@ import PaymentScreen from '../screens/PaymentScreen';
 import FavoritesScreen from '../screens/FavoritesScreen';
 import CategorieList from '../screens/CategorieList';
 import RestaurantMenu from '../screens/RestaurantMenu';
-import RestaurantDetails from '../screens/RestaurantDetails';
+import RestaurantDetailsScreen from '../screens/RestaurantDetailsScreen';
 import AllProducts from '../screens/AllProducts';
 import AllRestaurants from '../screens/AllRestaurants';
 import MapScreen from '../screens/MapScreen';
@@ -64,7 +64,7 @@ const HomeStack = () => {
       />
       <Stack.Screen 
         name="RestaurantDetails" 
-        component={RestaurantDetails} 
+        component={RestaurantDetailsScreen} 
         options={{ title: t.restaurants.information }} 
       />
       <Stack.Screen 

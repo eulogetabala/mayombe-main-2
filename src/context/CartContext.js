@@ -1,11 +1,44 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 
 const CartContext = createContext();
 
+export const useCart = () => useContext(CartContext);
+
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
+  const [orderInProgress, setOrderInProgress] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState(null);
+
+  // Charger le panier depuis le stockage local
+  useEffect(() => {
+    loadCartFromStorage();
+  }, []);
+
+  // Sauvegarder le panier dans le stockage local
+  useEffect(() => {
+    saveCartToStorage();
+  }, [cartItems]);
+
+  const loadCartFromStorage = async () => {
+    try {
+      const storedCart = await AsyncStorage.getItem('cart');
+      if (storedCart) {
+        setCartItems(JSON.parse(storedCart));
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement du panier:', error);
+    }
+  };
+
+  const saveCartToStorage = async () => {
+    try {
+      await AsyncStorage.setItem('cart', JSON.stringify(cartItems));
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde du panier:', error);
+    }
+  };
 
   const addToCart = async (product, quantity = 1) => {
     try {
@@ -142,19 +175,38 @@ export const CartProvider = ({ children }) => {
     return cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
   };
 
-  return (
-    <CartContext.Provider value={{
-      cartItems,
-      setCartItems,
-      addToCart,
-      removeFromCart,
-      updateQuantity,
-      clearCart,
-      calculateCartTotal
-    }}>
-      {children}
-    </CartContext.Provider>
-  );
+  const startOrder = (orderDetails) => {
+    setOrderInProgress(true);
+    setPendingOrder(orderDetails);
+  };
+
+  const completeOrder = () => {
+    setOrderInProgress(false);
+    setPendingOrder(null);
+    clearCart();
+  };
+
+  const cancelOrder = () => {
+    setOrderInProgress(false);
+    setPendingOrder(null);
+  };
+
+  const value = {
+    cartItems,
+    setCartItems,
+    addToCart,
+    removeFromCart,
+    updateQuantity,
+    clearCart,
+    calculateCartTotal,
+    orderInProgress,
+    pendingOrder,
+    startOrder,
+    completeOrder,
+    cancelOrder
+  };
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 };
 
-export const useCart = () => useContext(CartContext); 
+export default CartContext; 
