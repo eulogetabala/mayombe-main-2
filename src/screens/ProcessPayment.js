@@ -10,9 +10,11 @@ import {
   TextInput,
   Alert,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import CountryPicker, { DEFAULT_THEME, DARK_THEME } from 'react-native-country-picker-modal';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -24,6 +26,8 @@ const ProcessPayment = ({ route, navigation }) => {
   const [expiryDate, setExpiryDate] = useState('');
   const [cvv, setCvv] = useState('');
   const [cardholderName, setCardholderName] = useState('');
+  const [countryCode, setCountryCode] = useState('CG');
+  const [callingCode, setCallingCode] = useState('242');
 
   const paymentMethod = orderDetails?.paymentMethod || 'cash';
 
@@ -76,11 +80,12 @@ const ProcessPayment = ({ route, navigation }) => {
       }
 
       // Préparer les données de paiement selon le format attendu par l'API
+      const fullPhoneNumber = `+${callingCode}${phoneNumber.replace(/^0+/, '')}`;
       const paymentData = {
         order_id: orderDetails.orderId,
         total: orderDetails.total,
         delivery_address: orderDetails.address,
-        delivery_phone: orderDetails.phone || phoneNumber, // Utiliser le numéro de téléphone de paiement si pas de numéro de livraison
+        delivery_phone: orderDetails.phone || fullPhoneNumber, // Utiliser le numéro de téléphone de paiement si pas de numéro de livraison
         payment_method: paymentMethod === 'airtel' ? 'airtel_money' : 
                        paymentMethod === 'mtn' ? 'mobile_money' : 'cb',
         operator: paymentMethod === 'airtel' ? 'airtel_money' : 
@@ -201,10 +206,22 @@ const ProcessPayment = ({ route, navigation }) => {
           <Text style={styles.formDescription}>
             Entrez votre numéro de téléphone pour effectuer le paiement
           </Text>
-          <View style={styles.inputContainer}>
-            <Ionicons name="call-outline" size={20} color="#666" />
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <CountryPicker
+              countryCode={countryCode}
+              withFilter
+              withFlag
+              withCallingCode
+              withCallingCodeButton
+              onSelect={(country) => {
+                setCountryCode(country.cca2);
+                setCallingCode(country.callingCode[0]);
+              }}
+              translation="fr"
+              theme={Platform.OS === 'ios' ? DEFAULT_THEME : DARK_THEME}
+            />
             <TextInput
-              style={styles.input}
+              style={{ flex: 1, marginLeft: 8, borderBottomWidth: 1, borderColor: '#ddd', padding: 8 }}
               placeholder="Numéro de téléphone"
               keyboardType="phone-pad"
               value={phoneNumber}

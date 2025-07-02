@@ -28,6 +28,7 @@ const CategorieSection = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [imageErrors, setImageErrors] = useState({});
 
   useEffect(() => {
     fetchCategories();
@@ -49,13 +50,17 @@ const CategorieSection = () => {
           id: category.id,
           name: category.libelle || '',
           icon: normalizeAndTranslate(category.libelle),
+          image_url: category.image_url || category.image || category.cover,
         }));
 
+        console.log('Catégories chargées:', mappedCategories.length);
+        console.log('Exemple de catégorie:', mappedCategories[0]);
         setCategories(mappedCategories);
       } else {
         throw new Error('Format de données invalide');
       }
     } catch (error) {
+      console.error('Erreur lors du chargement des catégories:', error);
       setError(t.categories.loadError);
     } finally {
       setLoading(false);
@@ -102,36 +107,57 @@ const CategorieSection = () => {
     return iconMap[normalizedName] || "apps";
   };
 
-  const renderCategory = (category) => (
-    <TouchableOpacity
-      key={category.id}
-      style={styles.category}
-      onPress={() => handleCategoryPress(category)}
-      activeOpacity={0.7}
-    >
-      <Animatable.View 
-        animation="fadeIn" 
-        duration={500} 
-        delay={category.id * 100}
-        style={styles.iconWrapper}
+  const handleImageError = (categoryId) => {
+    setImageErrors(prev => ({
+      ...prev,
+      [categoryId]: true
+    }));
+  };
+
+  const renderCategory = (category) => {
+    const hasImageError = imageErrors[category.id];
+    const imageUrl = category.image_url ? `https://www.mayombe-app.com/uploads_admin/${category.image_url}` : null;
+
+    return (
+      <TouchableOpacity
+        key={category.id}
+        style={styles.category}
+        onPress={() => handleCategoryPress(category)}
+        activeOpacity={0.7}
       >
-        <View style={styles.iconBackground}>
-          <MaterialCommunityIcons
-            name={getIconName(category)}
-            size={24}
-            color="#51A905"
-          />
-        </View>
-        <Text 
-          numberOfLines={1}
-          ellipsizeMode="tail"
-          style={styles.categoryText}
+        <Animatable.View 
+          animation="fadeIn" 
+          duration={500} 
+          delay={category.id * 100}
+          style={styles.iconWrapper}
         >
-          {category.name || ''}
-        </Text>
-      </Animatable.View>
-    </TouchableOpacity>
-  );
+          <View style={styles.iconBackground}>
+            {imageUrl && !hasImageError ? (
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.categoryImage}
+                onError={() => handleImageError(category.id)}
+                defaultSource={require('../../../assets/images/3.jpg')}
+              />
+            ) : (
+              <MaterialCommunityIcons
+                name={getIconName(category)}
+                size={24}
+                color="#51A905"
+              />
+            )}
+          </View>
+          <Text 
+            numberOfLines={1}
+            ellipsizeMode="tail"
+            style={styles.categoryText}
+          >
+            {category.name || ''}
+          </Text>
+        </Animatable.View>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -281,6 +307,12 @@ const styles = StyleSheet.create({
   retryText: {
     color: '#FFF',
     fontFamily: "Montserrat-Bold",
+  },
+  categoryImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: width * 0.075,
+    resizeMode: 'cover',
   },
 });
 

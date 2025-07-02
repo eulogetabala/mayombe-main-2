@@ -16,6 +16,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AddressModal from '../components/AddressModal';
+import CountryPicker, { 
+  CountryModalProvider,
+  DARK_THEME,
+  DEFAULT_THEME
+} from "react-native-country-picker-modal";
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -27,6 +32,8 @@ const PaymentScreen = ({ route, navigation }) => {
   const [phone, setPhone] = useState('');
   const [isAddressModalVisible, setIsAddressModalVisible] = useState(false);
   const [addressModalVisible, setAddressModalVisible] = useState(false);
+  const [countryCode, setCountryCode] = useState("CG"); // Code pays par défaut (Congo)
+  const [callingCode, setCallingCode] = useState("242"); // Indicatif par défaut (Congo)
 
   const paymentMethods = [
     {
@@ -224,7 +231,22 @@ const PaymentScreen = ({ route, navigation }) => {
         <View style={styles.formGroup}>
           <Text style={styles.label}>Numéro de téléphone de livraison</Text>
           <View style={styles.phoneInput}>
-            <Ionicons name="call-outline" size={20} color="#FF6B00" style={styles.phoneIcon} />
+            <View style={styles.countryPickerContainer}>
+              <CountryPicker
+                containerButtonStyle={styles.countryButton}
+                countryCode={countryCode}
+                withFilter
+                withFlag
+                withCallingCode
+                withCallingCodeButton
+                onSelect={(country) => {
+                  setCountryCode(country.cca2);
+                  setCallingCode(country.callingCode[0]);
+                }}
+                translation="fr"
+                theme={Platform.OS === 'ios' ? DEFAULT_THEME : DARK_THEME}
+              />
+            </View>
             <TextInput
               style={styles.input}
               placeholder="Entrez votre numéro de téléphone"
@@ -423,7 +445,7 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#fff',
     padding: 16,
-    paddingBottom: Platform.OS === 'android' ? 50 : 40,
+    paddingBottom: Platform.OS === 'android' ? 20 : 20,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
   },
@@ -432,7 +454,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 160,
+    marginBottom: 90,
   },
   payButtonDisabled: {
     backgroundColor: '#ccc',
@@ -485,13 +507,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    paddingHorizontal: 10,
-    marginBottom: 15,
-    height: 50,
     backgroundColor: '#fff',
+    height: 50,
+    marginBottom: 15,
   },
-  phoneIcon: {
-    marginRight: 8,
+  countryPickerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#ddd',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  countryButton: {
+    padding: 0,
+  },
+  countryButtonText: {
+    fontSize: 14,
+    color: '#333',
+    fontFamily: 'Montserrat',
   },
 });
 

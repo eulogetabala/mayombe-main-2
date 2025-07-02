@@ -9,6 +9,7 @@ import {
   Platform,
   Image,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
@@ -23,33 +24,84 @@ const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const CategoriesContent = ({ categories, navigation, t }) => {
   const windowWidth = Dimensions.get('window').width;
   const cardWidth = (windowWidth - 56) / 2;
+  const [imageErrors, setImageErrors] = useState({});
+  const [loadingImages, setLoadingImages] = useState({});
 
-  const renderCategory = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.categoryCard, { width: cardWidth }]}
-      onPress={() => {
-        navigation.dispatch(
-          CommonActions.navigate({
-            name: 'CategorieList',
-            params: {
-              categoryId: item.id,
-              categoryName: t.categories[item.libelle.toLowerCase()] || item.libelle,
-            },
-          })
-        );
-      }}
-      activeOpacity={0.8}
-    >
-      <View style={styles.imageContainer}>
-        <Image
-          source={require('../../assets/images/3.jpg')}
-          style={styles.categoryImage}
-        />
-        <View style={styles.overlay} />
-        <Text style={styles.categoryName}>{item.libelle}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const handleImageError = (categoryId) => {
+    setImageErrors(prev => ({
+      ...prev,
+      [categoryId]: true
+    }));
+    setLoadingImages(prev => ({
+      ...prev,
+      [categoryId]: false
+    }));
+  };
+
+  const handleImageLoad = (categoryId) => {
+    setLoadingImages(prev => ({
+      ...prev,
+      [categoryId]: false
+    }));
+  };
+
+  const handleImageLoadStart = (categoryId) => {
+    setLoadingImages(prev => ({
+      ...prev,
+      [categoryId]: true
+    }));
+  };
+
+  const renderCategory = ({ item }) => {
+    const hasImageError = imageErrors[item.id];
+    const isLoading = loadingImages[item.id];
+    const imageUrl = item.image_url ? `https://www.mayombe-app.com/uploads_admin/${item.image_url}` : null;
+
+    return (
+      <TouchableOpacity
+        style={[styles.categoryCard, { width: cardWidth }]}
+        onPress={() => {
+          navigation.dispatch(
+            CommonActions.navigate({
+              name: 'CategorieList',
+              params: {
+                categoryId: item.id,
+                categoryName: t.categories[item.libelle.toLowerCase()] || item.libelle,
+              },
+            })
+          );
+        }}
+        activeOpacity={0.8}
+      >
+        <View style={styles.imageContainer}>
+          {imageUrl && !hasImageError ? (
+            <View style={styles.imageWrapper}>
+              <Image
+                source={{ uri: imageUrl }}
+                style={styles.categoryImage}
+                onError={() => handleImageError(item.id)}
+                onLoad={() => handleImageLoad(item.id)}
+                onLoadStart={() => handleImageLoadStart(item.id)}
+                defaultSource={require('../../assets/images/3.jpg')}
+              />
+              {isLoading && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="small" color="#51A905" />
+                </View>
+              )}
+            </View>
+          ) : (
+            <Image
+              source={require('../../assets/images/3.jpg')}
+              style={styles.categoryImage}
+            />
+          )}
+          <View style={styles.overlay} />
+          <Text style={styles.categoryName}>{item.libelle}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -123,10 +175,11 @@ const Categories = ({ navigation }) => {
       const formattedCategories = data.map(category => ({
         id: category.id,
         libelle: category.libelle || t.categories.unnamed,
-        image_url: category.image_url,
+        image_url: category.image_url || category.image || category.cover,
       }));
 
       console.log(`${formattedCategories.length} catégories chargées avec succès`);
+      console.log('Exemple de catégorie:', formattedCategories[0]);
       setCategories(formattedCategories);
     } catch (error) {
       console.error("Erreur lors du chargement des catégories:", error);
@@ -254,6 +307,15 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 14,
     fontFamily: 'Montserrat-Bold',
+  },
+  imageWrapper: {
+    position: 'relative',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

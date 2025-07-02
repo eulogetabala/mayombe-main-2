@@ -9,7 +9,7 @@ import { translations } from '../../translations';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
-const NouveauSurLeMarche = () => {
+const NouveauxProduits = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -97,6 +97,19 @@ const NouveauSurLeMarche = () => {
     return favorites.some(fav => fav.id === productId);
   };
 
+  // Fonction pour vérifier si un produit est récent (1-3 jours)
+  const isRecentProduct = (createdAt) => {
+    if (!createdAt) return false;
+    
+    const productDate = new Date(createdAt);
+    const now = new Date();
+    const diffTime = Math.abs(now - productDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Retourne true si le produit a entre 1 et 3 jours
+    return diffDays >= 1 && diffDays <= 5;
+  };
+
   const fetchProducts = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/products-list`);
@@ -104,15 +117,37 @@ const NouveauSurLeMarche = () => {
       console.log('Données reçues:', data);
 
       if (response.ok && Array.isArray(data)) {
-        const mappedProducts = data.map((product, index) => ({
-          id: product.id.toString(),
-          name: product.name || product.libelle || "Produit sans nom",
-          description: product.desc || product.description || "Description non disponible",
-          price: `${product.price || 0} FCFA`,
-          image: staticImages[index % staticImages.length],
-        }));
+        const mappedProducts = data.map((product, index) => {
+          // Vérifier si l'image est valide
+          const isValidImage = product.image_url && 
+            typeof product.image_url === 'string' && 
+            product.image_url.startsWith('products/') && 
+            product.image_url !== 'image_url' && 
+            product.image_url !== 'test.jpg';
 
-        setProducts(mappedProducts);
+          const imageUrl = isValidImage
+            ? `https://www.mayombe-app.com/uploads_admin/${product.image_url}`
+            : null;
+
+          return {
+            id: product.id.toString(),
+            name: product.name || product.libelle || "Produit sans nom",
+            description: product.desc || product.description || "Description non disponible",
+            price: `${product.price || 0} FCFA`,
+            image: isValidImage 
+              ? { uri: imageUrl }
+              : staticImages[index % staticImages.length],
+            created_at: product.created_at,
+          };
+        });
+
+        // Filtrer seulement les produits récents (1-3 jours)
+        const recentProducts = mappedProducts.filter(product => 
+          isRecentProduct(product.created_at)
+        );
+
+        console.log('Produits récents (1-3 jours):', recentProducts);
+        setProducts(recentProducts);
       }
     } catch (error) {
       console.error('Erreur:', error);
@@ -132,7 +167,6 @@ const NouveauSurLeMarche = () => {
   const handleAddToCart = async (product) => {
     const success = await addToCart(product);
     if (success) {
-      // Montrer une notification de succès
       setModalVisible(false);
     }
   };
@@ -193,9 +227,9 @@ const NouveauSurLeMarche = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.sectionTitle}>{t.home.newMarket.title}</Text>
+        <Text style={styles.sectionTitle}>Nouveaux produits</Text>
         <Text style={styles.sectionSubtitle}>
-          {t.home.newMarket.subtitle}
+          Découvrez les produits ajoutés ces derniers jours
         </Text>
       </View>
 
@@ -383,4 +417,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default NouveauSurLeMarche;
+export default NouveauxProduits;

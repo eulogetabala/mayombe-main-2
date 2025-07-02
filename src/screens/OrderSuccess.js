@@ -5,14 +5,94 @@ import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { useCart } from '../context/CartContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Location from 'expo-location';
 
 const OrderSuccess = ({ navigation, route }) => {
   const { orderDetails } = route.params;
   const { currentLanguage } = useLanguage();
   const { clearCart } = useCart();
   const t = translations[currentLanguage];
-  const [estimatedTime, setEstimatedTime] = useState('15-20');
-  const [estimatedDistance, setEstimatedDistance] = useState('2.5');
+  const [estimatedTime, setEstimatedTime] = useState('...');
+  const [estimatedDistance, setEstimatedDistance] = useState('...');
+  const [userLocation, setUserLocation] = useState(null);
+
+  // Fonction de calcul de distance (Haversine)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Rayon de la Terre en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(2);
+  };
+
+  // Calcul de la durée estimée de livraison selon la distance
+  const getEstimatedDeliveryTime = (distance) => {
+    if (!distance) return '...';
+    // Exemple : 5 min de base + 2 min par km
+    const base = 5;
+    const perKm = 2;
+    const estimated = Math.round(base + perKm * parseFloat(distance));
+    return `${estimated}`;
+  };
+
+  // Récupérer la position de l'utilisateur et calculer la vraie distance
+  useEffect(() => {
+    const getLocationAndCalculateDistance = async () => {
+      try {
+        // Demander la permission de localisation
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          console.log('Permission de localisation refusée');
+          return;
+        }
+
+        // Obtenir la position actuelle
+        let location = await Location.getCurrentPositionAsync({});
+        setUserLocation(location.coords);
+
+        // Vérifier si on a les coordonnées du restaurant
+        if (orderDetails.restaurant && orderDetails.restaurant.altitude && orderDetails.restaurant.longitude) {
+          const lat = parseFloat(orderDetails.restaurant.altitude);
+          const lon = parseFloat(orderDetails.restaurant.longitude);
+          
+          // Vérifier que les coordonnées sont plausibles
+          const plausible = lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+          
+          if (plausible) {
+            const distance = calculateDistance(
+              location.coords.latitude,
+              location.coords.longitude,
+              lat,
+              lon
+            );
+            setEstimatedDistance(distance);
+            setEstimatedTime(getEstimatedDeliveryTime(distance));
+          } else {
+            console.log('Coordonnées du restaurant invalides');
+            // Utiliser des valeurs par défaut
+            setEstimatedDistance('2.5');
+            setEstimatedTime('15');
+          }
+        } else {
+          console.log('Coordonnées du restaurant non disponibles');
+          // Utiliser des valeurs par défaut
+          setEstimatedDistance('2.5');
+          setEstimatedTime('15');
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération de la position:', error);
+        // Utiliser des valeurs par défaut en cas d'erreur
+        setEstimatedDistance('2.5');
+        setEstimatedTime('15');
+      }
+    };
+
+    getLocationAndCalculateDistance();
+  }, [orderDetails]);
 
   // Nettoyer le panier au montage du composant
   useEffect(() => {
@@ -25,14 +105,6 @@ const OrderSuccess = ({ navigation, route }) => {
       }
     };
     cleanupCart();
-  }, []);
-
-  // Simuler le temps de livraison
-  useEffect(() => {
-    const randomTime = Math.floor(Math.random() * 10) + 15; // 15-25 minutes
-    const randomDistance = (Math.random() * 2 + 1).toFixed(1); // 1-3 km
-    setEstimatedTime(`${randomTime}`);
-    setEstimatedDistance(randomDistance);
   }, []);
 
   const handleGoToOrders = () => {
@@ -82,14 +154,14 @@ const OrderSuccess = ({ navigation, route }) => {
           <View style={styles.orderDetailRow}>
             <Ionicons name="time-outline" size={24} color="#51A905" />
             <Text style={styles.orderDetailText}>
-              Temps estimé : {estimatedTime} minutes
+              Temps estimé : {estimatedTime === '...' ? 'Calcul en cours...' : `${estimatedTime} minutes`}
             </Text>
           </View>
           
           <View style={styles.orderDetailRow}>
             <Ionicons name="location-outline" size={24} color="#51A905" />
             <Text style={styles.orderDetailText}>
-              Distance : {estimatedDistance} km
+              Distance : {estimatedDistance === '...' ? 'Calcul en cours...' : `${estimatedDistance} km`}
             </Text>
           </View>
           

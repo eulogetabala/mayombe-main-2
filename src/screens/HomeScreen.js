@@ -22,7 +22,7 @@ import RestaurantsSection from "../components/Home/RestaurantsSection";
 import HeaderSection from "../components/Home/HeaderSection";
 import CategorieSection from "../components/Home/CategorieSection";
 import ProductSection from "../components/Home/ProductSection";
-import NouveauSurLeMarche from "../components/Home/NewMarket";
+import NouveauxProduits from "../components/Home/NewMarket";
 import TrouverRestaurant from "../components/Home/TrouverRestaurant";
 import FindNearbyRestaurants from '../components/Home/FindNearbyRestaurants';
 import CommanderLivreur from '../components/Home/CommanderLivreur';
@@ -159,7 +159,7 @@ const HomeScreen = ({ navigation }) => {
         </Animatable.View>
 
         <Animatable.View animation="fadeInUp" duration={800} delay={800}>
-          <NouveauSurLeMarche />
+          <NouveauxProduits />
         </Animatable.View>
 
         <Animatable.View animation="fadeInUp" duration={800} delay={800}>

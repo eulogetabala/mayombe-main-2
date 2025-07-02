@@ -32,6 +32,7 @@ const CategorieList = ({ route, navigation }) => {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success'); // 'success' ou 'error'
+  const [imageErrors, setImageErrors] = useState({});
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const staticImages = {
@@ -52,7 +53,14 @@ const CategorieList = ({ route, navigation }) => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/products-by-id-category?id_category=${categoryId}`, {
+      setError(null);
+      
+      console.log('Tentative de chargement des produits pour la catégorie:', categoryId, 'Nom:', categoryName);
+      
+      const url = `${API_BASE_URL}/products-by-id-category?id_category=${categoryId}`;
+      console.log('URL de l\'API:', url);
+      
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -60,28 +68,86 @@ const CategorieList = ({ route, navigation }) => {
         },
       });
 
+      console.log('Statut de la réponse:', response.status);
+      console.log('Headers de la réponse:', response.headers);
+
       const data = await response.json();
+      console.log('Données reçues:', data);
+      console.log('Type de données:', typeof data);
+      console.log('Est un tableau?', Array.isArray(data));
+
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status} - ${response.statusText}`);
+      }
 
       if (Array.isArray(data)) {
-        const mappedProducts = data.map((product, index) => ({
-          id: product.id,
-          name: product.name || product.nom_produit || product.libelle || product.nom || "Nom non disponible",
-          price: product.price ? `${product.price} FCFA` : "Prix non disponible",
-          description: product.description || "Description non disponible",
-          image: index % 2 === 0 ? staticImages.image1 : staticImages.image2,
-          rawPrice: product.price || 0
-        }));
+        console.log('Nombre de produits reçus:', data.length);
+        
+        if (data.length > 0) {
+          console.log('Exemple de produit:', data[0]);
+        }
+
+        const mappedProducts = data.map((product, index) => {
+          // Construction de l'URL de l'image
+          let imageUrl = null;
+          if (product.image_url) {
+            imageUrl = `https://www.mayombe-app.com/uploads_admin/${product.image_url}`;
+          } else if (product.image) {
+            imageUrl = `https://www.mayombe-app.com/uploads_admin/${product.image}`;
+          } else if (product.cover) {
+            imageUrl = `https://www.mayombe-app.com/uploads_admin/${product.cover}`;
+          }
+
+          const mappedProduct = {
+            id: product.id,
+            name: product.name || product.nom_produit || product.libelle || product.nom || "Nom non disponible",
+            price: product.price ? `${product.price} FCFA` : "Prix non disponible",
+            description: product.description || "Description non disponible",
+            image_url: imageUrl,
+            rawPrice: product.price || 0,
+            unite: product.unite || '',
+            stock: product.stock || 0,
+            category_id: product.category_id || categoryId
+          };
+
+          console.log(`Produit ${index + 1} mappé:`, mappedProduct.name, 'Prix:', mappedProduct.price);
+          return mappedProduct;
+        });
 
         setProducts(mappedProducts);
+        
         if (mappedProducts.length === 0) {
-          setError(t.categories.noProducts);
+          console.log('Aucun produit trouvé pour cette catégorie');
+          setError(`Aucun produit disponible dans la catégorie "${categoryName}". Veuillez réessayer plus tard ou consulter une autre catégorie.`);
+        } else {
+          console.log(`${mappedProducts.length} produits mappés avec succès`);
         }
       } else {
-        throw new Error("Format de données invalide");
+        console.error('Format de données invalide - attendu un tableau, reçu:', typeof data);
+        throw new Error("Le serveur a retourné un format de données inattendu. Veuillez réessayer.");
       }
     } catch (error) {
-      // console.error('Erreur lors du chargement des produits:', error);
-      setError(t.categories.loadError);
+      console.error('Erreur détaillée lors du chargement des produits:', error);
+      console.error('Message d\'erreur:', error.message);
+      console.error('Stack trace:', error.stack);
+      
+      let errorMessage = 'Impossible de charger les produits pour le moment.';
+      
+      if (error.message.includes('Network')) {
+        errorMessage = 'Problème de connexion internet. Vérifiez votre connexion et réessayez.';
+      } else if (error.message.includes('HTTP: 404')) {
+        errorMessage = `La catégorie "${categoryName}" n'existe pas ou a été supprimée.`;
+      } else if (error.message.includes('HTTP: 500')) {
+        errorMessage = 'Erreur du serveur. Nos équipes ont été notifiées. Veuillez réessayer dans quelques minutes.';
+      } else if (error.message.includes('HTTP')) {
+        errorMessage = 'Erreur de communication avec le serveur. Veuillez réessayer.';
+      } else if (error.message.includes('Format')) {
+        errorMessage = 'Erreur technique. Veuillez réessayer ou contacter le support.';
+      } else if (error.message.includes('timeout')) {
+        errorMessage = 'La requête a pris trop de temps. Vérifiez votre connexion et réessayez.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -122,13 +188,20 @@ const CategorieList = ({ route, navigation }) => {
       const cartItems = await AsyncStorage.getItem('cartItems');
       let updatedCart = cartItems ? JSON.parse(cartItems) : [];
 
+      // Déterminer quelle image utiliser
+      let productImage = staticImages.image1; // Image par défaut
+      if (product.image_url && !imageErrors[product.id]) {
+        productImage = { uri: product.image_url };
+      }
+
       const cartProduct = {
         id: product.id,
         name: product.name,
         price: price,
-        image: product.image,
+        image: productImage,
         quantity: 1,
-        totalPrice: price
+        totalPrice: price,
+        unite: product.unite || ''
       };
 
       const existingItemIndex = updatedCart.findIndex(item => item.id === product.id);
@@ -145,13 +218,24 @@ const CategorieList = ({ route, navigation }) => {
       showToast(t.categories.productAddedToCart);
 
     } catch (error) {
+      console.error('Erreur lors de l\'ajout au panier:', error);
       showToast(t.categories.errorAddingToCart, 'error');
     }
+  };
+
+  const handleImageError = (productId) => {
+    setImageErrors(prev => ({
+      ...prev,
+      [productId]: true
+    }));
   };
 
   const renderItem = ({ item, index }) => {
     if (index % 2 === 0) {
       const nextItem = products[index + 1];
+      const hasImageError = imageErrors[item.id];
+      const hasNextImageError = nextItem ? imageErrors[nextItem.id] : false;
+
       return (
         <View style={styles.row}>
           <View style={styles.cardContainer}>
@@ -159,11 +243,21 @@ const CategorieList = ({ route, navigation }) => {
               style={styles.productCard}
               onPress={() => handleProductPress(item)}
             >
-              <Image
-                source={item.image}
-                style={styles.productImage}
-                resizeMode="cover"
-              />
+              {item.image_url && !hasImageError ? (
+                <Image
+                  source={{ uri: item.image_url }}
+                  style={styles.productImage}
+                  resizeMode="cover"
+                  onError={() => handleImageError(item.id)}
+                  defaultSource={staticImages.image1}
+                />
+              ) : (
+                <Image
+                  source={staticImages.image1}
+                  style={styles.productImage}
+                  resizeMode="cover"
+                />
+              )}
               <View style={styles.productInfo}>
                 <Text style={styles.productName} numberOfLines={2}>
                   {item.name}
@@ -188,11 +282,21 @@ const CategorieList = ({ route, navigation }) => {
                 style={styles.productCard}
                 onPress={() => handleProductPress(nextItem)}
               >
-                <Image
-                  source={nextItem.image}
-                  style={styles.productImage}
-                  resizeMode="cover"
-                />
+                {nextItem.image_url && !hasNextImageError ? (
+                  <Image
+                    source={{ uri: nextItem.image_url }}
+                    style={styles.productImage}
+                    resizeMode="cover"
+                    onError={() => handleImageError(nextItem.id)}
+                    defaultSource={staticImages.image2}
+                  />
+                ) : (
+                  <Image
+                    source={staticImages.image2}
+                    style={styles.productImage}
+                    resizeMode="cover"
+                  />
+                )}
                 <View style={styles.productInfo}>
                   <Text style={styles.productName} numberOfLines={2}>
                     {nextItem.name}
@@ -229,10 +333,25 @@ const CategorieList = ({ route, navigation }) => {
   if (error) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{t.categories.loadError}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
-          <Text style={styles.retryButtonText}>{t.home.retry}</Text>
-        </TouchableOpacity>
+        <Ionicons name="alert-circle" size={60} color="#FF6B6B" />
+        <Text style={styles.errorTitle}>Oups ! Une erreur s'est produite</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <Text style={styles.errorSubtext}>
+          Catégorie: {categoryName} (ID: {categoryId})
+        </Text>
+        <View style={styles.errorActions}>
+          <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
+            <Ionicons name="refresh" size={20} color="#FFF" style={{ marginRight: 8 }} />
+            <Text style={styles.retryButtonText}>Réessayer</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.backToCategoriesButton} 
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={20} color="#51A905" style={{ marginRight: 8 }} />
+            <Text style={styles.backToCategoriesText}>Retour aux catégories</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -395,11 +514,62 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: "#F5F5F5",
   },
+  errorTitle: {
+    color: '#FF6B6B',
+    textAlign: 'center',
+    fontSize: 18,
+    fontFamily: 'Montserrat-Bold',
+    marginBottom: 10,
+  },
   errorText: {
     color: '#FF6B6B',
     textAlign: 'center',
     fontSize: 16,
     fontFamily: 'Montserrat-Medium',
+    marginBottom: 10,
+  },
+  errorSubtext: {
+    color: '#666',
+    textAlign: 'center',
+    fontSize: 14,
+    fontFamily: 'Montserrat-Medium',
+    marginBottom: 20,
+  },
+  errorActions: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 12,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#FF9800',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 150,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontFamily: 'Montserrat-Bold',
+  },
+  backToCategoriesButton: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#51A905',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 150,
+  },
+  backToCategoriesText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontFamily: 'Montserrat-Bold',
   },
   toast: {
     position: 'absolute',
@@ -438,19 +608,6 @@ const styles = StyleSheet.create({
     color: '#51A905',
     fontSize: 16,
     fontFamily: 'Montserrat-Medium',
-  },
-  retryButton: {
-    marginTop: 20,
-    padding: 12,
-    backgroundColor: '#FF9800',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  retryButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontFamily: 'Montserrat-Bold',
   },
 });
 
