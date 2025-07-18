@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,10 +21,15 @@ import CountryPicker, {
   DARK_THEME,
   DEFAULT_THEME
 } from "react-native-country-picker-modal";
+import { useCart } from '../context/CartContext';
+import { useLanguage } from '../context/LanguageContext';
+import { translations } from '../translations';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
 const PaymentScreen = ({ route, navigation }) => {
+  const { currentLanguage } = useLanguage();
+  const t = translations[currentLanguage];
   const { orderDetails, onPaymentSuccess } = route.params;
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -229,7 +234,7 @@ const PaymentScreen = ({ route, navigation }) => {
         </View>
 
         <View style={styles.formGroup}>
-          <Text style={styles.label}>Numéro de téléphone de livraison</Text>
+          <Text style={styles.label}>{t.payment.deliveryPhone}</Text>
           <View style={styles.phoneInput}>
             <View style={styles.countryPickerContainer}>
               <CountryPicker
@@ -243,13 +248,13 @@ const PaymentScreen = ({ route, navigation }) => {
                   setCountryCode(country.cca2);
                   setCallingCode(country.callingCode[0]);
                 }}
-                translation="fr"
+                translation={currentLanguage}
                 theme={Platform.OS === 'ios' ? DEFAULT_THEME : DARK_THEME}
               />
             </View>
             <TextInput
               style={styles.input}
-              placeholder="Entrez votre numéro de téléphone"
+              placeholder={t.payment.enterPhoneNumber}
               keyboardType="phone-pad"
               value={phone}
               onChangeText={setPhone}
@@ -258,21 +263,21 @@ const PaymentScreen = ({ route, navigation }) => {
         </View>
 
         <View style={styles.summaryContainer}>
-          <Text style={styles.summaryTitle}>Récapitulatif</Text>
+          <Text style={styles.summaryTitle}>{t.payment.summary}</Text>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Sous-total</Text>
+            <Text style={styles.summaryLabel}>{t.payment.subtotal}</Text>
             <Text style={styles.summaryValue}>
               {orderDetails.subtotal} FCFA
             </Text>
           </View>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Frais de livraison</Text>
+            <Text style={styles.summaryLabel}>{t.payment.deliveryFee}</Text>
             <Text style={styles.summaryValue}>
               {orderDetails.deliveryFee} FCFA
             </Text>
           </View>
           <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalLabel}>{t.payment.total}</Text>
             <Text style={styles.totalValue}>{orderDetails.total} FCFA</Text>
           </View>
         </View>
@@ -291,7 +296,7 @@ const PaymentScreen = ({ route, navigation }) => {
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <Text style={styles.payButtonText}>
-              Procéder au paiement ({orderDetails.total} FCFA)
+              {t.payment.proceedToPayment.replace('{amount}', orderDetails.total)}
             </Text>
           )}
         </TouchableOpacity>

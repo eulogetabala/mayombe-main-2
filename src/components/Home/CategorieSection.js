@@ -137,7 +137,6 @@ const CategorieSection = () => {
                 source={{ uri: imageUrl }}
                 style={styles.categoryImage}
                 onError={() => handleImageError(category.id)}
-                defaultSource={require('../../../assets/images/3.jpg')}
               />
             ) : (
               <MaterialCommunityIcons

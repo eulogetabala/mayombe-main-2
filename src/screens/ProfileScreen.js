@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
+import { useFocusEffect } from '@react-navigation/native';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -17,15 +18,18 @@ const ProfileScreen = ({ navigation }) => {
   const { currentLanguage, changeLanguage } = useLanguage();
   const t = translations[currentLanguage];
 
-  useEffect(() => {
-    loadUserData();
-  }, []);
+  // Recharger les données à chaque fois qu'on revient sur cet écran
+  useFocusEffect(
+    React.useCallback(() => {
+      loadUserData();
+    }, [])
+  );
 
   const loadUserData = async () => {
     try {
       const userToken = await AsyncStorage.getItem('userToken');
       if (userToken) {
-        console.log('Tentative de récupération des données utilisateur...');
+        console.log('🔄 Rechargement des données utilisateur...');
         const response = await fetch(`${API_BASE_URL}/user`, {
           headers: {
             'Authorization': `Bearer ${userToken}`,
@@ -35,16 +39,16 @@ const ProfileScreen = ({ navigation }) => {
         });
         
         if (!response.ok) {
-          console.error('Erreur API:', response.status);
+          console.error('❌ Erreur API:', response.status);
           throw new Error(`Erreur HTTP: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('Données utilisateur reçues:', data);
+        console.log('✅ Données utilisateur reçues:', data);
         setUserData(data);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des données utilisateur:', error);
+      console.error('❌ Erreur lors du chargement des données utilisateur:', error);
       // Gérer l'erreur de manière appropriée
       setUserData({
         name: 'Erreur de chargement',
@@ -83,7 +87,7 @@ const ProfileScreen = ({ navigation }) => {
     {
       icon: 'language',
       title: t.profile.language,
-      onPress: () => navigation.navigate('LanguageSelection')
+      onPress: () => navigation.navigate('LanguageSettings')
     }
   ];
 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Linking, SafeAreaView, StatusBar, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Linking, SafeAreaView, StatusBar, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as Animatable from 'react-native-animatable';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -13,6 +14,7 @@ const ListeLivreursScreen = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [imageErrors, setImageErrors] = useState({});
+  const [reservingLivreur, setReservingLivreur] = useState(null);
 
   useEffect(() => {
     fetchLivreurs();
@@ -189,12 +191,62 @@ const ListeLivreursScreen = () => {
     Linking.openURL(`tel:${phone}`);
   };
 
-  const handleSelectLivreur = (livreur) => {
-    setSelectedLivreur(livreur);
-    // Ici vous pouvez ajouter la logique pour sélectionner le livreur
-    setTimeout(() => {
-      navigation.goBack();
-    }, 1000);
+  const handleReserveLivreur = async (livreur) => {
+    try {
+      setReservingLivreur(livreur.id);
+      
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (!userToken) {
+        Alert.alert('Erreur', 'Vous devez être connecté pour réserver un livreur');
+        return;
+      }
+
+      console.log('🔄 Réservation du livreur:', livreur.name);
+      
+      const response = await fetch('https://www.api-mayombe.mayombe-app.com/public/api/reserve-livreur', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          livreur_id: livreur.id,
+          livreur_name: livreur.name,
+          livreur_phone: livreur.phone,
+        }),
+      });
+
+      const data = await response.json();
+      console.log('📥 Réponse de l\'API reserve-livreur:', data);
+
+      if (response.ok) {
+        console.log('✅ Livreur réservé avec succès');
+        Alert.alert(
+          'Succès',
+          `Livreur ${livreur.name} réservé avec succès ! Il vous contactera bientôt.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.goBack(),
+            },
+          ]
+        );
+      } else {
+        console.error('❌ Erreur lors de la réservation:', data);
+        if (data.errors) {
+          const errorMessages = Object.values(data.errors).flat().join('\n');
+          Alert.alert('Erreur', errorMessages);
+        } else {
+          Alert.alert('Erreur', data.message || 'Impossible de réserver ce livreur');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la réservation:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue lors de la réservation');
+    } finally {
+      setReservingLivreur(null);
+    }
   };
 
   const handleImageError = (livreurId) => {
@@ -206,7 +258,7 @@ const ListeLivreursScreen = () => {
 
   const renderLivreur = ({ item, index }) => {
     const hasImageError = imageErrors[item.id];
-    const defaultAvatar = require('../../assets/images/logo_mayombe.jpg');
+    const isReserving = reservingLivreur === item.id;
 
     return (
       <View style={styles.livreurCard}>
@@ -215,45 +267,58 @@ const ListeLivreursScreen = () => {
             {item.avatar && !hasImageError ? (
               <Image 
                 source={{ uri: item.avatar }} 
-                style={{ width: 54, height: 54, borderRadius: 27 }}
+                style={styles.avatar}
                 onError={() => handleImageError(item.id)}
-                defaultSource={defaultAvatar}
               />
             ) : (
-              <Ionicons name="person-circle" size={54} color="#51A905" />
+              <Ionicons name="person-circle" size={40} color="#51A905" />
             )}
           </View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.livreurName}>{item.name || (item.nom + ' ' + item.prenom)}</Text>
-            <Text style={styles.zone}>{item.zone || "Zone centrale"}</Text>
+          <View style={styles.infoContainer}>
+            <Text style={styles.livreurName}>{item.name}</Text>
+            <View style={styles.ratingRow}>
+              <Ionicons name="star" size={14} color="#FFD700" />
+              <Text style={styles.rating}>{item.rating}</Text>
+              <Text style={styles.zone}>• {item.zone}</Text>
+            </View>
           </View>
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={16} color="#FFD700" />
-            <Text style={styles.rating}>{item.rating || "4.5"}</Text>
+          <View style={styles.statusBadge}>
+            <Text style={[styles.statusText, { color: item.status === "Disponible" ? "#4CAF50" : "#FF6B6B" }]}>
+              {item.status}
+            </Text>
           </View>
         </View>
 
-        <View style={styles.infoRow}>
-          <Ionicons name="call" size={16} color="#51A905" />
-          <Text style={styles.infoText}>{item.phone}</Text>
-          <Ionicons name="bicycle" size={16} color="#51A905" style={{ marginLeft: 16 }} />
-          <Text style={styles.infoText}>{item.vehicle || "Moto"}</Text>
+        <View style={styles.detailsRow}>
+          <View style={styles.detailItem}>
+            <Ionicons name="bicycle" size={14} color="#51A905" />
+            <Text style={styles.detailText}>{item.vehicle}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Ionicons name="cube" size={14} color="#51A905" />
+            <Text style={styles.detailText}>{item.deliveries} livraisons</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Ionicons name="time-outline" size={14} color="#51A905" />
+            <Text style={styles.detailText}>{item.experience}</Text>
+          </View>
         </View>
 
-        <View style={styles.infoRow}>
-          <Ionicons name="cube" size={16} color="#51A905" />
-          <Text style={styles.infoText}>{item.deliveries || "0"} livraisons</Text>
-          <Ionicons name="time-outline" size={16} color="#51A905" style={{ marginLeft: 16 }} />
-          <Text style={styles.infoText}>{item.experience || "1 an"} d'expérience</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Ionicons name="pricetag" size={16} color="#51A905" />
-          <Text style={styles.infoText}>Spécialité : {item.specialite || "Tous types"}</Text>
-        </View>
-
-        <View style={styles.statusRow}>
-          <Text style={[styles.status, { color: item.status === "Disponible" ? "#4CAF50" : "#FF6B6B" }]}>Statut : {item.status}</Text>
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={[styles.reserveButton, isReserving && styles.reserveButtonDisabled]}
+            onPress={() => handleReserveLivreur(item)}
+            disabled={isReserving}
+          >
+            {isReserving ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <>
+                <Ionicons name="checkmark-circle" size={16} color="#FFF" />
+                <Text style={styles.reserveButtonText}>Réserver</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -295,19 +360,19 @@ const ListeLivreursScreen = () => {
         <>
           <View style={styles.statsContainer}>
             <View style={styles.statCard}>
-              <Ionicons name="people" size={24} color="#51A905" />
+              <Ionicons name="people" size={20} color="#51A905" />
               <Text style={styles.statNumber}>{livreurs.length}</Text>
               <Text style={styles.statLabel}>Livreurs</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="star" size={24} color="#FFD700" />
+              <Ionicons name="star" size={20} color="#FFD700" />
               <Text style={styles.statNumber}>
                 {livreurs.length > 0 ? (livreurs.reduce((sum, l) => sum + parseFloat(l.rating), 0) / livreurs.length).toFixed(1) : '4.8'}
               </Text>
               <Text style={styles.statLabel}>Note moyenne</Text>
             </View>
             <View style={styles.statCard}>
-              <Ionicons name="time" size={24} color="#FF6B00" />
+              <Ionicons name="time" size={20} color="#FF6B00" />
               <Text style={styles.statNumber}>15-20</Text>
               <Text style={styles.statLabel}>Min</Text>
             </View>
@@ -350,13 +415,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
     fontFamily: 'Montserrat-Bold',
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
     fontFamily: 'Montserrat',
     marginTop: 2,
@@ -365,7 +430,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingVertical: 16,
     backgroundColor: '#fff',
     marginBottom: 8,
   },
@@ -373,38 +438,38 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
-    padding: 16,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: 10,
     marginHorizontal: 4,
   },
   statNumber: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#51A905',
     fontFamily: 'Montserrat-Bold',
     marginTop: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#666',
     fontFamily: 'Montserrat',
     marginTop: 2,
   },
   listContainer: {
-    padding: 16,
+    padding: 12,
   },
   livreurCard: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    marginBottom: 16,
+    borderRadius: 12,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 2,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
     borderWidth: 1,
     borderColor: '#f0f0f0',
     overflow: 'hidden',
@@ -412,67 +477,90 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
   },
   avatarContainer: {
-    position: 'relative',
+    marginRight: 12,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 3,
-    borderColor: '#51A905',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  infoContainer: {
+    flex: 1,
   },
   livreurName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
     fontFamily: 'Montserrat-Bold',
+    marginBottom: 2,
   },
-  zone: {
-    fontSize: 14,
-    color: '#666',
-    fontFamily: 'Montserrat',
-    marginTop: 2,
-  },
-  ratingContainer: {
+  ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF9E6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
   rating: {
-    marginLeft: 4,
-    fontSize: 14,
+    fontSize: 13,
     color: '#FFA000',
     fontFamily: 'Montserrat-Bold',
+    marginLeft: 4,
   },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-  },
-  infoText: {
-    fontSize: 14,
+  zone: {
+    fontSize: 12,
     color: '#666',
     fontFamily: 'Montserrat',
-    marginLeft: 8,
+    marginLeft: 6,
   },
-  statusRow: {
+  statusBadge: {
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  statusText: {
+    fontSize: 11,
+    fontFamily: 'Montserrat-Bold',
+  },
+  detailsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  status: {
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Montserrat',
+    marginLeft: 4,
+  },
+  actionsRow: {
+    padding: 12,
+  },
+  reserveButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#51A905',
+  },
+  reserveButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  reserveButtonText: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: '#FFF',
     fontFamily: 'Montserrat-Bold',
+    marginLeft: 6,
   },
   loadingContainer: {
     flex: 1,

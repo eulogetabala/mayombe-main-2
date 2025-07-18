@@ -8,13 +8,15 @@ import {
   Dimensions,
 } from 'react-native';
 import { useLanguage } from '../context/LanguageContext';
+import { translations } from '../translations';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
 const LanguageSelectionScreen = ({ navigation }) => {
-  const { changeLanguage } = useLanguage();
+  const { changeLanguage, currentLanguage } = useLanguage();
+  const t = translations[currentLanguage];
 
   useEffect(() => {
     checkInitialLanguage();
@@ -68,8 +70,8 @@ const LanguageSelectionScreen = ({ navigation }) => {
         style={styles.logo}
       />
       
-      <Text style={styles.title}>Choisissez votre langue</Text>
-      <Text style={styles.subtitle}>Choose your language</Text>
+      <Text style={styles.title}>{t.language.selectLanguage}</Text>
+      <Text style={styles.subtitle}>{t.language.chooseLanguage}</Text>
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity
@@ -83,7 +85,7 @@ const LanguageSelectionScreen = ({ navigation }) => {
             end={{ x: 1, y: 0 }}
           >
             <View style={styles.buttonContent}>
-              <Text style={styles.buttonText}>Français</Text>
+              <Text style={styles.buttonText}>{t.language.french}</Text>
               <Text style={styles.buttonSubtext}>French</Text>
             </View>
           </LinearGradient>
@@ -100,7 +102,7 @@ const LanguageSelectionScreen = ({ navigation }) => {
             end={{ x: 1, y: 0 }}
           >
             <View style={styles.buttonContent}>
-              <Text style={styles.buttonText}>English</Text>
+              <Text style={styles.buttonText}>{t.language.english}</Text>
               <Text style={styles.buttonSubtext}>Anglais</Text>
             </View>
           </LinearGradient>

@@ -58,18 +58,8 @@ export const useRestaurantMenu = (restaurantId) => {
             return coverPath;
           }
           
-          // Si le chemin commence par "storage/"
-          if (coverPath.startsWith('storage/')) {
-            return `${API_BASE_URL}/${coverPath}`;
-          }
-          
-          // Si le chemin commence par "menus/"
-          if (coverPath.startsWith('menus/')) {
-            return `${API_BASE_URL}/storage/${coverPath}`;
-          }
-          
-          // Cas par défaut
-          return `${API_BASE_URL}/storage/menus/${coverPath}`;
+          // Utiliser le bon format d'URL pour les images
+          return `https://www.mayombe-app.com/uploads_admin/${coverPath}`;
         })();
 
         console.log('URL finale de l\'image:', imageUrl);
@@ -79,14 +69,7 @@ export const useRestaurantMenu = (restaurantId) => {
           name: menu.libelle || "Sans nom",
           description: menu.description || "Aucune description",
           price: menu.prix || "0",
-          image: imageUrl ? {
-            uri: imageUrl,
-            headers: {
-              'Accept': 'image/jpeg',
-              'Cache-Control': 'no-cache'
-            },
-            cache: 'reload'
-          } : require('../../assets/images/2.jpg'),
+          image: imageUrl ? { uri: imageUrl } : require('../../assets/images/2.jpg'),
           category: menu.category,
           sub_menu_id: menu.sub_menu_id,
           restaurant_id: menu.resto_id,
@@ -96,7 +79,7 @@ export const useRestaurantMenu = (restaurantId) => {
             description: complement.description || "",
             price: complement.prix || "0",
             image: complement.cover 
-              ? { uri: `${API_BASE_URL}/storage/${complement.cover}` }
+              ? { uri: `https://www.mayombe-app.com/uploads_admin/${complement.cover}` }
               : null,
             status: complement.status,
             created_at: complement.created_at,

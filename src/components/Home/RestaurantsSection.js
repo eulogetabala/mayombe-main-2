@@ -251,48 +251,80 @@ const RestaurantsSection = () => {
       if (Array.isArray(submenuData) && submenuData.length > 0) {
         let allMenuItems = [];
         
+        // Essayer différents formats de date
+        const dateFormats = [
+          { debut: '2025/07/05', fin: '2025/10/05' },
+          { debut: '2025-07-05', fin: '2025-10-05' },
+          { debut: '05-07-2025', fin: '05-10-2025' },
+          { debut: '05/07/2025', fin: '05/10/2025' }
+        ];
+        
         // Essayer avec le premier sous-menu d'abord
         const firstSubmenuId = submenuData[0].id;
-        const menuUrl = `${API_BASE_URL}/get-menu-by-resto?debut=2025/04/15&fin=2025/06/22&sub_menu_id=${firstSubmenuId}&resto_id=${restoId}`;
         
-        console.log('URL menu details:', menuUrl);
-        
-        const menuResponse = await fetch(menuUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-          }
-        });
-        
-        const menuData = await menuResponse.json();
-        console.log('Détails du menu reçus:', JSON.stringify(menuData, null, 2));
-        
-        if (Array.isArray(menuData) && menuData.length > 0) {
-          // Si nous avons des données pour le premier sous-menu, les ajouter
-          allMenuItems = [...menuData];
-        }
-        
-        // Si nous n'avons pas de données pour le premier sous-menu, essayer les autres
-        if (allMenuItems.length === 0 && submenuData.length > 1) {
-          for (let i = 1; i < submenuData.length; i++) {
-            const submenuId = submenuData[i].id;
-            const additionalMenuUrl = `${API_BASE_URL}/get-menu-by-resto?debut=2025/04/15&fin=2025/06/22&sub_menu_id=${submenuId}&resto_id=${restoId}`;
-            
-            console.log(`Essai avec sous-menu ${submenuId}:`, additionalMenuUrl);
-            
-            const additionalMenuResponse = await fetch(additionalMenuUrl, {
+        for (const dateFormat of dateFormats) {
+          const menuUrl = `${API_BASE_URL}/get-menu-by-resto?debut=${dateFormat.debut}&fin=${dateFormat.fin}&sub_menu_id=${firstSubmenuId}&resto_id=${restoId}`;
+          
+          console.log('Essai avec format de date:', dateFormat, 'URL:', menuUrl);
+          
+          try {
+            const menuResponse = await fetch(menuUrl, {
               method: 'GET',
               headers: {
                 'Accept': 'application/json',
               }
             });
             
-            const additionalMenuData = await additionalMenuResponse.json();
-            
-            if (Array.isArray(additionalMenuData) && additionalMenuData.length > 0) {
-              allMenuItems = [...allMenuItems, ...additionalMenuData];
-              break; // Arrêter dès qu'on trouve des données
+            if (menuResponse.ok) {
+              const menuData = await menuResponse.json();
+              console.log('Détails du menu reçus:', JSON.stringify(menuData, null, 2));
+              
+              if (Array.isArray(menuData) && menuData.length > 0) {
+                allMenuItems = [...menuData];
+                console.log('Menu trouvé avec le format de date:', dateFormat);
+                break; // Arrêter dès qu'on trouve des données
+              }
             }
+          } catch (error) {
+            console.log('Erreur avec le format de date:', dateFormat, error.message);
+            continue; // Essayer le prochain format
+          }
+        }
+        
+        // Si nous n'avons pas de données pour le premier sous-menu, essayer les autres
+        if (allMenuItems.length === 0 && submenuData.length > 1) {
+          for (let i = 1; i < submenuData.length; i++) {
+            const submenuId = submenuData[i].id;
+            
+            for (const dateFormat of dateFormats) {
+              const additionalMenuUrl = `${API_BASE_URL}/get-menu-by-resto?debut=${dateFormat.debut}&fin=${dateFormat.fin}&sub_menu_id=${submenuId}&resto_id=${restoId}`;
+              
+              console.log(`Essai avec sous-menu ${submenuId} et format de date:`, dateFormat);
+              
+              try {
+                const additionalMenuResponse = await fetch(additionalMenuUrl, {
+                  method: 'GET',
+                  headers: {
+                    'Accept': 'application/json',
+                  }
+                });
+                
+                if (additionalMenuResponse.ok) {
+                  const additionalMenuData = await additionalMenuResponse.json();
+                  
+                  if (Array.isArray(additionalMenuData) && additionalMenuData.length > 0) {
+                    allMenuItems = [...allMenuItems, ...additionalMenuData];
+                    console.log('Menu trouvé avec sous-menu:', submenuId, 'et format:', dateFormat);
+                    break; // Arrêter dès qu'on trouve des données
+                  }
+                }
+              } catch (error) {
+                console.log('Erreur avec sous-menu:', submenuId, 'et format:', dateFormat, error.message);
+                continue;
+              }
+            }
+            
+            if (allMenuItems.length > 0) break; // Arrêter si on a trouvé des données
           }
         }
         
@@ -300,10 +332,10 @@ const RestaurantsSection = () => {
         if (allMenuItems.length > 0) {
           const menuWithImages = allMenuItems.map(item => ({
             ...item,
-            cover: item.cover ? `${BASE_URL}/storage/${item.cover}` : null,
+            cover: item.cover ? `https://www.mayombe-app.com/uploads_admin/${item.cover}` : null,
             complements: item.complements?.map(complement => ({
               ...complement,
-              cover: complement.cover ? `${BASE_URL}/storage/${complement.cover}` : null
+              cover: complement.cover ? `https://www.mayombe-app.com/uploads_admin/${complement.cover}` : null
             }))
           }));
           
@@ -313,13 +345,13 @@ const RestaurantsSection = () => {
       }
       
       // Si nous n'avons pas trouvé de menu, retourner un tableau vide
-      console.log('Aucun menu trouvé pour ce restaurant');
+      console.log('Aucun menu trouvé pour ce restaurant - API temporairement indisponible');
       return [];
       
     } catch (error) {
       console.error('Erreur détaillée:', error);
-      setError('Impossible de charger le menu du restaurant');
-      return null;
+      console.log('API temporairement indisponible - retour d\'un tableau vide');
+      return [];
     }
   };
 

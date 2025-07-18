@@ -15,10 +15,15 @@ import PhoneInput from 'react-native-phone-number-input';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import FontAwesome from 'react-native-vector-icons/FontAwesome';
 import ModalOpt from '../../components/ModalOtp';
+import { useLanguage } from '../../context/LanguageContext';
+import { translations } from '../../translations';
 
 const { width, height } = Dimensions.get('window');
 
 const RegisterScreen = ({ navigation }) => {
+  const { currentLanguage } = useLanguage();
+  const t = translations[currentLanguage];
+
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -127,14 +132,14 @@ const RegisterScreen = ({ navigation }) => {
         />
 
         <View style={styles.card}>
-          <Text style={styles.header}>S’inscrire</Text>
+          <Text style={styles.header}>{t.auth.register.title}</Text>
 
           <View style={styles.inputContainer}>
             <View style={styles.inputWithIcon}>
               <Ionicons name="person-outline" size={20} color="#4CAF50" style={styles.icon} />
               <TextInput
                 style={styles.input}
-                placeholder="ex : Euloge TABALA"
+                placeholder={t.auth.register.namePlaceholder}
                 value={name}
                 onChangeText={setName}
               />
@@ -144,7 +149,7 @@ const RegisterScreen = ({ navigation }) => {
           <View style={styles.inputContainer}>
             <PhoneInput
               ref={phoneInput}
-              placeholder="065290000"
+              placeholder={t.auth.register.phonePlaceholder}
               defaultValue={phone}
               defaultCode="CG"
               layout="first"
@@ -163,7 +168,7 @@ const RegisterScreen = ({ navigation }) => {
               <Ionicons name="lock-closed-outline" size={20} color="#4CAF50" style={styles.icon} />
               <TextInput
                 style={styles.inputPassword}
-                placeholder="Créer un mot de passe"
+                placeholder={t.auth.register.createPassword}
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
@@ -183,7 +188,7 @@ const RegisterScreen = ({ navigation }) => {
               <Ionicons name="lock-closed-outline" size={20} color="#4CAF50" style={styles.icon} />
               <TextInput
                 style={styles.inputPassword}
-                placeholder="Confirmer le mot de passe"
+                placeholder={t.auth.register.confirmPasswordPlaceholder}
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
@@ -208,13 +213,13 @@ const RegisterScreen = ({ navigation }) => {
             {loading ? (
               <ActivityIndicator size="small" color="#FFF" />
             ) : (
-              <Text style={styles.registerButtonText}>S’inscrire</Text>
+              <Text style={styles.registerButtonText}>{t.auth.register.registerButton}</Text>
             )}
           </TouchableOpacity>
 
           <Text style={styles.termsText}>
-            En cliquant, vous acceptez nos{' '}
-            <Text style={styles.termsLink}>Termes et conditions</Text>
+            {t.auth.register.termsText}{' '}
+            <Text style={styles.termsLink}>{t.auth.register.termsLink}</Text>
           </Text>
 
           <TouchableOpacity
@@ -222,7 +227,7 @@ const RegisterScreen = ({ navigation }) => {
             onPress={() => navigation.navigate('Login')}
           >
             <Text style={styles.linkText}>
-              Déjà un compte ? <Text style={styles.linkHighlight}>Se connecter</Text>
+              {t.auth.register.alreadyAccount} <Text style={styles.linkHighlight}>{t.auth.register.connectLink}</Text>
             </Text>
           </TouchableOpacity>
         </View>

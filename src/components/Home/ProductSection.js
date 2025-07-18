@@ -55,7 +55,6 @@ const ProductSectionContent = ({
               <Image
                 source={item.hasValidImage ? { uri: item.imageUrl } : require('../../../assets/images/2.jpg')}
                 style={styles.productImage}
-                defaultSource={require('../../../assets/images/2.jpg')}
                 onError={e => console.log('Erreur chargement image', item.imageUrl, e.nativeEvent)}
               />
             </View>

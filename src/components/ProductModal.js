@@ -54,6 +54,10 @@ const ProductModal = ({
     }
   }, [cart, product, onClose]);
 
+  const handleImageError = () => {
+    // Handle image error
+  };
+
   if (!visible || !product) return null;
 
   return (
@@ -86,7 +90,7 @@ const ProductModal = ({
                   : require('../../assets/images/2.jpg')
               }
               style={styles.productImage}
-              defaultSource={require('../../assets/images/2.jpg')}
+              onError={handleImageError}
             />
             
             <View style={styles.productInfo}>

@@ -249,7 +249,6 @@ const CategorieList = ({ route, navigation }) => {
                   style={styles.productImage}
                   resizeMode="cover"
                   onError={() => handleImageError(item.id)}
-                  defaultSource={staticImages.image1}
                 />
               ) : (
                 <Image
@@ -288,7 +287,6 @@ const CategorieList = ({ route, navigation }) => {
                     style={styles.productImage}
                     resizeMode="cover"
                     onError={() => handleImageError(nextItem.id)}
-                    defaultSource={staticImages.image2}
                   />
                 ) : (
                   <Image
@@ -352,6 +350,15 @@ const CategorieList = ({ route, navigation }) => {
             <Text style={styles.backToCategoriesText}>Retour aux catégories</Text>
           </TouchableOpacity>
         </View>
+      </View>
+    );
+  }
+
+  if (!loading && products.length === 0) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Ionicons name="cube-outline" size={60} color="#FF9800" style={{ marginBottom: 16 }} />
+        <Text style={styles.emptyText}>Aucun produit disponible pour cette catégorie</Text>
       </View>
     );
   }
@@ -608,6 +615,20 @@ const styles = StyleSheet.create({
     color: '#51A905',
     fontSize: 16,
     fontFamily: 'Montserrat-Medium',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: "#F5F5F5",
+  },
+  emptyText: {
+    color: '#FF9800',
+    textAlign: 'center',
+    fontSize: 16,
+    fontFamily: 'Montserrat-Medium',
+    marginTop: 10,
   },
 });
 

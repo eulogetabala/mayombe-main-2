@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
 import CartScreen from '../screens/CartScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
+import LanguageSettingsScreen from '../screens/LanguageSettingsScreen';
 import RestaurantDetailsScreen from '../screens/RestaurantDetailsScreen';
 import RestaurantList from '../screens/RestaurantList';
 import TopRatedRestaurants from '../screens/TopRatedRestaurants';
@@ -134,6 +136,32 @@ function HomeStackScreen() {
   );
 }
 
+function ProfileStack() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen 
+        name="ProfileMain" 
+        component={ProfileScreen} 
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="EditProfile" 
+        component={EditProfileScreen}
+        options={{
+          headerShown: false
+        }}
+      />
+      <Stack.Screen 
+        name="LanguageSettings" 
+        component={LanguageSettingsScreen}
+        options={{
+          headerShown: false
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 const BottomTabNavigator = () => {
   return (
     <Tab.Navigator
@@ -205,7 +233,7 @@ const BottomTabNavigator = () => {
       />
       <Tab.Screen 
         name="Profile" 
-        component={ProfileScreen}
+        component={ProfileStack}
         options={{
           tabBarLabel: 'Profil',
           tabBarIcon: ({ color, size }) => (

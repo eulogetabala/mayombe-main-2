@@ -20,7 +20,18 @@
       "buildNumber": "1.0.0",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.",
-        "NSLocationAlwaysUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité."
+        "NSLocationAlwaysUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSExceptionDomains": {
+            "mayombe-app.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSExceptionMinimumTLSVersion": "1.0",
+              "NSExceptionRequiresForwardSecrecy": false,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
       }
     },
     "android": {
@@ -35,8 +46,10 @@
         "ACCESS_COARSE_LOCATION",
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
-      ]
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET"
+      ],
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/favicon.png"

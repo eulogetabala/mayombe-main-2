@@ -15,10 +15,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CountryPicker, { DEFAULT_THEME, DARK_THEME } from 'react-native-country-picker-modal';
+import { useLanguage } from '../context/LanguageContext';
+import { translations } from '../translations';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
 const ProcessPayment = ({ route, navigation }) => {
+  const { currentLanguage } = useLanguage();
+  const t = translations[currentLanguage];
+  
   const { orderDetails, onPaymentSuccess } = route.params || {};
   const [isLoading, setIsLoading] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -201,10 +206,10 @@ const ProcessPayment = ({ route, navigation }) => {
             style={styles.paymentLogo} 
           />
           <Text style={styles.formTitle}>
-            {paymentMethod === 'airtel' ? 'Paiement Airtel Money' : 'Paiement MTN Mobile Money'}
+            {paymentMethod === 'airtel' ? t.payment.airtelPayment : t.payment.mtnPayment}
           </Text>
           <Text style={styles.formDescription}>
-            Entrez votre numéro de téléphone pour effectuer le paiement
+            {t.payment.enterPhoneForPayment}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
             <CountryPicker
@@ -217,12 +222,12 @@ const ProcessPayment = ({ route, navigation }) => {
                 setCountryCode(country.cca2);
                 setCallingCode(country.callingCode[0]);
               }}
-              translation="fr"
+              translation={currentLanguage}
               theme={Platform.OS === 'ios' ? DEFAULT_THEME : DARK_THEME}
             />
             <TextInput
               style={{ flex: 1, marginLeft: 8, borderBottomWidth: 1, borderColor: '#ddd', padding: 8 }}
-              placeholder="Numéro de téléphone"
+              placeholder={t.payment.phoneNumber}
               keyboardType="phone-pad"
               value={phoneNumber}
               onChangeText={setPhoneNumber}
@@ -234,15 +239,15 @@ const ProcessPayment = ({ route, navigation }) => {
       return (
         <View style={styles.formContainer}>
           <Image source={require('../../assets/images/visa-mastercard.webp')} style={styles.paymentLogo} />
-          <Text style={styles.formTitle}>Paiement par carte bancaire</Text>
+          <Text style={styles.formTitle}>{t.payment.cardPayment}</Text>
           <Text style={styles.formDescription}>
-            Entrez les informations de votre carte pour effectuer le paiement
+            {t.payment.enterCardInfo}
           </Text>
           <View style={styles.inputContainer}>
             <Ionicons name="card-outline" size={20} color="#666" />
             <TextInput
               style={styles.input}
-              placeholder="Numéro de carte"
+              placeholder={t.payment.cardNumber}
               keyboardType="number-pad"
               value={cardNumber}
               onChangeText={setCardNumber}
@@ -253,7 +258,7 @@ const ProcessPayment = ({ route, navigation }) => {
               <Ionicons name="calendar-outline" size={20} color="#666" />
               <TextInput
                 style={styles.input}
-                placeholder="MM/AA"
+                placeholder={t.payment.expiryDate}
                 keyboardType="number-pad"
                 value={expiryDate}
                 onChangeText={setExpiryDate}
@@ -263,7 +268,7 @@ const ProcessPayment = ({ route, navigation }) => {
               <Ionicons name="lock-closed-outline" size={20} color="#666" />
               <TextInput
                 style={styles.input}
-                placeholder="CVV"
+                placeholder={t.payment.cvv}
                 keyboardType="number-pad"
                 value={cvv}
                 onChangeText={setCvv}
@@ -275,7 +280,7 @@ const ProcessPayment = ({ route, navigation }) => {
             <Ionicons name="person-outline" size={20} color="#666" />
             <TextInput
               style={styles.input}
-              placeholder="Nom du titulaire"
+              placeholder={t.payment.cardholderName}
               value={cardholderName}
               onChangeText={setCardholderName}
             />
@@ -286,9 +291,9 @@ const ProcessPayment = ({ route, navigation }) => {
       return (
         <View style={styles.formContainer}>
           <Image source={require('../../assets/images/cash.jpg')} style={styles.paymentLogo} />
-          <Text style={styles.formTitle}>Paiement à la livraison</Text>
+          <Text style={styles.formTitle}>{t.payment.cashPayment}</Text>
           <Text style={styles.formDescription}>
-            Vous paierez en espèces à la réception de votre commande
+            {t.payment.payOnDelivery}
           </Text>
         </View>
       );
@@ -302,7 +307,7 @@ const ProcessPayment = ({ route, navigation }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Finalisez votre paiement</Text>
+        <Text style={styles.headerTitle}>{t.payment.finalizePayment}</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -310,7 +315,7 @@ const ProcessPayment = ({ route, navigation }) => {
         {renderPaymentForm()}
 
         <View style={styles.summaryContainer}>
-          <Text style={styles.summaryTitle}>Montant total à payer</Text>
+          <Text style={styles.summaryTitle}>{t.payment.totalAmountToPay}</Text>
           <Text style={styles.totalAmount}>{orderDetails?.total || 0} FCFA</Text>
         </View>
 
@@ -323,7 +328,7 @@ const ProcessPayment = ({ route, navigation }) => {
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <Text style={styles.payButtonText}>
-              Payer maintenant ({orderDetails?.total || 0} FCFA)
+              {t.payment.payNowAmount.replace('{amount}', orderDetails?.total || 0)}
             </Text>
           )}
         </TouchableOpacity>
