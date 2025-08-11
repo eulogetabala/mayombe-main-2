@@ -3,27 +3,23 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
-  Image,
-  TouchableOpacity,
-  ActivityIndicator,
-  SafeAreaView,
   ScrollView,
+  TouchableOpacity,
+  Image,
+  SafeAreaView,
+  FlatList,
+  ActivityIndicator,
   Alert,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useCart } from '../context/CartContext';
 import RestaurantProductModal from '../components/RestaurantProductModal';
 import * as Location from 'expo-location';
-import { useLanguage } from '../context/LanguageContext';
-import { translations } from '../translations';
+import UniformHeader from '../components/UniformHeader';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
-const BASE_IMAGE_URL = "https://www.mayombe-app.com";
 
 const RestaurantDetails = ({ route, navigation }) => {
-  const { currentLanguage } = useLanguage();
-  const t = translations[currentLanguage];
   const { restaurant: initialRestaurant, subMenus: initialSubMenus, initialMenus } = route.params;
   const [restaurant, setRestaurant] = useState(initialRestaurant || {});
   const [activeCategory, setActiveCategory] = useState('repas');
@@ -39,7 +35,6 @@ const RestaurantDetails = ({ route, navigation }) => {
   const [userLocation, setUserLocation] = useState(null);
   const [distance, setDistance] = useState(null);
   const [validDates, setValidDates] = useState({ debut: null, fin: null });
-  const [imageErrors, setImageErrors] = useState(new Set());
 
   useEffect(() => {
     if (restaurant?.id) {
@@ -48,10 +43,11 @@ const RestaurantDetails = ({ route, navigation }) => {
   }, [restaurant]);
 
   useEffect(() => {
-    if (selectedSubMenu) {
+    if (selectedSubMenu && restaurant?.id) {
+      console.log('🔄 Sous-menu sélectionné, récupération des menus...');
       fetchMenusByResto();
     }
-  }, [selectedSubMenu]);
+  }, [selectedSubMenu, restaurant]);
 
   useEffect(() => {
     (async () => {
@@ -155,104 +151,54 @@ const RestaurantDetails = ({ route, navigation }) => {
     }
   };
 
-  // Fonction pour récupérer les dates valides dynamiquement
-  const fetchValidDates = async () => {
-    try {
-      const dateRanges = [
-        { debut: '2025-06-01', fin: '2026-06-25' },
-        { debut: '2025/06/01', fin: '2026/06/25' },
-        { debut: '2025-07-05', fin: '2025-10-05' },
-        { debut: '2025/07/05', fin: '2025/10/05' },
-        { debut: '2025-06-25', fin: '2025-10-25' },
-        { debut: '2025/06/25', fin: '2025/10/25' },
-        { debut: '2025-01-01', fin: '2025-12-31' },
-        { debut: '2025/01/01', fin: '2025/12/31' }
-      ];
-
-      if (subMenus.length > 0) {
-        console.log(`🔍 Test des ${subMenus.length} sous-menus pour le restaurant ${restaurant.id}`);
-        
-        for (const subMenu of subMenus) {
-          console.log(`📋 Test du sous-menu: ${subMenu.libelle} (ID: ${subMenu.id})`);
-          
-          for (const dateRange of dateRanges) {
-            const url = `${API_BASE_URL}/get-menu-by-resto?debut=${dateRange.debut}&fin=${dateRange.fin}&sub_menu_id=${subMenu.id}&resto_id=${restaurant.id}`;
-            
-            try {
-              const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                  'Accept': 'application/json',
-                  'Content-Type': 'application/json',
-                }
-              });
-
-              if (response.ok) {
-                const data = await response.json();
-                if (Array.isArray(data) && data.length > 0) {
-                  console.log(`✅ Période valide trouvée pour ${subMenu.libelle}:`, dateRange, `(${data.length} menus)`);
-                  setValidDates(dateRange);
-                  return;
-                }
-              }
-            } catch (error) {
-              console.log(`❌ Erreur avec ${subMenu.libelle} et la période:`, dateRange, error.message);
-              continue;
-            }
-          }
-        }
-      }
-
-      console.log('⚠️ Aucune période valide trouvée, utilisation de la période par défaut');
-      setValidDates({
-        debut: '2025-06-01',
-        fin: '2026-06-25'
-      });
-    } catch (error) {
-      console.error('Erreur lors de la récupération des dates valides:', error);
-      setValidDates({
-        debut: '2025-06-01',
-        fin: '2026-06-25'
-      });
-    }
-  };
-
-  useEffect(() => {
-    fetchValidDates();
-  }, []);
-
   const fetchMenusByResto = async () => {
+    if (!selectedSubMenu) {
+      console.log('⚠️ Aucun sous-menu sélectionné');
+      return;
+    }
+    
+    if (!restaurant?.id) {
+      console.log('⚠️ Aucun restaurant sélectionné');
+      return;
+    }
+    
     try {
       setLoading(true);
       setError(null);
 
-      if (!selectedSubMenu) {
-        setProducts([]);
-        return;
-      }
-
-      // Essayer plusieurs périodes pour ce sous-menu spécifique
-      const dateRanges = [
-        { debut: '2025-06-01', fin: '2026-06-25' },
-        { debut: '2025/06/01', fin: '2026/06/25' },
-        { debut: '2025-07-05', fin: '2025-10-05' },
-        { debut: '2025/07/05', fin: '2025/10/05' },
-        { debut: '2025-06-25', fin: '2025-10-25' },
-        { debut: '2025/06/25', fin: '2025/10/25' },
-        { debut: '2025-01-01', fin: '2025-12-31' },
-        { debut: '2025/01/01', fin: '2025/12/31' }
+      console.log('🔄 Récupération dynamique de tous les menus disponibles...');
+      
+      // Essayer plusieurs approches pour récupérer tous les produits
+      const approaches = [
+        // Approche 1: Sans dates (si l'API le supporte)
+        {
+          url: `${API_BASE_URL}/get-menu-by-resto?sub_menu_id=${selectedSubMenu.id}&resto_id=${restaurant.id}`,
+          name: 'Sans dates'
+        },
+        // Approche 2: Plage très large
+        {
+          url: `${API_BASE_URL}/get-menu-by-resto?debut=2025-01-01&fin=2026-12-31&sub_menu_id=${selectedSubMenu.id}&resto_id=${restaurant.id}`,
+          name: 'Plage large (2025-2026)'
+        },
+        // Approche 3: Plage moyenne
+        {
+          url: `${API_BASE_URL}/get-menu-by-resto?debut=2025-06-01&fin=2025-12-31&sub_menu_id=${selectedSubMenu.id}&resto_id=${restaurant.id}`,
+          name: 'Plage moyenne (2025-06 à 2025-12)'
+        },
+        // Approche 4: Endpoint alternatif
+        {
+          url: `${API_BASE_URL}/menus-by-resto?id_resto=${restaurant.id}&id_sub_menu=${selectedSubMenu.id}`,
+          name: 'Endpoint alternatif'
+        }
       ];
-
-      let data = null;
-      let workingDateRange = null;
-
-      // Tester chaque période pour ce sous-menu
-      for (const dateRange of dateRanges) {
-        const url = `${API_BASE_URL}/get-menu-by-resto?debut=${dateRange.debut}&fin=${dateRange.fin}&sub_menu_id=${selectedSubMenu.id}&resto_id=${restaurant.id}`;
-        console.log(`🔍 Test URL pour ${selectedSubMenu.libelle}:`, url);
-
+      
+      let allMenus = [];
+      
+      for (const approach of approaches) {
         try {
-          const response = await fetch(url, {
+          console.log(`🧪 Essai avec ${approach.name}:`, approach.url);
+          
+          const response = await fetch(approach.url, {
             method: 'GET',
             headers: {
               'Accept': 'application/json',
@@ -261,142 +207,75 @@ const RestaurantDetails = ({ route, navigation }) => {
           });
 
           if (response.ok) {
-            const responseData = await response.json();
-            if (Array.isArray(responseData) && responseData.length > 0) {
-              console.log(`✅ Données trouvées pour ${selectedSubMenu.libelle} avec la période:`, dateRange, `(${responseData.length} menus)`);
-              data = responseData;
-              workingDateRange = dateRange;
-              break;
+            const data = await response.json();
+            console.log(`✅ ${approach.name} - Menus reçus:`, data);
+            
+            if (Array.isArray(data) && data.length > 0) {
+              const mappedMenus = data.map(menu => {
+                console.log('Menu reçu:', menu);
+                const imageUrl = menu.cover && typeof menu.cover === 'string'
+                  ? `https://www.mayombe-app.com/uploads_admin/${menu.cover}`
+                  : null;
+                console.log('URL image menu:', imageUrl);
+                
+                return {
+                  id: menu.id,
+                  name: menu.name || menu.libelle || "Sans nom",
+                  description: menu.description || "Aucune description",
+                  price: menu.prix || menu.price || "0",
+                  image: imageUrl
+                    ? { uri: imageUrl }
+                    : require('../../assets/images/2.jpg'),
+                  category: menu.category || menu.categorie,
+                  sub_menu_id: menu.sub_menu_id,
+                  restaurant_id: menu.restaurant_id,
+                  status: menu.status,
+                  created_at: menu.created_at,
+                  updated_at: menu.updated_at,
+                  quantity: 1,
+                  unitPrice: parseFloat(menu.prix || menu.price || 0),
+                  total: parseFloat(menu.prix || menu.price || 0),
+                  productKey: `${menu.id}-${Date.now()}`,
+                  type: 'menu',
+                  subMenuName: selectedSubMenu.name || selectedSubMenu.libelle
+                };
+              });
+              
+              // Ajouter les nouveaux menus sans doublons
+              mappedMenus.forEach(newMenu => {
+                const exists = allMenus.find(existing => existing.id === newMenu.id);
+                if (!exists) {
+                  allMenus.push(newMenu);
+                }
+              });
+              
+              console.log(`✅ ${approach.name} - ${mappedMenus.length} menus ajoutés`);
             }
+          } else {
+            console.log(`❌ ${approach.name} - Erreur HTTP:`, response.status);
           }
         } catch (error) {
-          console.log(`❌ Erreur avec la période:`, dateRange, error.message);
-          continue;
+          console.error(`❌ ${approach.name} - Erreur:`, error.message);
         }
       }
 
-      if (data && data.length > 0) {
-        const processedMenus = data.map(menu => {
-          const coverPath = menu.cover || '';
-          console.log('🔍 Chemin original de l\'image:', coverPath);
-
-          // Construire l'URL de l'image de manière simple et cohérente
-          let imageUrl = null;
-          if (coverPath) {
-            imageUrl = `https://www.mayombe-app.com/uploads_admin/${coverPath}`;
-            console.log('🔗 URL HTTPS construite:', imageUrl);
-          }
-          
-          console.log('📸 URL finale de l\'image:', imageUrl);
-
-          return {
-            ...menu,
-            name: menu.libelle || menu.name || "Sans nom",
-            description: menu.description || "Aucune description",
-            price: menu.prix || menu.price || "0",
-            image: imageUrl ? { uri: imageUrl } : require('../../assets/images/2.jpg'),
-            category: selectedSubMenu.libelle,
-            sub_menu_id: selectedSubMenu.id,
-            restaurant_id: restaurant.id,
-            complements: (menu.complements || []).map(complement => ({
-              ...complement,
-              name: complement.libelle || complement.name || "Sans nom",
-              price: complement.prix || complement.price || "0",
-              image: complement.cover 
-                ? { uri: `https://www.mayombe-app.com/uploads_admin/${complement.cover}` }
-                : null
-            }))
-          };
-        });
-
-        setProducts(processedMenus);
-        setMenus(processedMenus);
-        console.log('Menus traités et affichés:', processedMenus.length);
-        setError(null);
-      } else {
-        console.warn(`Aucun menu trouvé pour ${selectedSubMenu.libelle}`);
-        const demoProducts = [
-          {
-            id: 1,
-            name: "Poulet Braisé",
-            description: "Poulet braisé avec accompagnement",
-            price: "5000",
-            image: require('../../assets/images/2.jpg'),
-            category: selectedSubMenu.libelle,
-            sub_menu_id: selectedSubMenu.id,
-            restaurant_id: restaurant.id,
-            status: "actif"
-          },
-          {
-            id: 2,
-            name: "Poisson Braisé",
-            description: "Poisson frais braisé avec légumes",
-            price: "6000",
-            image: require('../../assets/images/2.jpg'),
-            category: selectedSubMenu.libelle,
-            sub_menu_id: selectedSubMenu.id,
-            restaurant_id: restaurant.id,
-            status: "actif"
-          },
-          {
-            id: 3,
-            name: "Riz au Poulet",
-            description: "Riz parfumé avec poulet et légumes",
-            price: "4500",
-            image: require('../../assets/images/2.jpg'),
-            category: selectedSubMenu.libelle,
-            sub_menu_id: selectedSubMenu.id,
-            restaurant_id: restaurant.id,
-            status: "actif"
-          }
-        ];
-        setProducts(demoProducts);
-        setError(`Aucun menu disponible pour ${selectedSubMenu.libelle} - Affichage des plats populaires`);
-      }
+      console.log('🎯 Total des menus récupérés:', allMenus.length);
+      console.log('📋 Menus uniques:', allMenus.map(m => `${m.name} (${m.price} FCFA)`));
+      
+      setMenus(allMenus);
+      
     } catch (error) {
       console.error('Erreur lors du chargement des menus:', error);
-      
-      const demoProducts = [
-        {
-          id: 1,
-          name: "Poulet Braisé",
-          description: "Poulet braisé avec accompagnement",
-          price: "5000",
-          image: require('../../assets/images/2.jpg'),
-          category: selectedSubMenu?.libelle || "Repas",
-          sub_menu_id: selectedSubMenu?.id || 4,
-          restaurant_id: restaurant.id,
-          status: "actif"
-        },
-        {
-          id: 2,
-          name: "Poisson Braisé",
-          description: "Poisson frais braisé avec légumes",
-            price: "6000",
-            image: require('../../assets/images/2.jpg'),
-            category: selectedSubMenu?.libelle || "Repas",
-            sub_menu_id: selectedSubMenu?.id || 4,
-            restaurant_id: restaurant.id,
-            status: "actif"
-          },
-          {
-            id: 3,
-            name: "Riz au Poulet",
-            description: "Riz parfumé avec poulet et légumes",
-            price: "4500",
-            image: require('../../assets/images/2.jpg'),
-            category: selectedSubMenu?.libelle || "Repas",
-            sub_menu_id: selectedSubMenu?.id || 4,
-            restaurant_id: restaurant.id,
-            status: "actif"
-          }
-        ];
-        setProducts(demoProducts);
-        setError('Menus temporairement indisponibles - Affichage des plats populaires');
-      } finally {
-        setLoading(false);
-      }
-    };
+      setError('Impossible de charger les menus');
+      Alert.alert(
+        'Erreur',
+        'Impossible de charger les menus du restaurant. Veuillez réessayer plus tard.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Fonction de calcul de distance (Haversine)
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
@@ -425,15 +304,16 @@ const RestaurantDetails = ({ route, navigation }) => {
     <View style={styles.header}>
       <Image source={restaurant.image} style={styles.coverImage} />
       <View style={styles.headerOverlay} />
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
-        <Ionicons name="arrow-back" size={24} color="#FFF" />
-      </TouchableOpacity>
+      <UniformHeader
+        onBack={() => navigation.goBack()}
+        title={restaurant.name}
+        style={styles.uniformHeader}
+      />
       <View style={styles.headerContent}>
         <Text style={styles.headerName}>{restaurant.name}</Text>
-       
+        {menus.length > 0 && (
+          <Text style={styles.menuCount}>{menus.length} produits disponibles</Text>
+        )}
       </View>
     </View>
   );
@@ -548,108 +428,44 @@ const RestaurantDetails = ({ route, navigation }) => {
     setModalVisible(true);
   };
 
-  const handleImageError = (itemId) => {
-    setImageErrors(prev => new Set(prev).add(itemId));
-    console.log('❌ Erreur image pour item ID:', itemId);
-  };
-
-  // Fonction pour tester si une URL d'image est accessible
-  const testImageUrl = async (url) => {
-    try {
-      const response = await fetch(url, { method: 'HEAD' });
-      return response.ok;
-    } catch (error) {
-      console.log('❌ URL image inaccessible:', url, error.message);
-      return false;
-    }
-  };
-
-  // Fonction pour précharger une image
-  const preloadImage = async (imageUrl) => {
-    try {
-      const response = await fetch(imageUrl, { method: 'HEAD' });
-      return response.ok;
-    } catch (error) {
-      console.log('❌ Image non accessible:', imageUrl, error.message);
-      return false;
-    }
-  };
-
-  // Fonction pour construire l'URL d'image optimale
-  const buildImageUrl = (imagePath) => {
-    if (!imagePath || typeof imagePath !== 'string') {
-      console.warn('⚠️ Chemin d\'image invalide:', imagePath);
-      return null;
-    }
-    
-    // Nettoyer le chemin de l'image
-    const cleanPath = imagePath.trim();
-    if (!cleanPath) {
-      console.warn('⚠️ Chemin d\'image vide');
-      return null;
-    }
-    
-    // Construire l'URL complète
-    const fullUrl = `https://www.mayombe-app.com/uploads_admin/${cleanPath}`;
-    console.log('🔍 URL image construite:', fullUrl);
-    
-    return fullUrl;
-  };
-
-  const renderProductCard = ({ item }) => {
-    // Déterminer la source de l'image avec fallback
-    const imageSource = imageErrors.has(item.id) 
-      ? require('../../assets/images/2.jpg')
-      : item.image;
-
-    console.log('🎨 Rendu image pour:', item.name, 'Source:', imageSource);
-
-    return (
-      <TouchableOpacity 
-        style={styles.productCard} 
-        activeOpacity={0.7}
-        onPress={() => handleProductPress(item)}
-      >
-        <Image 
-          source={imageSource} 
-          style={styles.productImage}
-          onError={(error) => {
-            console.log('❌ Erreur image pour:', item.name, 'URL:', item.image?.uri, 'Erreur:', error.nativeEvent);
-            handleImageError(item.id);
-          }}
-          onLoad={() => {
-            console.log('✅ Image chargée avec succès pour:', item.name, 'URL:', item.image?.uri);
-          }}
-          resizeMode="cover"
-          defaultSource={require('../../assets/images/2.jpg')}
-        />
-        <View style={styles.productContent}>
-          <View>
-            <Text style={styles.productName} numberOfLines={1}>
-              {item.name}
+  const renderProductCard = ({ item }) => (
+    <TouchableOpacity 
+      style={styles.productCard} 
+      activeOpacity={0.7}
+      onPress={() => handleProductPress(item)}
+    >
+      <Image source={item.image} style={styles.productImage} />
+      <View style={styles.productContent}>
+        <View>
+          <Text style={styles.productName} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {item.subMenuName && (
+            <Text style={styles.subMenuName} numberOfLines={1}>
+              {item.subMenuName}
             </Text>
-            <Text style={styles.productDescription} numberOfLines={2}>
-              {item.description}
-            </Text>
-          </View>
-          <View style={styles.productFooter}>
-            <Text style={styles.productPrice}>
-              {item.price} FCFA
-            </Text>
-            <TouchableOpacity 
-              style={styles.addButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleProductPress(item);
-              }}
-            >
-              <Ionicons name="add" size={20} color="#FFF" />
-            </TouchableOpacity>
-          </View>
+          )}
+          <Text style={styles.productDescription} numberOfLines={2}>
+            {item.description}
+          </Text>
         </View>
-      </TouchableOpacity>
-    );
-  };
+        <View style={styles.productFooter}>
+          <Text style={styles.productPrice}>
+            {item.price} FCFA
+          </Text>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleProductPress(item);
+            }}
+          >
+            <Ionicons name="add" size={20} color="#FFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 
   const renderContent = () => {
     if (loading) {
@@ -668,7 +484,7 @@ const RestaurantDetails = ({ route, navigation }) => {
             style={styles.retryButton}
             onPress={fetchMenusByResto}
           >
-            <Text style={styles.retryText}>{t.restaurants.retry}</Text>
+            <Text style={styles.retryText}>Réessayer</Text>
           </TouchableOpacity>
         </View>
       );
@@ -676,28 +492,14 @@ const RestaurantDetails = ({ route, navigation }) => {
 
     return (
       <FlatList
-        data={products}
+        data={menus}
         renderItem={renderProductCard}
         keyExtractor={item => item.id.toString()}
         contentContainerStyle={styles.productsContainer}
-        ListHeaderComponent={
-          error ? (
-            <View style={styles.infoContainer}>
-              <View style={styles.infoMessage}>
-                <Ionicons name="information-circle-outline" size={20} color="#FF9800" />
-                <Text style={styles.infoText}>{error}</Text>
-              </View>
-            </View>
-          ) : null
-        }
         ListEmptyComponent={
           <View style={styles.comingSoonContainer}>
-            <Ionicons name="restaurant-outline" size={48} color="#ccc" />
             <Text style={styles.comingSoonText}>
-              {t.restaurants.emptyState.noMenuAvailable}
-            </Text>
-            <Text style={styles.comingSoonSubtext}>
-              {t.restaurants.emptyState.menusConfiguring}
+              Aucun menu disponible
             </Text>
           </View>
         }
@@ -847,32 +649,46 @@ const styles = StyleSheet.create({
   productCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 8,
     overflow: 'hidden',
     elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     flexDirection: 'row',
-    height: 110,
+    height: 90,
+    marginHorizontal: 2,
   },
   productImage: {
-    width: 110,
+    width: 90,
     height: '100%',
     resizeMode: 'cover',
   },
   productContent: {
     flex: 1,
-    padding: 12,
+    padding: 8,
     justifyContent: 'space-between',
   },
   productName: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: 'Montserrat-Bold',
     color: '#333',
+    marginBottom: 2,
+  },
+  subMenuName: {
+    fontSize: 10,
+    fontFamily: 'Montserrat',
+    color: '#999',
+    marginTop: 1,
+    fontStyle: 'italic',
   },
   productDescription: {
-    fontSize: 14,
+    fontSize: 11,
     fontFamily: 'Montserrat',
     color: '#666',
-    marginVertical: 4,
+    marginVertical: 2,
+    lineHeight: 14,
   },
   productFooter: {
     flexDirection: 'row',
@@ -880,17 +696,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   productPrice: {
-    fontSize: 16,
+    fontSize: 13,
     fontFamily: 'Montserrat-Bold',
     color: '#FF9800',
   },
   addButton: {
     backgroundColor: '#FF9800',
-    padding: 8,
+    padding: 6,
     borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   productsContainer: {
-    padding: 16,
+    padding: 8,
+    paddingBottom: 20,
   },
   centerContent: {
     padding: 20,
@@ -923,14 +745,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat',
     color: '#666',
     textAlign: 'center',
-    marginTop: 12,
-  },
-  comingSoonSubtext: {
-    fontSize: 14,
-    fontFamily: 'Montserrat',
-    color: '#999',
-    textAlign: 'center',
-    marginTop: 4,
   },
   subMenuTabsContainer: {
     backgroundColor: '#fff',
@@ -949,7 +763,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF9E6',
   },
   subMenuTabText: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: 'Montserrat',
     color: '#666',
   },
@@ -957,19 +771,18 @@ const styles = StyleSheet.create({
     color: '#FF9800',
     fontFamily: 'Montserrat-Bold',
   },
-  infoMessage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF9E6',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  infoText: {
-    marginLeft: 8,
+  menuCount: {
     fontSize: 14,
     fontFamily: 'Montserrat',
-    color: '#FF9800',
+    color: '#666',
+    marginTop: 4,
+  },
+  uniformHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
 });
 

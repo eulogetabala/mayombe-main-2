@@ -15,6 +15,9 @@ import { LanguageProvider } from './src/context/LanguageContext';
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/Auth/LoginScreen";
 import RegisterScreen from "./src/screens/Auth/RegisterScreen";
+import ForgotPasswordScreen from "./src/screens/Auth/ForgotPasswordScreen";
+import ForgotPasswordOtpScreen from "./src/screens/Auth/ForgotPasswordOtpScreen";
+import ResetPasswordScreen from "./src/screens/Auth/ResetPasswordScreen";
 import OtpScreen from "./src/screens/Auth/OtpScreen";
 import BottomNavigation from "./src/components/BottomNavigation";
 import RestaurantListScreen from "./src/screens/RestaurantListScreen";
@@ -24,7 +27,7 @@ import CategorieList from "./src/screens/CategorieList";
 import Categories from "./src/screens/Categories";
 import TopRatedRestaurants from "./src/screens/TopRatedRestaurants";
 import OrderSuccess from './src/screens/OrderSuccess';
-import OrderTracking from './src/screens/OrderTracking';
+
 import LanguageSelectionScreen from "./src/screens/LanguageSelectionScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import { useNavigation } from '@react-navigation/native';
@@ -33,6 +36,13 @@ import AllProducts from "./src/screens/AllProducts";
 import BottomTabNavigator from './src/navigation/BottomTabNavigator';
 import ListeLivreursScreen from './src/screens/ListeLivreursScreen';
 import AllRestaurants from './src/screens/AllRestaurants';
+import SharedCartScreen from './src/screens/SharedCartScreen';
+import CommanderLivreurScreen from './src/screens/CommanderLivreurScreen';
+import PaymentScreen from './src/screens/PaymentScreen';
+import ProcessPayment from './src/screens/ProcessPayment';
+import DeliveryCompleteScreen from './src/screens/DeliveryCompleteScreen';
+import LivreurSimulatorScreen from './src/screens/LivreurSimulatorScreen';
+import OrderTrackingScreen from './src/screens/OrderTrackingScreen';
 
 SplashScreen.preventAutoHideAsync();
 const Stack = createNativeStackNavigator();
@@ -53,6 +63,9 @@ const  AppNavigator = ({ initialRoute }) => {
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
+      <Stack.Screen name="ForgotPasswordOtp" component={ForgotPasswordOtpScreen} />
+      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
       <Stack.Screen name="Otp" component={OtpScreen} />
       <Stack.Screen name="MainApp" component={BottomTabNavigator} />
       <Stack.Screen name="RestaurantList" component={RestaurantListScreen} />
@@ -77,11 +90,7 @@ const  AppNavigator = ({ initialRoute }) => {
         component={OrderSuccess} 
         options={{ headerShown: false }}
       />
-      <Stack.Screen 
-        name="OrderTracking" 
-        component={OrderTracking}
-        options={{ headerShown: false }}
-      />
+
       <Stack.Screen 
         name="ListeLivreurs" 
         component={ListeLivreursScreen}
@@ -90,6 +99,36 @@ const  AppNavigator = ({ initialRoute }) => {
       <Stack.Screen 
         name="AllRestaurants" 
         component={AllRestaurants}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="SharedCart" 
+        component={SharedCartScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="PaymentScreen" 
+        component={PaymentScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="ProcessPayment" 
+        component={ProcessPayment}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="DeliveryComplete" 
+        component={DeliveryCompleteScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="LivreurSimulator" 
+        component={LivreurSimulatorScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="OrderTracking" 
+        component={OrderTrackingScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

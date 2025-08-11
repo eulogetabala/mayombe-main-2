@@ -91,12 +91,9 @@ const TrouverRestaurant = ({ navigation }) => {
           name: restaurant.name || "Nom non disponible",
           address: restaurant.adresse || "Adresse non disponible",
           phone: restaurant.phone || "Téléphone non disponible",
-          rating: 4.8,
-          reviews: Math.floor(Math.random() * 150) + 100,
           image: restaurant.cover && typeof restaurant.cover === 'string'
             ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
             : require("../../../assets/images/2.jpg"),
-          minOrder: "5000",
         }));
 
         setRestaurants(prevRestaurants => ({
@@ -170,16 +167,6 @@ const TrouverRestaurant = ({ navigation }) => {
       <View style={styles.cardHeader}>
         <Image source={item.image} style={styles.image} />
         <View style={styles.overlay} />
-        <View style={styles.headerContent}>
-          <View style={styles.ratingBadge}>
-            <Ionicons name="star" size={12} color="#FFD700" />
-            <Text style={styles.ratingText}>{item.rating}</Text>
-          </View>
-          <View style={styles.deliveryBadge}>
-            <Ionicons name="time-outline" size={12} color="#FFF" />
-            <Text style={styles.deliveryTime}>{item.deliveryTime}30 min</Text>
-          </View>
-        </View>
       </View>
 
       <View style={styles.cardContent}>
@@ -195,15 +182,7 @@ const TrouverRestaurant = ({ navigation }) => {
           <Text style={styles.address} numberOfLines={1}>{item.address}</Text>
         </View>
 
-        <View style={styles.footer}>
-          <View style={styles.minOrderContainer}>
-            <Ionicons name="cart-outline" size={12} color="#666" />
-            <Text style={styles.minOrderText}>Min. {item.minOrder} FCFA</Text>
-          </View>
-          <View style={styles.reviewsContainer}>
-            <Text style={styles.reviews}>({item.reviews} avis)</Text>
-          </View>
-        </View>
+
       </View>
     </TouchableOpacity>
   );
@@ -375,42 +354,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.2)',
   },
-  headerContent: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    right: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  ratingText: {
-    color: '#FFD700',
-    fontSize: 12,
-    fontFamily: 'Montserrat-Bold',
-  },
-  deliveryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  deliveryTime: {
-    color: '#FFF',
-    fontSize: 11,
-    fontFamily: 'Montserrat',
-  },
+
   cardContent: {
     padding: 12,
   },
@@ -450,33 +394,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat',
     flex: 1,
   },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  minOrderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  minOrderText: {
-    fontSize: 11,
-    color: '#666',
-    fontFamily: 'Montserrat',
-  },
-  reviewsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  reviews: {
-    fontSize: 11,
-    color: '#666',
-    fontFamily: 'Montserrat',
-  },
+
   button: {
     flexDirection: 'row',
     alignItems: 'center',

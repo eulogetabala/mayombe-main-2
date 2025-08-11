@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Share, Alert } from 'react-native';
+import { Share, Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Fonction pour générer un ID unique
@@ -81,6 +81,17 @@ const useCartSharing = (cartItems, setCartItems, formatPrice = defaultFormatPric
     }
   };
 
+  // Fonction pour vérifier si un lien est accessible
+  const checkLinkAccessibility = async (url) => {
+    try {
+      const response = await fetch(url, { method: 'HEAD' });
+      return response.ok;
+    } catch (error) {
+      console.log('Lien non accessible:', url);
+      return false;
+    }
+  };
+
   // Fonction pour partager le panier
   const shareCart = async () => {
     if (cartItems.length === 0) {
@@ -118,24 +129,82 @@ const useCartSharing = (cartItems, setCartItems, formatPrice = defaultFormatPric
 
       // Sauvegarder le panier partagé dans le stockage local
       await AsyncStorage.setItem(`shared_cart_${sharedCartId}`, JSON.stringify(cartData));
+      console.log(`✅ Panier sauvegardé avec l'ID: shared_cart_${sharedCartId}`);
       
-      // Créer le lien de partage
+      // Vérifier que la sauvegarde a fonctionné
+      const savedData = await AsyncStorage.getItem(`shared_cart_${sharedCartId}`);
+      console.log(`🔍 Vérification sauvegarde:`, savedData ? 'SUCCÈS' : 'ÉCHEC');
+      
+      // Lister tous les paniers partagés pour diagnostic
+      const allKeys = await AsyncStorage.getAllKeys();
+      const sharedCartKeys = allKeys.filter(key => key.startsWith('shared_cart_'));
+      console.log('📋 Tous les paniers partagés stockés:', sharedCartKeys);
+      
+      // Créer les liens de partage avec fallback
       const shareUrl = `mayombe://cart/${sharedCartId}`;
-      const webShareUrl = `https://www.mayombe-app.com/shared-cart/${sharedCartId}`;
+      const primaryWebUrl = `https://www.mayombe-app.com/shared-cart/${sharedCartId}`;
+      const fallbackWebUrl = `https://mayombe-app.com/shared-cart/${sharedCartId}`;
+      const alternativeUrl = `https://www.mayombe-app.com/cart-share/${sharedCartId}`;
+      const webPaymentUrl = `https://mayombe-payment.web.app/cart/${sharedCartId}`; // Page web de paiement
       
-      // Message à partager
-      const message = `Voici mon panier Mayombe ! Cliquez sur le lien pour le voir et continuer le processus de paiement : ${webShareUrl}`;
+      // Vérifier l'accessibilité des liens
+      const isPrimaryAccessible = await checkLinkAccessibility(primaryWebUrl);
+      const isFallbackAccessible = await checkLinkAccessibility(fallbackWebUrl);
+      const isAlternativeAccessible = await checkLinkAccessibility(alternativeUrl);
+      const isWebPaymentAccessible = await checkLinkAccessibility(webPaymentUrl);
       
-      // Partager via WhatsApp ou autres applications
+      // Choisir le meilleur lien disponible
+      let finalWebUrl = primaryWebUrl;
+      if (!isPrimaryAccessible) {
+        if (isWebPaymentAccessible) {
+          finalWebUrl = webPaymentUrl; // Priorité à la page web de paiement
+        } else if (isFallbackAccessible) {
+          finalWebUrl = fallbackWebUrl;
+        } else if (isAlternativeAccessible) {
+          finalWebUrl = alternativeUrl;
+        } else {
+          // Si aucun lien web n'est accessible, utiliser un lien de téléchargement direct
+          finalWebUrl = `https://play.google.com/store/apps/details?id=com.mayombe.app`;
+        }
+      }
+      
+      // Créer le message de partage avec instructions
+      const cartSummary = cartItems.map(item => `• ${item.name} (${item.quantity}x)`).join('\n');
+      const totalAmount = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
+      
+      const message = `🛒 Mon panier Mayombe
+
+${cartSummary}
+
+💰 Total: ${totalAmount.toLocaleString()} FCFA
+
+🆔 ID du panier: ${sharedCartId}
+
+📱 Options de paiement :
+
+🔗 Paiement web (recommandé) :
+${finalWebUrl}
+
+📱 Application mobile :
+1. Téléchargez l'app Mayombe depuis le Play Store
+2. Ouvrez l'app et cliquez sur "Panier partagé"
+3. Entrez l'ID: ${sharedCartId}
+4. Cliquez sur "Payer maintenant"
+
+💳 Paiement sécurisé par MTN Money, Airtel Money ou carte bancaire
+
+#Mayombe #Livraison #Congo`;
+
+      // Partager via les applications disponibles
       await Share.share({
         message: message,
-        url: webShareUrl,
+        url: finalWebUrl,
         title: 'Partager mon panier Mayombe'
       });
       
       Alert.alert(
         "Partage réussi",
-        "Votre panier a été partagé avec succès."
+        "Votre panier a été partagé avec succès. L'ID du panier a été inclus dans le message pour faciliter le partage."
       );
     } catch (error) {
       console.error("Erreur lors du partage du panier:", error);

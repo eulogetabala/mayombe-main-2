@@ -70,6 +70,17 @@ export default function OtpScreen({ navigation, route }) {
     if (!text && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
+
+    // Vérification automatique quand tous les 4 chiffres sont saisis
+    if (text && index === otp.length - 1) {
+      const completeOtp = newOtp.join('');
+      if (completeOtp.length === 4) {
+        // Attendre un peu pour que l'utilisateur voie le dernier chiffre
+        setTimeout(() => {
+          handleActivateAccount();
+        }, 500);
+      }
+    }
   };
 
   const handleActivateAccount = async () => {
@@ -100,8 +111,12 @@ export default function OtpScreen({ navigation, route }) {
       console.log('Réponse activation:', data);
 
       if (response.ok) {
-        Alert.alert('Succès', 'Compte activé avec succès !');
-        navigation.navigate('Home');
+        // Redirection automatique sans Alert bloquant
+        console.log('Compte activé avec succès, redirection vers Home...');
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Home' }],
+        });
       } else {
         console.error('Erreur activation:', data);
         Alert.alert('Erreur', data.message || 'Code OTP invalide ou expiré.');

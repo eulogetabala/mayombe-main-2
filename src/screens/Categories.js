@@ -10,6 +10,7 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
@@ -52,14 +53,15 @@ const CategoriesContent = ({ categories, navigation, t }) => {
     }));
   };
 
-  const renderCategory = ({ item }) => {
+  const renderGridCategory = (item, index) => {
     const hasImageError = imageErrors[item.id];
     const isLoading = loadingImages[item.id];
     const imageUrl = item.image_url ? `https://www.mayombe-app.com/uploads_admin/${item.image_url}` : null;
 
     return (
       <TouchableOpacity
-        style={[styles.categoryCard, { width: cardWidth }]}
+        key={item.id}
+        style={styles.gridCard}
         onPress={() => {
           navigation.dispatch(
             CommonActions.navigate({
@@ -73,55 +75,66 @@ const CategoriesContent = ({ categories, navigation, t }) => {
         }}
         activeOpacity={0.8}
       >
-        <View style={styles.imageContainer}>
+        {/* Carte circulaire avec effet de profondeur */}
+        <View style={styles.circleCard}>
           {imageUrl && !hasImageError ? (
-            <View style={styles.imageWrapper}>
-              <Image
-                source={{ uri: imageUrl }}
-                style={styles.categoryImage}
-                onError={() => handleImageError(item.id)}
-                onLoad={() => handleImageLoad(item.id)}
-                onLoadStart={() => handleImageLoadStart(item.id)}
-                defaultSource={require('../../assets/images/3.jpg')}
-              />
-              {isLoading && (
-                <View style={styles.loadingOverlay}>
-                  <ActivityIndicator size="small" color="#51A905" />
-                </View>
-              )}
-            </View>
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.circleImage}
+              onError={() => handleImageError(item.id)}
+              onLoad={() => handleImageLoad(item.id)}
+              onLoadStart={() => handleImageLoadStart(item.id)}
+              defaultSource={require('../../assets/images/place.png')}
+            />
           ) : (
             <Image
-              source={require('../../assets/images/3.jpg')}
-              style={styles.categoryImage}
+              source={require('../../assets/images/place.png')}
+              style={styles.circleImage}
             />
           )}
-          <View style={styles.overlay} />
-          <Text style={styles.categoryName}>{item.libelle}</Text>
+          
+          {/* Overlay subtil */}
+          <View style={styles.circleOverlay} />
+          
+          {/* Contenu centré - sans icône */}
+          <View style={styles.circleContent}>
+          </View>
         </View>
       </TouchableOpacity>
     );
   };
 
+  // Debug: Afficher le nombre de catégories
+  console.log('Categories:', categories?.length, categories);
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Header moderne avec gradient */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#333" />
+          <View style={styles.backButtonContainer}>
+            <Ionicons name="arrow-back" size={20} color="#FFF" />
+          </View>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t.categories.title || 'Catégories'}</Text>
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>{t.categories.title || 'Catégories'}</Text>
+          <Text style={styles.headerSubtitle}>Découvrez nos spécialités</Text>
+        </View>
+        <View style={styles.headerIcon}>
+          <Ionicons name="grid" size={24} color="#FFF" />
+        </View>
       </View>
       
-      <FlatList
-        key={'grid'}
-        data={categories}
-        renderItem={renderCategory}
-        keyExtractor={item => item.id.toString()}
-        contentContainerStyle={styles.listContainer}
-        numColumns={2}
-        showsVerticalScrollIndicator={false}
-        columnWrapperStyle={styles.row}
-      />
+      {/* Disposition créative : Grille de cartes circulaires */}
+      <View style={styles.gridContainer}>
+        {categories && categories.length > 0 ? (
+          categories.map((item, index) => renderGridCategory(item, index))
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Aucune catégorie trouvée ({categories?.length || 0})</Text>
+          </View>
+        )}
+      </View>
     </SafeAreaView>
   );
 };
@@ -206,46 +219,87 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EAEAEA',
+    padding: 20,
+    paddingTop: 24,
+    backgroundColor: '#FF9800',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    elevation: 8,
+    shadowColor: '#FF9800',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   backButton: {
     padding: 8,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+  backButtonContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerContent: {
+    flex: 1,
     marginLeft: 16,
-    color: '#333',
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFF',
     fontFamily: 'Montserrat-Bold',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    fontFamily: 'Montserrat',
+  },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   listContainer: {
     padding: 16,
     paddingHorizontal: 20,
   },
-  row: {
-    justifyContent: 'space-between',
+  // Disposition créative : Cartes de tailles différentes
+  largeCard: {
+    height: 280,
+    marginBottom: 20,
+  },
+  mediumCard: {
+    height: 200,
+    marginBottom: 16,
+  },
+  smallCard: {
+    height: 160,
+    marginBottom: 12,
   },
   categoryCard: {
-    marginBottom: 12,
-    borderRadius: 12,
+    marginBottom: 16,
+    borderRadius: 16,
     overflow: 'hidden',
-    elevation: 3,
+    elevation: 6,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 1,
+      height: 3,
     },
-    shadowOpacity: 0.22,
-    shadowRadius: 2.22,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
     backgroundColor: '#fff',
   },
   imageContainer: {
     position: 'relative',
-    aspectRatio: 1.1,
-    borderRadius: 12,
+    aspectRatio: 1.2,
+    borderRadius: 16,
     overflow: 'hidden',
   },
   categoryImage: {
@@ -255,21 +309,101 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'flex-end',
-    padding: 10,
+  },
+  cardContent: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    paddingBottom: 20,
+  },
+  largeCardContent: {
+    padding: 24,
+    paddingBottom: 28,
+  },
+  mediumCardContent: {
+    padding: 20,
+    paddingBottom: 24,
+  },
+  smallCardContent: {
+    padding: 16,
+    paddingBottom: 20,
+  },
+  categoryIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  // Styles adaptatifs pour les différentes tailles de cartes
+  largeIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  mediumIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  smallIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   categoryName: {
-    position: 'absolute',
-    bottom: 10,
-    left: 10,
-    right: 10,
     color: '#FFF',
-    fontSize: 14,
+    fontSize: 16,
     fontFamily: 'Montserrat-Bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    marginBottom: 8,
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
     textShadowOffset: { width: -1, height: 1 },
-    textShadowRadius: 10,
+    textShadowRadius: 3,
+  },
+  largeCategoryName: {
+    fontSize: 24,
+    marginBottom: 12,
+  },
+  mediumCategoryName: {
+    fontSize: 20,
+    marginBottom: 10,
+  },
+  smallCategoryName: {
+    fontSize: 16,
+    marginBottom: 8,
+  },
+  categoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  largeBadge: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+  },
+  mediumBadge: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 14,
+  },
+  smallBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  categoryBadgeText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontFamily: 'Montserrat-Bold',
   },
   loadingContainer: {
     flex: 1,
@@ -316,6 +450,76 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Disposition en grille circulaire
+  gridContainer: {
+    flex: 1,
+    padding: 20,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  gridCard: {
+    width: 100,
+    height: 100,
+    marginBottom: 20,
+  },
+  circleCard: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 50,
+    overflow: 'hidden',
+    position: 'relative',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  circleImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  circleOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(255,152,0,0.3)',
+    borderRadius: 50,
+  },
+  circleContent: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 8,
+  },
+  circleIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  emptyText: {
+    color: '#666',
+    fontSize: 16,
+    fontFamily: 'Montserrat',
+    textAlign: 'center',
   },
 });
 

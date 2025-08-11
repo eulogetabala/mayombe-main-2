@@ -273,6 +273,13 @@ const HeaderSection = ({ navigation }) => {
           <View style={styles.headerIcons}>
             <TouchableOpacity 
               style={styles.iconContainer}
+              onPress={() => navigation.navigate('SharedCart')}
+            >
+              <Ionicons name="share-outline" size={22} color="#FF9800" />
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.iconContainer}
               onPress={() => navigation.navigate('CartTab', { screen: 'CartMain' })}
             >
               {cartItemsCount > 0 && (

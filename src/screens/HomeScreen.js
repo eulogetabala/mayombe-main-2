@@ -11,6 +11,7 @@ import {
   Text,
   Button,
   SafeAreaView,
+  TouchableOpacity,
 } from "react-native";
 import * as Animatable from "react-native-animatable";
 import { useNavigation } from '@react-navigation/native';
@@ -26,7 +27,13 @@ import NouveauxProduits from "../components/Home/NewMarket";
 import TrouverRestaurant from "../components/Home/TrouverRestaurant";
 import FindNearbyRestaurants from '../components/Home/FindNearbyRestaurants';
 import CommanderLivreur from '../components/Home/CommanderLivreur';
-const images = [
+import { Ionicons } from '@expo/vector-icons';
+import SharedCartScreen from './SharedCartScreen';
+const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+const BASE_URL = "https://www.mayombe-app.com/uploads_admin";
+
+// Images statiques de fallback
+const fallbackImages = [
   require("../../assets/images/m-1.jpg"),
   require("../../assets/images/m-2.jpg"),
   require("../../assets/images/m-3.jpg"),
@@ -36,6 +43,9 @@ const HomeScreen = ({ navigation }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [banners, setBanners] = useState([]);
+  const [bannersLoading, setBannersLoading] = useState(true);
   const scrollViewRef = useRef(null);
   const flatListRef = useRef(null);
   const { isAuthenticated, login, logout } = useAuth();
@@ -67,10 +77,110 @@ const HomeScreen = ({ navigation }) => {
     saveScrollPosition(position);
   };
 
-  // Restaurer la position au montage
+  // Fonction de rafraîchissement
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Rafraîchir les bannières
+      await fetchBanners();
+      
+      // Ici vous pouvez ajouter d'autres appels API pour rafraîchir les données
+      // Par exemple : await fetchRestaurants(), await fetchCategories(), etc.
+      
+      console.log('🔄 Page d\'accueil rafraîchie');
+    } catch (error) {
+      console.error('Erreur lors du rafraîchissement:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Fonction pour récupérer les bannières
+  const fetchBanners = async () => {
+    try {
+      setBannersLoading(true);
+      console.log('🖼️ Récupération des bannières...');
+      
+      const response = await fetch(`${API_BASE_URL}/banniere`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      console.log('📥 Réponse bannières brute:', data);
+      console.log('📥 Type de données:', typeof data);
+      console.log('📥 Est un tableau?', Array.isArray(data));
+
+      if (response.ok && Array.isArray(data)) {
+        console.log('📥 Nombre de bannières reçues:', data.length);
+        console.log('📥 Première bannière:', data[0]);
+        
+        const mappedBanners = data.map((banner, index) => {
+          console.log(`📥 Bannière ${index}:`, banner);
+          
+          const imageUri = banner.cover 
+            ? `${BASE_URL}/${banner.cover}`
+            : null;
+          
+          console.log(`📥 URL image ${index}:`, imageUri);
+          
+          const bannerObj = {
+            id: banner.id || index,
+            title: banner.title || banner.titre || 'Bannière',
+            description: banner.description || banner.description || '',
+            image: imageUri ? { uri: imageUri } : fallbackImages[0],
+            link: banner.link || banner.url || null,
+            active: banner.active !== false, // Par défaut actif si non spécifié
+            title: '', // Pas de titre
+            description: '', // Pas de description
+          };
+          
+          console.log(`📥 Bannière ${index} mappée:`, bannerObj);
+          return bannerObj;
+        }).filter(banner => banner.active); // Filtrer seulement les bannières actives
+
+        console.log('✅ Bannières finales:', mappedBanners);
+        console.log('✅ Nombre de bannières actives:', mappedBanners.length);
+        
+        // Vérifier que les bannières ont des images différentes
+        const uniqueImages = new Set(mappedBanners.map(b => b.image.uri));
+        console.log('✅ Images uniques:', uniqueImages.size, 'sur', mappedBanners.length);
+        
+        setBanners(mappedBanners);
+      } else {
+        console.log('⚠️ Aucune bannière trouvée, utilisation des images par défaut');
+        setBanners(fallbackImages.map((image, index) => ({
+          id: index,
+          title: `Bannière ${index + 1}`,
+          description: '',
+          image: image,
+          link: null,
+          active: true,
+        })));
+      }
+    } catch (error) {
+      console.error('❌ Erreur lors de la récupération des bannières:', error);
+      // Utiliser les images de fallback en cas d'erreur
+      setBanners(fallbackImages.map((image, index) => ({
+        id: index,
+        title: `Bannière ${index + 1}`,
+        description: '',
+        image: image,
+        link: null,
+        active: true,
+      })));
+    } finally {
+      setBannersLoading(false);
+    }
+  };
+
+  // Restaurer la position au montage et charger les bannières
   useEffect(() => {
     const initScreen = async () => {
       await restoreScrollPosition();
+      await fetchBanners();
       setIsLoading(false);
     };
     initScreen();
@@ -87,12 +197,12 @@ const HomeScreen = ({ navigation }) => {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentIndex((prevIndex) =>
-        prevIndex === images.length - 1 ? 0 : prevIndex + 1
+        prevIndex === (banners.length - 1) ? 0 : prevIndex + 1
       );
     }, 5000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [banners.length]);
 
   useEffect(() => {
     if (flatListRef.current) {
@@ -103,29 +213,58 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [currentIndex]);
 
-  const renderCarousel = () => (
-    <View style={styles.carouselContainer}>
-      <FlatList
-        ref={flatListRef}
-        data={images}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.imageContainer}>
-            <Image source={item} style={styles.image} />
+  const renderCarousel = () => {
+    return (
+      <View style={styles.carouselContainer}>
+        {bannersLoading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Chargement des bannières...</Text>
           </View>
-        )}
-        onMomentumScrollEnd={(event) => {
-          const newIndex = Math.round(
-            event.nativeEvent.contentOffset.x / Dimensions.get("window").width
-          );
-          setCurrentIndex(newIndex);
-        }}
-      />
+        ) : (
+        <FlatList
+          ref={flatListRef}
+          data={banners}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={styles.imageContainer}
+              onPress={() => {
+                if (item.link) {
+                  console.log('🔗 Ouverture du lien:', item.link);
+                  // Ici vous pouvez ajouter la logique pour ouvrir le lien
+                  // Par exemple : Linking.openURL(item.link);
+                }
+              }}
+              activeOpacity={item.link ? 0.8 : 1}
+            >
+              <Image 
+                source={item.image} 
+                style={styles.image}
+                resizeMode="cover"
+                onError={(error) => {
+                  console.log('❌ Erreur image:', item.title, error.nativeEvent);
+                  // En cas d'erreur, utiliser l'image de fallback
+                  item.image = fallbackImages[0];
+                }}
+                defaultSource={fallbackImages[0]}
+              />
+
+            </TouchableOpacity>
+          )}
+          onMomentumScrollEnd={(event) => {
+            const newIndex = Math.round(
+              event.nativeEvent.contentOffset.x / Dimensions.get("window").width
+            );
+            setCurrentIndex(newIndex);
+          }}
+        />
+      )}
     </View>
-  );
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -137,6 +276,16 @@ const HomeScreen = ({ navigation }) => {
         onScroll={handleScroll}
         scrollEventThrottle={16}
         onMomentumScrollEnd={handleScroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#51A905']}
+            tintColor="#51A905"
+            title="Rafraîchir..."
+            titleColor="#51A905"
+          />
+        }
       >
         <Animatable.View animation="fadeInUp" duration={800}>
           <HeaderSection navigation={navigation} />
@@ -159,7 +308,7 @@ const HomeScreen = ({ navigation }) => {
         </Animatable.View>
 
         <Animatable.View animation="fadeInUp" duration={800} delay={800}>
-          <NouveauxProduits />
+          {/* <NouveauxProduits /> */}
         </Animatable.View>
 
         <Animatable.View animation="fadeInUp" duration={800} delay={800}>
@@ -174,8 +323,12 @@ const HomeScreen = ({ navigation }) => {
           <CommanderLivreur />
         </Animatable.View>
 
+
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
+      
+
     </SafeAreaView>
   );
 };
@@ -211,10 +364,17 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    height: (Dimensions.get("window").width * 270) / 1080,
   },
+  loadingText: {
+    fontSize: 16,
+    color: '#666',
+    fontFamily: 'Montserrat',
+  },
+
   bottomSpacer: {
     height: 60,
-  }
+  },
 });
 
 export default HomeScreen;

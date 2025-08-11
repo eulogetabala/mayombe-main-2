@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import ProductModal from '../components/ProductModal';
+import CustomHeader from '../components/common/CustomHeader';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 
@@ -205,16 +206,12 @@ const AllProducts = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#000" />
-          <Text style={styles.backText}>{t.common.cancel}</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t.products.allProducts}</Text>
-      </View>
+      <CustomHeader
+        title={t.products.allProducts}
+        showBack={true}
+        backgroundColor="#FF9800"
+        textColor="#FFF"
+      />
       <FlatList
         data={products}
         renderItem={renderProduct}
@@ -242,32 +239,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  header: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Platform.OS === 'ios' ? 50 : 35,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backText: {
-    fontSize: 16,
-    color: '#000',
-    marginLeft: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Montserrat-Bold',
-    color: '#333',
-    marginLeft: 16,
-    flex: 1,
-  },
+
   productGrid: {
     padding: 10,
     paddingBottom: Platform.OS === 'android' ? 70 : 20,

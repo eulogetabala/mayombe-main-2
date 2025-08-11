@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, SafeAreaView, ScrollView, Platform, StatusBar, Alert, ActivityIndicator, Dimensions } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, SafeAreaView, ScrollView, Platform, StatusBar, Alert, ActivityIndicator, Dimensions, RefreshControl, Clipboard, Share } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import useCartSharing from '../hooks/useCartSharing';
+import { getDistanceToRestaurant, formatDistance } from '../services/LocationService';
+import CustomHeader from '../components/common/CustomHeader';
+import ShareInstructionsModal from '../components/ShareInstructionsModal';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const { width, height } = Dimensions.get('window');
@@ -16,6 +19,12 @@ const CartScreen = ({ navigation, route }) => {
   const t = translations[currentLanguage];
   const [totalAmount, setTotalAmount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [deliveryDistance, setDeliveryDistance] = useState(5); // Distance par défaut en km
+  const [deliveryFee, setDeliveryFee] = useState(1000); // Frais par défaut
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [currentSharedCartId, setCurrentSharedCartId] = useState(null);
   
   // Utiliser le hook de partage de panier
   const { isSharing, shareCart, loadSharedCart } = useCartSharing(cartItems, setCartItems, formatPrice);
@@ -32,6 +41,38 @@ const CartScreen = ({ navigation, route }) => {
     const total = calculateCartTotal();
     setTotalAmount(total);
   }, [cartItems]);
+
+  // Calculer les frais de livraison quand la distance change
+  useEffect(() => {
+    const calculatedFee = calculateDeliveryFee(deliveryDistance);
+    setDeliveryFee(calculatedFee);
+  }, [deliveryDistance]);
+
+  // Obtenir la géolocalisation au chargement de l'écran
+  useEffect(() => {
+    const getLocationAndCalculateFee = async () => {
+      if (cartItems.length === 0) return; // Pas besoin si panier vide
+      
+      setIsLoadingLocation(true);
+      try {
+        const distance = await getDistanceToRestaurant();
+        setDeliveryDistance(distance);
+        console.log('📍 Distance obtenue:', distance, 'km');
+      } catch (error) {
+        console.log('⚠️ Erreur géolocalisation:', error.message);
+        // Garder la distance par défaut (5km)
+        Alert.alert(
+          'Localisation non disponible',
+          'Impossible d\'obtenir votre position. Les frais de livraison seront calculés avec une distance par défaut.',
+          [{ text: 'OK' }]
+        );
+      } finally {
+        setIsLoadingLocation(false);
+      }
+    };
+
+    getLocationAndCalculateFee();
+  }, [cartItems.length]); // Se déclenche quand le panier change
 
   // Vérifier si nous avons reçu un panier partagé
   useEffect(() => {
@@ -59,6 +100,19 @@ const CartScreen = ({ navigation, route }) => {
     }
   };
 
+  // Fonction de rafraîchissement
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadCartItems();
+      console.log('🔄 Panier rafraîchi');
+    } catch (error) {
+      console.error('Erreur lors du rafraîchissement du panier:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
   const updateItemQuantity = async (itemId, change) => {
     const item = cartItems.find(i => i.productKey === itemId);
     if (item) {
@@ -78,6 +132,40 @@ const CartScreen = ({ navigation, route }) => {
   const formatPrice = (price) => {
     const numPrice = Number(price);
     return isNaN(numPrice) ? 0 : numPrice;
+  };
+
+  // Fonction pour calculer les frais de livraison selon la distance
+  const calculateDeliveryFee = (distance) => {
+    if (!distance || isNaN(distance)) {
+      return 1000; // Frais par défaut si pas de distance
+    }
+    
+    const distanceNum = parseFloat(distance);
+    
+    if (distanceNum <= 10) {
+      return 1000; // 0-10km : 1000 FCFA
+    } else if (distanceNum <= 20) {
+      return 1500; // 11-20km : 1500 FCFA
+    } else {
+      return 2000; // 21km+ : 2000 FCFA
+    }
+  };
+
+  // Fonction pour obtenir la description des frais
+  const getDeliveryFeeDescription = (distance) => {
+    if (!distance || isNaN(distance)) {
+      return "Frais de livraison (distance non disponible)";
+    }
+    
+    const distanceNum = parseFloat(distance);
+    
+    if (distanceNum <= 10) {
+      return `Frais de livraison (0-10km)`;
+    } else if (distanceNum <= 20) {
+      return `Frais de livraison (11-20km)`;
+    } else {
+      return `Frais de livraison (21km+)`;
+    }
   };
 
   const createOrder = async () => {
@@ -133,7 +221,7 @@ const CartScreen = ({ navigation, route }) => {
       const requestBody = {
         items: formattedItems,
         total_amount: formatPrice(totalAmount),
-        delivery_fee: 1000
+        delivery_fee: deliveryFee // Utiliser les frais dynamiques calculés
       };
 
       console.log("Données de la commande:", JSON.stringify(requestBody, null, 2));
@@ -190,9 +278,10 @@ const CartScreen = ({ navigation, route }) => {
       const orderDetails = {
         items: [...cartItems],
         subtotal: totalAmount,
-        deliveryFee: 1000,
-        total: totalAmount + 1000,
-        orderId: orderId
+        deliveryFee: deliveryFee,
+        total: totalAmount + deliveryFee,
+        orderId: orderId,
+        distance: deliveryDistance
       };
 
       // Vider complètement le panier
@@ -225,6 +314,88 @@ const CartScreen = ({ navigation, route }) => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // Fonction pour gérer le partage avec fallback
+  const handleShareCart = async () => {
+    if (cartItems.length === 0) {
+      Alert.alert("Erreur", "Votre panier est vide");
+      return;
+    }
+
+    try {
+      // Générer un ID unique pour le panier partagé
+      const sharedCartId = 'cart_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+      setCurrentSharedCartId(sharedCartId);
+      
+      // Préparer les données du panier pour le stockage
+      const cartData = cartItems.map(item => {
+        const isMenu = item.type === 'menu';
+        return {
+          id: item.id,
+          type: isMenu ? 'menu' : 'product',
+          menu_id: isMenu ? item.id : null,
+          product_id: !isMenu ? item.id : null,
+          quantity: item.quantity,
+          price_at_order: formatPrice(item.unitPrice),
+          name: item.name,
+          unitPrice: item.unitPrice,
+          total: item.total,
+          imageUrl: item.imageUrl,
+          cover: item.cover,
+          complements: item.complements || []
+        };
+      });
+
+      // Sauvegarder le panier partagé dans le stockage local
+      await AsyncStorage.setItem(`shared_cart_${sharedCartId}`, JSON.stringify(cartData));
+      
+      // Essayer de partager via le système normal
+      try {
+        await shareCart();
+      } catch (error) {
+        console.log('Erreur lors du partage normal, affichage du modal de fallback');
+        setShowShareModal(true);
+      }
+    } catch (error) {
+      console.error("Erreur lors de la préparation du partage:", error);
+      Alert.alert("Erreur", "Impossible de préparer le partage du panier.");
+    }
+  };
+
+  // Fonction pour gérer les liens de partage non accessibles
+  const handleShareLinkError = () => {
+    Alert.alert(
+      "Lien non accessible",
+      "Le lien de partage n'est pas accessible pour le moment. Voici les alternatives :",
+      [
+        {
+          text: "Copier l'ID du panier",
+          onPress: () => {
+            const sharedCartId = generateUniqueId();
+            Clipboard.setString(sharedCartId);
+            Alert.alert("ID copié", "L'ID du panier a été copié dans le presse-papiers. Partagez-le manuellement.");
+          }
+        },
+        {
+          text: "Partager via WhatsApp",
+          onPress: () => {
+            const cartSummary = cartItems.map(item => `• ${item.name} (${item.quantity}x)`).join('\n');
+            const totalAmount = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
+            const message = `🛒 Mon panier Mayombe\n\n${cartSummary}\n\n💰 Total: ${totalAmount.toLocaleString()} FCFA\n\n📱 Téléchargez l'app Mayombe pour continuer la commande.`;
+            
+            Share.share({
+              message: message,
+              title: 'Mon panier Mayombe'
+            });
+          }
+        },
+        {
+          text: "Annuler",
+          style: "cancel"
+        }
+      ]
+    );
   };
 
   const renderItem = ({ item }) => (
@@ -297,22 +468,18 @@ const CartScreen = ({ navigation, route }) => {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
+    <View style={styles.safeArea}>
+      <CustomHeader 
+        title={t.cart.title}
+        rightComponent={
           <View style={styles.headerTextContainer}>
-            <Text style={styles.title}>{t.cart.title}</Text>
             <Text style={styles.subtitle}>
               {cartItems.length} {cartItems.length > 1 ? 'articles' : 'article'}
             </Text>
           </View>
-        </View>
+        }
+      />
+      <View style={styles.container}>
 
         {cartItems.length === 0 ? (
           <View style={styles.emptyContainer}>
@@ -326,6 +493,16 @@ const CartScreen = ({ navigation, route }) => {
               keyExtractor={(item) => item.productKey}
               contentContainerStyle={styles.listContainer}
               showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={['#51A905']}
+                  tintColor="#51A905"
+                  title="Rafraîchir..."
+                  titleColor="#51A905"
+                />
+              }
               ListFooterComponent={() => (
                 <>
                   <View style={styles.summaryContainer}>
@@ -335,12 +512,29 @@ const CartScreen = ({ navigation, route }) => {
                       <Text style={styles.priceValue}>{formatPrice(totalAmount)} FCFA</Text>
                     </View>
                     <View style={styles.priceRow}>
-                      <Text style={styles.priceLabel}>Frais de livraison</Text>
-                      <Text style={styles.priceValue}>1000 FCFA</Text>
+                      <Text style={styles.priceLabel}>
+                        {isLoadingLocation 
+                          ? '📍 Calcul de la distance...'
+                          : getDeliveryFeeDescription(deliveryDistance)
+                        }
+                      </Text>
+                      <Text style={styles.priceValue}>
+                        {isLoadingLocation ? (
+                          <ActivityIndicator size="small" color="#51A905" />
+                        ) : (
+                          `${deliveryFee} FCFA`
+                        )}
+                      </Text>
                     </View>
+                    {!isLoadingLocation && (
+                      <View style={styles.priceRow}>
+                        <Text style={styles.priceLabel}>Distance</Text>
+                        <Text style={styles.priceValue}>{formatDistance(deliveryDistance)}</Text>
+                      </View>
+                    )}
                     <View style={[styles.priceRow, styles.totalRow]}>
                       <Text style={styles.totalLabel}>Total</Text>
-                      <Text style={styles.totalValue}>{formatPrice(totalAmount + 1000)} FCFA</Text>
+                      <Text style={styles.totalValue}>{formatPrice(totalAmount + deliveryFee)} FCFA</Text>
                     </View>
                   </View>
 
@@ -366,7 +560,7 @@ const CartScreen = ({ navigation, route }) => {
                           styles.shareButton,
                           isSharing && styles.disabledButton
                         ]}
-                        onPress={shareCart}
+                        onPress={handleShareCart}
                         disabled={isSharing}
                       >
                         {isSharing ? (
@@ -386,7 +580,14 @@ const CartScreen = ({ navigation, route }) => {
           </View>
         )}
       </View>
-    </SafeAreaView>
+      
+      <ShareInstructionsModal
+        visible={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        cartItems={cartItems}
+        sharedCartId={currentSharedCartId}
+      />
+    </View>
   );
 };
 
@@ -394,34 +595,14 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#fff',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   container: {
     flex: 1,
     backgroundColor: '#fff',
     paddingHorizontal: width * 0.05,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-    backgroundColor: '#fff',
-  },
-  backButton: {
-    padding: 8,
-    marginRight: 10,
-  },
   headerTextContainer: {
     flex: 1,
-  },
-  title: {
-    fontSize: 24,
-    color: '#333',
-    fontFamily: "Montserrat-Bold",
-    marginBottom: 4,
   },
   subtitle: {
     fontSize: 14,
@@ -636,6 +817,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#51A905',
     fontFamily: 'Montserrat-Bold',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#51A905',
+    fontFamily: 'Montserrat-Regular',
   },
 });
 

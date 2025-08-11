@@ -22,6 +22,7 @@ import CountryPicker, {
 } from "react-native-country-picker-modal";
 import { useLanguage } from '../../context/LanguageContext';
 import { translations } from '../../translations';
+import { api } from '../../services/api';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState("");
@@ -70,24 +71,22 @@ const LoginScreen = ({ navigation }) => {
     setLoading(true);
 
     try {
-      const response = await fetch(
-        "https://www.api-mayombe.mayombe-app.com/public/api/login",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: `+${callingCode}${phone}`, password }),
-        }
-      );
+      const fullPhone = `+${callingCode}${phone}`;
+      console.log("Tentative de connexion avec:", { phone: fullPhone, passwordLength: password.length });
+      
+      const result = await api.login(fullPhone, password);
+      console.log("Résultat API login:", result);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        await AsyncStorage.setItem("userToken", data.token);
+      if (result.status === 200) {
+        await AsyncStorage.setItem("userToken", result.data.token);
         navigation.replace("MainApp");
       } else {
-        Alert.alert("Erreur", data.message || "Échec de la connexion.");
+        const errorMessage = result.data.data?.erreur || result.data.message || "Échec de la connexion.";
+        console.log("Échec de connexion:", errorMessage);
+        Alert.alert("Erreur", errorMessage);
       }
     } catch (error) {
+      console.error("Erreur lors de la connexion:", error);
       Alert.alert("Erreur", "Une erreur est survenue lors de la connexion.");
     } finally {
       setLoading(false);
@@ -213,6 +212,18 @@ const LoginScreen = ({ navigation }) => {
                   ) : (
                     <Text style={styles.buttonText}>{t.auth.login.loginButton}</Text>
                   )}
+                </TouchableOpacity>
+              </Animatable.View>
+
+              {/* Lien mot de passe oublié */}
+              <Animatable.View animation="fadeInUp" delay={800}>
+                <TouchableOpacity
+                  style={styles.linkContainer}
+                  onPress={() => navigation.navigate("ForgotPassword")}
+                >
+                  <Text style={styles.linkText}>
+                    <Text style={styles.linkHighlight}>Mot de passe oublié ?</Text>
+                  </Text>
                 </TouchableOpacity>
               </Animatable.View>
 

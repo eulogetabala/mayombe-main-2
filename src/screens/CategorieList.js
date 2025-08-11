@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,14 @@ import {
   ActivityIndicator,
   Dimensions,
   Animated,
+  RefreshControl,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ProductModal from '../components/ProductModal';
+import CustomHeader from '../components/common/CustomHeader';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 
@@ -33,6 +37,7 @@ const CategorieList = ({ route, navigation }) => {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState('success'); // 'success' ou 'error'
   const [imageErrors, setImageErrors] = useState({});
+  const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const staticImages = {
@@ -90,68 +95,58 @@ const CategorieList = ({ route, navigation }) => {
         const mappedProducts = data.map((product, index) => {
           // Construction de l'URL de l'image
           let imageUrl = null;
-          if (product.image_url) {
+          let hasValidImage = false;
+          if (product.image_url && typeof product.image_url === 'string' && product.image_url.startsWith('products/')) {
             imageUrl = `https://www.mayombe-app.com/uploads_admin/${product.image_url}`;
-          } else if (product.image) {
+            hasValidImage = true;
+          } else if (product.image && typeof product.image === 'string' && product.image.startsWith('products/')) {
             imageUrl = `https://www.mayombe-app.com/uploads_admin/${product.image}`;
-          } else if (product.cover) {
+            hasValidImage = true;
+          } else if (product.cover && typeof product.cover === 'string' && product.cover.startsWith('products/')) {
             imageUrl = `https://www.mayombe-app.com/uploads_admin/${product.cover}`;
+            hasValidImage = true;
           }
 
-          const mappedProduct = {
-            id: product.id,
-            name: product.name || product.nom_produit || product.libelle || product.nom || "Nom non disponible",
-            price: product.price ? `${product.price} FCFA` : "Prix non disponible",
-            description: product.description || "Description non disponible",
-            image_url: imageUrl,
-            rawPrice: product.price || 0,
-            unite: product.unite || '',
-            stock: product.stock || 0,
-            category_id: product.category_id || categoryId
+          return {
+            ...product,
+            id: product.id || index,
+            imageUrl: imageUrl,
+            hasValidImage: hasValidImage,
+            productKey: `${product.id || index}-${Date.now()}`,
+            quantity: 1,
+            unitPrice: parseFloat(product.price) || 0,
+            total: parseFloat(product.price) || 0,
+            type: 'product'
           };
-
-          console.log(`Produit ${index + 1} mappé:`, mappedProduct.name, 'Prix:', mappedProduct.price);
-          return mappedProduct;
         });
 
         setProducts(mappedProducts);
-        
-        if (mappedProducts.length === 0) {
-          console.log('Aucun produit trouvé pour cette catégorie');
-          setError(`Aucun produit disponible dans la catégorie "${categoryName}". Veuillez réessayer plus tard ou consulter une autre catégorie.`);
-        } else {
-          console.log(`${mappedProducts.length} produits mappés avec succès`);
-        }
+        console.log('Produits mappés avec succès:', mappedProducts.length);
       } else {
-        console.error('Format de données invalide - attendu un tableau, reçu:', typeof data);
-        throw new Error("Le serveur a retourné un format de données inattendu. Veuillez réessayer.");
+        console.log('Aucun produit trouvé ou données invalides');
+        setProducts([]);
       }
     } catch (error) {
-      console.error('Erreur détaillée lors du chargement des produits:', error);
-      console.error('Message d\'erreur:', error.message);
-      console.error('Stack trace:', error.stack);
-      
-      let errorMessage = 'Impossible de charger les produits pour le moment.';
-      
-      if (error.message.includes('Network')) {
-        errorMessage = 'Problème de connexion internet. Vérifiez votre connexion et réessayez.';
-      } else if (error.message.includes('HTTP: 404')) {
-        errorMessage = `La catégorie "${categoryName}" n'existe pas ou a été supprimée.`;
-      } else if (error.message.includes('HTTP: 500')) {
-        errorMessage = 'Erreur du serveur. Nos équipes ont été notifiées. Veuillez réessayer dans quelques minutes.';
-      } else if (error.message.includes('HTTP')) {
-        errorMessage = 'Erreur de communication avec le serveur. Veuillez réessayer.';
-      } else if (error.message.includes('Format')) {
-        errorMessage = 'Erreur technique. Veuillez réessayer ou contacter le support.';
-      } else if (error.message.includes('timeout')) {
-        errorMessage = 'La requête a pris trop de temps. Vérifiez votre connexion et réessayez.';
-      }
-      
-      setError(errorMessage);
+      console.error('Erreur lors du chargement des produits:', error);
+      setError(error.message);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Fonction de rafraîchissement
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchProducts();
+      console.log('🔄 Liste des catégories rafraîchie');
+    } catch (error) {
+      console.error('Erreur lors du rafraîchissement:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [categoryId]);
 
   const handleProductPress = (product) => {
     setSelectedProduct(product);
@@ -190,8 +185,8 @@ const CategorieList = ({ route, navigation }) => {
 
       // Déterminer quelle image utiliser
       let productImage = staticImages.image1; // Image par défaut
-      if (product.image_url && !imageErrors[product.id]) {
-        productImage = { uri: product.image_url };
+      if (product.imageUrl && !imageErrors[product.id]) {
+        productImage = { uri: product.imageUrl };
       }
 
       const cartProduct = {
@@ -243,9 +238,9 @@ const CategorieList = ({ route, navigation }) => {
               style={styles.productCard}
               onPress={() => handleProductPress(item)}
             >
-              {item.image_url && !hasImageError ? (
+              {item.imageUrl && !hasImageError ? (
                 <Image
-                  source={{ uri: item.image_url }}
+                  source={{ uri: item.imageUrl }}
                   style={styles.productImage}
                   resizeMode="cover"
                   onError={() => handleImageError(item.id)}
@@ -281,9 +276,9 @@ const CategorieList = ({ route, navigation }) => {
                 style={styles.productCard}
                 onPress={() => handleProductPress(nextItem)}
               >
-                {nextItem.image_url && !hasNextImageError ? (
+                {nextItem.imageUrl && !hasNextImageError ? (
                   <Image
-                    source={{ uri: nextItem.image_url }}
+                    source={{ uri: nextItem.imageUrl }}
                     style={styles.productImage}
                     resizeMode="cover"
                     onError={() => handleImageError(nextItem.id)}
@@ -365,24 +360,28 @@ const CategorieList = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#000" />
-          <Text style={styles.backText}>{t.common.cancel}</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {t.categories[categoryName.toLowerCase()] || categoryName}
-        </Text>
-      </View>
+      <CustomHeader
+        title={t.categories[categoryName.toLowerCase()] || categoryName}
+        showBack={true}
+        backgroundColor="#FF9800"
+        textColor="#FFF"
+      />
       <FlatList
         data={products}
         renderItem={renderItem}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#51A905']}
+            tintColor="#51A905"
+            title="Rafraîchir..."
+            titleColor="#51A905"
+          />
+        }
       />
       {selectedProduct && (
         <ProductModal
@@ -416,32 +415,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#F5F5F5",
-  },
-  header: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 50,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backText: {
-    fontSize: 16,
-    color: '#000',
-    marginLeft: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontFamily: 'Montserrat-Bold',
-    color: '#333',
-    marginLeft: 16,
-    flex: 1,
   },
   listContainer: {
     padding: 10,

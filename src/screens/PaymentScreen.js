@@ -5,13 +5,14 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
-  SafeAreaView,
   ScrollView,
   Alert,
   Platform,
   ActivityIndicator,
   TextInput,
   FlatList,
+  Dimensions,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +27,8 @@ import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+const { width, height } = Dimensions.get('window');
+const scaleFont = (size) => Math.round(size * (width / 375));
 
 const PaymentScreen = ({ route, navigation }) => {
   const { currentLanguage } = useLanguage();
@@ -45,25 +48,29 @@ const PaymentScreen = ({ route, navigation }) => {
       id: 'airtel',
       name: 'Airtel Money',
       logo: require('../../assets/images/airtel.png'),
-     
+      disabled: true,
+      description: 'Disponible bientôt'
     },
     {
       id: 'mtn',
       name: 'MTN Mobile Money',
       logo: require('../../assets/images/mtn.jpeg'),
-     
+      disabled: false,
+      description: 'Paiement mobile sécurisé'
     },
     {
       id: 'cb',
       name: 'Carte Bancaire',
       logo: require('../../assets/images/visa-mastercard.webp'),
-     
+      disabled: false,
+      description: 'Visa, Mastercard acceptées'
     },
     {
       id: 'cash',
       name: 'Paiement à la livraison',
       logo: require('../../assets/images/cash.jpg'),
-      
+      disabled: false,
+      description: 'Payer à la réception'
     },
   ];
 
@@ -116,6 +123,17 @@ const PaymentScreen = ({ route, navigation }) => {
   const handleProceedToPayment = async () => {
     if (!selectedMethod) {
       Alert.alert('Erreur', 'Veuillez sélectionner un mode de paiement');
+      return;
+    }
+
+    // Vérifier si la méthode sélectionnée est désactivée
+    const selectedMethodData = paymentMethods.find(m => m.id === selectedMethod);
+    if (selectedMethodData && selectedMethodData.disabled) {
+      Alert.alert(
+        'Mode de paiement non disponible',
+        'Le mode de paiement sélectionné n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.',
+        [{ text: 'OK' }]
+      );
       return;
     }
 
@@ -188,8 +206,24 @@ const PaymentScreen = ({ route, navigation }) => {
     setAddress(address);
   };
 
+  const handleMethodSelection = (methodId) => {
+    const method = paymentMethods.find(m => m.id === methodId);
+    
+    if (method && method.disabled) {
+      Alert.alert(
+        'Mode de paiement non disponible',
+        'Le paiement par Airtel Money n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
+    setSelectedMethod(methodId);
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
@@ -208,14 +242,36 @@ const PaymentScreen = ({ route, navigation }) => {
               style={[
                 styles.methodCard,
                 selectedMethod === method.id && styles.selectedMethod,
+                method.disabled && styles.disabledMethod,
               ]}
-              onPress={() => setSelectedMethod(method.id)}
+              onPress={() => handleMethodSelection(method.id)}
             >
-              <Image source={method.logo} style={styles.methodLogo} />
+              <Image 
+                source={method.logo} 
+                style={[
+                  styles.methodLogo,
+                  method.disabled && styles.disabledLogo
+                ]} 
+              />
               <View style={styles.methodInfo}>
-                <Text style={styles.methodName}>{method.name}</Text>
-                <Text style={styles.methodDescription}>{method.description}</Text>
+                <Text style={[
+                  styles.methodName,
+                  method.disabled && styles.disabledText
+                ]}>
+                  {method.name}
+                </Text>
+                <Text style={[
+                  styles.methodDescription,
+                  method.disabled && styles.disabledText
+                ]}>
+                  {method.description}
+                </Text>
               </View>
+              {method.disabled && (
+                <View style={styles.comingSoonBadge}>
+                  <Ionicons name="time-outline" size={16} color="#FFA500" />
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
@@ -307,7 +363,7 @@ const PaymentScreen = ({ route, navigation }) => {
         onClose={() => setAddressModalVisible(false)}
         onSelectAddress={handleAddressSelect}
       />
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -315,20 +371,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f8f8',
-    paddingTop: Platform.OS === 'android' ? 10 : 0,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 0,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 12,
     backgroundColor: '#fff',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 12 : 12,
   },
   backButton: {
     padding: 8,
     marginRight: 10,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: scaleFont(18),
     fontWeight: 'bold',
     color: '#333',
     fontFamily: 'Montserrat-Bold',
@@ -347,7 +404,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 10,
-    fontSize: 14,
+    fontSize: scaleFont(14),
     fontFamily: 'Montserrat',
   },
   methodsContainer: {
@@ -361,7 +418,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    padding: 12,
+    padding: scaleFont(12),
     borderRadius: 12,
     marginBottom: 10,
     borderWidth: 1,
@@ -372,8 +429,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F9ED',
   },
   methodLogo: {
-    width: 40,
-    height: 40,
+    width: scaleFont(40),
+    height: scaleFont(40),
     resizeMode: 'contain',
   },
   methodInfo: {
@@ -381,13 +438,13 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   methodName: {
-    fontSize: 15,
+    fontSize: scaleFont(15),
     fontWeight: 'bold',
     color: '#333',
     fontFamily: 'Montserrat-Bold',
   },
   methodDescription: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#666',
     marginTop: 2,
     fontFamily: 'Montserrat',
@@ -404,7 +461,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   summaryTitle: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: 'bold',
     marginBottom: 10,
     color: '#333',
@@ -416,12 +473,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryLabel: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#666',
     fontFamily: 'Montserrat',
   },
   summaryValue: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#333',
     fontFamily: 'Montserrat-Bold',
   },
@@ -432,13 +489,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   totalLabel: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: 'bold',
     color: '#333',
     fontFamily: 'Montserrat-Bold',
   },
   totalValue: {
-    fontSize: 18,
+    fontSize: scaleFont(18),
     fontWeight: 'bold',
     color: '#51A905',
     fontFamily: 'Montserrat-Bold',
@@ -456,7 +513,7 @@ const styles = StyleSheet.create({
   },
   payButton: {
     backgroundColor: '#51A905',
-    padding: 15,
+    padding: scaleFont(15),
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 90,
@@ -466,10 +523,9 @@ const styles = StyleSheet.create({
   },
   payButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: 'bold',
     fontFamily: 'Montserrat-Bold',
-   
   },
   scrollViewContent: {
     padding: 20,
@@ -478,7 +534,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   label: {
-    fontSize: 12,
+    fontSize: scaleFont(12),
     color: '#666',
     marginBottom: 2,
     fontFamily: 'Montserrat',
@@ -490,19 +546,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    padding: 12,
+    padding: scaleFont(12),
     backgroundColor: '#fff',
   },
   addressIcon: {
     marginRight: 8,
   },
   addressText: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     color: '#333',
     flex: 1,
   },
   placeholderText: {
-    fontSize: 16,
+    fontSize: scaleFont(16),
     color: '#999',
     flex: 1,
   },
@@ -513,7 +569,7 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 8,
     backgroundColor: '#fff',
-    height: 50,
+    height: scaleFont(50),
     marginBottom: 15,
   },
   countryPickerContainer: {
@@ -528,9 +584,30 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   countryButtonText: {
-    fontSize: 14,
+    fontSize: scaleFont(14),
     color: '#333',
     fontFamily: 'Montserrat',
+  },
+  disabledMethod: {
+    opacity: 0.7,
+    backgroundColor: '#f0f0f0',
+    borderColor: '#ccc',
+  },
+  disabledLogo: {
+    opacity: 0.7,
+  },
+  disabledText: {
+    color: '#999',
+  },
+  comingSoonBadge: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 5,
+    borderWidth: 1,
+    borderColor: '#FFA500',
   },
 });
 

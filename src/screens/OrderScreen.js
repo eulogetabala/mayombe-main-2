@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,12 @@ import {
   SafeAreaView,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../context/CartContext';
+import { getDistanceToRestaurant, formatDistance } from '../services/LocationService';
 
 const OrderScreen = ({ route, navigation }) => {
   const { cartItems = [], totalAmount = 0 } = route.params || {};
@@ -20,8 +22,74 @@ const OrderScreen = ({ route, navigation }) => {
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
   const [rating, setRating] = useState(0);
-  const deliveryFee = 1000;
+  const [deliveryDistance, setDeliveryDistance] = useState(5); // Distance par défaut
+  const [deliveryFee, setDeliveryFee] = useState(1000); // Frais par défaut
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const finalTotal = totalAmount + deliveryFee;
+
+  // Fonction pour calculer les frais de livraison selon la distance
+  const calculateDeliveryFee = (distance) => {
+    if (!distance || isNaN(distance)) {
+      return 1000; // Frais par défaut si pas de distance
+    }
+    
+    const distanceNum = parseFloat(distance);
+    
+    if (distanceNum <= 10) {
+      return 1000; // 0-10km : 1000 FCFA
+    } else if (distanceNum <= 20) {
+      return 1500; // 11-20km : 1500 FCFA
+    } else {
+      return 2000; // 21km+ : 2000 FCFA
+    }
+  };
+
+  // Fonction pour obtenir la description des frais
+  const getDeliveryFeeDescription = (distance) => {
+    if (!distance || isNaN(distance)) {
+      return "Frais de livraison (distance non disponible)";
+    }
+    
+    const distanceNum = parseFloat(distance);
+    
+    if (distanceNum <= 10) {
+      return `Frais de livraison (0-10km)`;
+    } else if (distanceNum <= 20) {
+      return `Frais de livraison (11-20km)`;
+    } else {
+      return `Frais de livraison (21km+)`;
+    }
+  };
+
+  // Calculer les frais quand la distance change
+  useEffect(() => {
+    const calculatedFee = calculateDeliveryFee(deliveryDistance);
+    setDeliveryFee(calculatedFee);
+  }, [deliveryDistance]);
+
+  // Obtenir la géolocalisation au chargement de l'écran
+  useEffect(() => {
+    const getLocationAndCalculateFee = async () => {
+      setIsLoadingLocation(true);
+      try {
+        const distance = await getDistanceToRestaurant();
+        setDeliveryDistance(distance);
+        console.log('📍 Distance obtenue (OrderScreen):', distance, 'km');
+      } catch (error) {
+        console.log('⚠️ Erreur géolocalisation (OrderScreen):', error.message);
+        // Garder la distance par défaut (5km)
+        Alert.alert(
+          'Localisation non disponible',
+          'Impossible d\'obtenir votre position. Les frais de livraison seront calculés avec une distance par défaut.',
+          [{ text: 'OK' }]
+        );
+      } finally {
+        setIsLoadingLocation(false);
+      }
+    };
+
+    getLocationAndCalculateFee();
+  }, []); // Se déclenche une seule fois au chargement
 
   const saveOrder = async (orderDetails) => {
     try {
@@ -179,9 +247,26 @@ const OrderScreen = ({ route, navigation }) => {
             <Text style={styles.priceValue}>{totalAmount} FCFA</Text>
           </View>
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Frais de livraison</Text>
-            <Text style={styles.priceValue}>{deliveryFee} FCFA</Text>
+            <Text style={styles.priceLabel}>
+              {isLoadingLocation 
+                ? '📍 Calcul de la distance...'
+                : getDeliveryFeeDescription(deliveryDistance)
+              }
+            </Text>
+            <Text style={styles.priceValue}>
+              {isLoadingLocation ? (
+                <ActivityIndicator size="small" color="#51A905" />
+              ) : (
+                `${deliveryFee} FCFA`
+              )}
+            </Text>
           </View>
+          {!isLoadingLocation && (
+            <View style={styles.priceRow}>
+              <Text style={styles.priceLabel}>Distance</Text>
+              <Text style={styles.priceValue}>{formatDistance(deliveryDistance)}</Text>
+            </View>
+          )}
           <View style={[styles.priceRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{finalTotal} FCFA</Text>
@@ -353,6 +438,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     fontFamily: 'Montserrat-Bold',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#51A905',
+    fontFamily: 'Montserrat-Regular',
   },
 });
 
