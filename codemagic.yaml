@@ -3,7 +3,7 @@ workflows:
     name: iOS Production Build
     max_build_duration: 60
     environment:
-      xcode: 15.4.0   # Version stable compatible App Store
+      xcode: 15.4   # Version stable compatible App Store
       cocoapods: default
       node: 18
     integrations:
