@@ -16,6 +16,9 @@ workflows:
       - name: Build iOS app (archive + export IPA)
         script: |
           mkdir -p build
+          
+          # Build and archive
+          echo "Starting archive build..."
           xcodebuild \
             -workspace ios/Mayombe.xcworkspace \
             -scheme Mayombe \
@@ -27,12 +30,32 @@ workflows:
             PROVISIONING_PROFILE_SPECIFIER="" \
             CODE_SIGN_IDENTITY="iPhone Distribution" \
             archive
-
+          
+          # Check if archive was created successfully
+          if [ ! -d "./build/Mayombe.xcarchive" ]; then
+            echo "Archive failed - no archive found at ./build/Mayombe.xcarchive"
+            ls -la ./build/
+            exit 1
+          fi
+          
+          echo "Archive created successfully, proceeding with export..."
+          
+          # Export IPA
           xcodebuild \
             -exportArchive \
             -archivePath ./build/Mayombe.xcarchive \
             -exportOptionsPlist ios/exportOptions.plist \
             -exportPath ./build
+          
+          # Check if IPA was created
+          if [ ! -f "./build/Mayombe.ipa" ]; then
+            echo "IPA export failed - no IPA found"
+            ls -la ./build/
+            exit 1
+          fi
+          
+          echo "Build completed successfully!"
+          ls -la ./build/
     artifacts:
       - build/**/*.ipa
     publishing:
