@@ -24,6 +24,8 @@ workflows:
             -archivePath ./build/Mayombe.xcarchive \
             CODE_SIGN_STYLE=Automatic \
             DEVELOPMENT_TEAM=9W3MSS5RZ9 \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
             archive
 
           xcodebuild \
