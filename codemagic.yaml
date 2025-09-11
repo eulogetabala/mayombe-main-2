@@ -15,18 +15,22 @@ workflows:
           cd ios && pod install && cd ..
       - name: Build iOS app (archive + export IPA)
         script: |
+          mkdir -p build
           xcodebuild \
             -workspace ios/Mayombe.xcworkspace \
             -scheme Mayombe \
             -configuration Release \
             -sdk iphoneos \
-            -archivePath build/Mayombe.xcarchive archive
+            -archivePath ./build/Mayombe.xcarchive \
+            CODE_SIGN_STYLE=Automatic \
+            DEVELOPMENT_TEAM=9W3MSS5RZ9 \
+            archive
 
           xcodebuild \
             -exportArchive \
-            -archivePath build/Mayombe.xcarchive \
+            -archivePath ./build/Mayombe.xcarchive \
             -exportOptionsPlist ios/exportOptions.plist \
-            -exportPath build
+            -exportPath ./build
     artifacts:
       - build/**/*.ipa
     publishing:

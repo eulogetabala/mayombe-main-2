@@ -16,5 +16,7 @@
     <string>export</string>
     <key>signingStyle</key>
     <string>automatic</string>
+    <key>teamID</key>
+    <string>9W3MSS5RZ9</string>
 </dict>
 </plist>
