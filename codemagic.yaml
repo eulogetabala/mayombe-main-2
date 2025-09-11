@@ -1,0 +1,28 @@
+workflows:
+  ios-production:
+    name: iOS Production Build
+    max_build_duration: 60
+    environment:
+      xcode: latest
+      cocoapods: default
+      node: 18
+      vars:
+        EXPO_TOKEN: Encrypted(...) # Vous devrez ajouter votre token Expo ici
+        APP_STORE_CONNECT_ISSUER_ID: Encrypted(...) # Votre App Store Connect Issuer ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: Encrypted(...) # Votre Key ID
+        APP_STORE_CONNECT_PRIVATE_KEY: Encrypted(...) # Votre clé privée
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install
+          cd ios && pod install && cd ..
+      - name: Build iOS app
+        script: |
+          npx eas build --platform ios --profile production --non-interactive
+    artifacts:
+      - build/**/*.ipa
+    publishing:
+      app_store_connect:
+        auth: api_key
+        submit_to_testflight: false
+        submit_to_app_store: true
