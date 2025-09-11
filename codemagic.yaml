@@ -7,10 +7,10 @@ workflows:
       cocoapods: default
       node: 18
       vars:
-        EXPO_TOKEN: Encrypted(...) # Vous devrez ajouter votre token Expo ici
-        APP_STORE_CONNECT_ISSUER_ID: Encrypted(...) # Votre App Store Connect Issuer ID
-        APP_STORE_CONNECT_KEY_IDENTIFIER: Encrypted(...) # Votre Key ID
-        APP_STORE_CONNECT_PRIVATE_KEY: Encrypted(...) # Votre clé privée
+        EXPO_TOKEN:   5aoR40okvqTbsm-cNAsn0zLWgSnWmZrEhuFA2TWt
+        APP_STORE_CONNECT_ISSUER_ID: Encrypted(bcfc7865-be78-4ecc-96a4-105545e81432)
+        APP_STORE_CONNECT_KEY_IDENTIFIER: Encrypted(356DVBD4XP)
+        APP_STORE_CONNECT_PRIVATE_KEY: Encrypted(...) # Remplacez par le contenu de votre fichier .p8
     scripts:
       - name: Install dependencies
         script: |
