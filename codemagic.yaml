@@ -25,6 +25,7 @@ workflows:
             -configuration Release \
             -sdk iphoneos \
             -archivePath ./build/Mayombe.xcarchive \
+            -allowProvisioningUpdates \
             CODE_SIGN_STYLE=Automatic \
             DEVELOPMENT_TEAM=9W3MSS5RZ9 \
             PROVISIONING_PROFILE_SPECIFIER="" \
