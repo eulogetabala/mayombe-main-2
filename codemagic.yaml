@@ -28,7 +28,7 @@ workflows:
             CODE_SIGN_STYLE=Automatic \
             DEVELOPMENT_TEAM=9W3MSS5RZ9 \
             PROVISIONING_PROFILE_SPECIFIER="" \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            CODE_SIGN_IDENTITY="Apple Development" \
             archive
           
           # Check if archive was created successfully
