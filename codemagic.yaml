@@ -3,23 +3,34 @@ workflows:
     name: iOS Production Build
     max_build_duration: 60
     environment:
-      xcode: latest
+      xcode: 15.4.0   # Version stable compatible App Store
       cocoapods: default
       node: 18
-      vars:
-        EXPO_TOKEN: ${{ inputs.EXPO_TOKEN }}
+    integrations:
+      app_store_connect: mayombe-appstore-key   # Nom de votre intégration dans Codemagic
     scripts:
       - name: Install dependencies
         script: |
           npm install
           cd ios && pod install && cd ..
-      - name: Build iOS app
+      - name: Build iOS app (archive + export IPA)
         script: |
-          npx eas build --platform ios --profile production --non-interactive
+          xcodebuild \
+            -workspace ios/Mayombe.xcworkspace \
+            -scheme Mayombe \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/Mayombe.xcarchive archive
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath build/Mayombe.xcarchive \
+            -exportOptionsPlist ios/exportOptions.plist \
+            -exportPath build
     artifacts:
       - build/**/*.ipa
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
+        submit_to_testflight: true     # TestFlight pour tester avant App Store
         submit_to_app_store: true
