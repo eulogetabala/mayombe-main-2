@@ -6,8 +6,10 @@ workflows:
       xcode: 15.4   # Version stable compatible App Store
       cocoapods: default
       node: 18
-    integrations:
-      app_store_connect: mayombe-appstore-key   # Nom de votre intégration dans Codemagic
+      vars:
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
     scripts:
       - name: Install dependencies
         script: |
@@ -61,6 +63,6 @@ workflows:
       - build/**/*.ipa
     publishing:
       app_store_connect:
-        auth: integration
+        auth: api_key
         submit_to_testflight: true     # TestFlight pour tester avant App Store
         submit_to_app_store: true
