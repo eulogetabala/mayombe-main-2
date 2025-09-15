@@ -1,69 +1,29 @@
 workflows:
   ios-production:
-    name: iOS Production Build
-    max_build_duration: 60
+    name: iOS Production
     environment:
-      xcode: 15.4   # Version stable compatible App Store
+      xcode: 15.4
       cocoapods: default
       node: 18
-      vars:
-        APP_STORE_CONNECT_ISSUER_ID: ${{ inputs.APP_STORE_CONNECT_ISSUER_ID }}
-        APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ inputs.APP_STORE_CONNECT_KEY_IDENTIFIER }}
-        APP_STORE_CONNECT_PRIVATE_KEY: ${{ inputs.APP_STORE_CONNECT_PRIVATE_KEY }}
+      ios_signing:
+        distribution_type: app-store
+        bundle_identifier: ${{ inputs.BUNDLE_IDENTIFIER }}
     scripts:
       - name: Install dependencies
         script: |
           npm install
           cd ios && pod install && cd ..
-      - name: Build iOS app (archive + export IPA)
+      - name: Build iOS
         script: |
-          mkdir -p build
-          
-          # Build and archive
-          echo "Starting archive build..."
-          xcodebuild \
-            -workspace ios/Mayombe.xcworkspace \
-            -scheme Mayombe \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath ./build/Mayombe.xcarchive \
-            -allowProvisioningUpdates \
-            CODE_SIGN_STYLE=Automatic \
-            DEVELOPMENT_TEAM=9W3MSS5RZ9 \
-            PROVISIONING_PROFILE_SPECIFIER="" \
-            CODE_SIGN_IDENTITY="Apple Development" \
-            archive
-          
-          # Check if archive was created successfully
-          if [ ! -d "./build/Mayombe.xcarchive" ]; then
-            echo "Archive failed - no archive found at ./build/Mayombe.xcarchive"
-            ls -la ./build/
-            exit 1
-          fi
-          
-          echo "Archive created successfully, proceeding with export..."
-          
-          # Export IPA
-          xcodebuild \
-            -exportArchive \
-            -archivePath ./build/Mayombe.xcarchive \
-            -exportOptionsPlist ios/exportOptions.plist \
-            -exportPath ./build
-          
-          # Check if IPA was created
-          if [ ! -f "./build/Mayombe.ipa" ]; then
-            echo "IPA export failed - no IPA found"
-            ls -la ./build/
-            exit 1
-          fi
-          
-          echo "Build completed successfully!"
-          ls -la ./build/
+          xcode-project build-ipa \
+            --workspace "ios/Mayombe.xcworkspace" \
+            --scheme "Mayombe" \
+            --archive-path "build/Mayombe.xcarchive"
     artifacts:
-      - build/**/*.ipa
+      - build/*.ipa
+      - build/*.dSYM.zip
     publishing:
       app_store_connect:
-        auth: ${{ inputs.APP_STORE_CONNECT_AUTH }}
-        submit_to_testflight: true     # TestFlight pour tester avant App Store
-        submit_to_app_store: true
-        
+        auth: integration
+        apple_id: contact@mayombe-app.com
+        submit_to_testflight: true

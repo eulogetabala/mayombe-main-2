@@ -14,12 +14,14 @@
         "buildType": "apk"
       }
     },
+    "production": {}
+  },
+  "submit": {
     "production": {
       "ios": {
-        "distribution": "store"
-      },
-      "android": {
-        "buildType": "apk"
+        "appleId": "contact@mayombe-app.com",
+        "ascAppId": "6752300369",
+        "appleTeamId": "9W3MSS5RZ9"
       }
     }
   }
