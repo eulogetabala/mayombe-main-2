@@ -4,8 +4,6 @@ workflows:
     max_build_duration: 120
     instance_type: mac_mini_m2
     environment:
-      groups:
-        - ios_creds # <-- (group contains variables: APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_KEY_IDENTIFIER, APP_STORE_CONNECT_PRIVATE_KEY)
       vars:
         XCODE_WORKSPACE: "ios/Mayombe.xcworkspace"
         XCODE_SCHEME: "Mayombe"
@@ -58,7 +56,7 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
     publishing:
       app_store_connect:
-        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        api_key: ${{ inputs.APP_STORE_CONNECT_PRIVATE_KEY }}
+        key_id: ${{ inputs.APP_STORE_CONNECT_KEY_IDENTIFIER }}
+        issuer_id: ${{ inputs.APP_STORE_CONNECT_ISSUER_ID }}
         submit_to_testflight: true
