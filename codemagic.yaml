@@ -8,7 +8,10 @@ workflows:
         XCODE_WORKSPACE: "ios/Mayombe.xcworkspace"
         XCODE_SCHEME: "Mayombe"
         BUNDLE_ID: "com.thprojet.mayombeclient"
-        APP_STORE_APP_ID: 6752300369 # Remplacez par votre App Store App ID
+        APP_STORE_APP_ID: 6752300369
+        APP_STORE_CONNECT_ISSUER_ID: "bcfc7865-be78-4ecc-96a4-105545e81432"
+        APP_STORE_CONNECT_KEY_IDENTIFIER: "356DVBD4XP"
+        APP_STORE_CONNECT_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\nMIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQga1DR1lu+XjFm73nz\nvjgOxOYS8GyPrYmtBd8ySiWXPQagCgYIKoZIzj0DAQehRANCAAT1ygLFl4GEJ0/R\n+VFW5wRwC0O9fl3aTYjWV65DvnBBgBqSvxdaOY4lzpxrIRJnbGpT4ZkIlBXUiMkI\nqG/cgh1X\n-----END PRIVATE KEY-----"
       node: 18
       xcode: 15.4
       cocoapods: default
@@ -56,7 +59,7 @@ workflows:
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
     publishing:
       app_store_connect:
-        api_key: ${{ inputs.APP_STORE_CONNECT_PRIVATE_KEY }}
-        key_id: ${{ inputs.APP_STORE_CONNECT_KEY_IDENTIFIER }}
-        issuer_id: ${{ inputs.APP_STORE_CONNECT_ISSUER_ID }}
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
