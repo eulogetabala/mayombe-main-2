@@ -1,0 +1,65 @@
+{
+  "rules": {
+    "orders": {
+      "$orderId": {
+        ".read": true,
+        ".write": true,
+        "driver": {
+          "location": {
+            ".read": true,
+            ".write": true,
+            "$property": {
+              ".validate": "newData.isNumber() || newData.isString()"
+            }
+          },
+          "info": {
+            ".read": true,
+            ".write": true
+          }
+        },
+        "status": {
+          ".read": true,
+          ".write": true,
+          "history": {
+            "$historyId": {
+              ".read": true,
+              ".write": true
+            }
+          }
+        },
+        "orderDetails": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    },
+    "drivers": {
+      "$driverId": {
+        ".read": true,
+        ".write": true,
+        "orders": {
+          "$orderId": {
+            ".read": true,
+            ".write": true
+          }
+        }
+      }
+    },
+    "tracking": {
+      "$orderId": {
+        ".read": true,
+        ".write": true,
+        "location": {
+          ".read": true,
+          ".write": true
+        },
+        "status": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    },
+    ".read": false,
+    ".write": false
+  }
+}

@@ -1,0 +1,151 @@
+require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
+require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
+
+require 'json'
+podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
+
+ENV['RCT_NEW_ARCH_ENABLED'] = podfile_properties['newArchEnabled'] == 'true' ? '1' : '0'
+ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] = podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
+
+platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
+install! 'cocoapods',
+  :deterministic_uuids => false
+
+prepare_react_native_project!
+
+target 'Mayombe' do
+  use_expo_modules!
+
+  if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
+    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
+  else
+    config_command = [
+      'node',
+      '--no-warnings',
+      '--eval',
+      'require(require.resolve(\'expo-modules-autolinking\', { paths: [require.resolve(\'expo/package.json\')] }))(process.argv.slice(1))',
+      'react-native-config',
+      '--json',
+      '--platform',
+      'ios'
+    ]
+  end
+
+# @generated begin react-native-maps - expo prebuild (DO NOT MODIFY) sync-e9cc66c360abe50bc66d89fffb3c55b034d7d369
+  pod 'react-native-maps', path: File.dirname(`node --print "require.resolve('react-native-maps/package.json')"`)
+# @generated end react-native-maps
+  config = use_native_modules!(config_command)
+
+  use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
+  use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
+
+  use_react_native!(
+    :path => config[:reactNativePath],
+    :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
+  )
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false,
+      :ccache_enabled => podfile_properties['apple.ccacheEnabled'] == 'true',
+    )
+    
+    # Fix for Hermes dSYM issue - Enhanced version
+    installer.pods_project.targets.each do |target|
+      if target.name == 'hermes-engine'
+        target.build_configurations.each do |config|
+          config.build_settings['DEBUG_INFORMATION_FORMAT'] = 'dwarf-with-dsym'
+          config.build_settings['DWARF_DSYM_FOLDER_PATH'] = '$(CONFIGURATION_BUILD_DIR)'
+          config.build_settings['DWARF_DSYM_FILE_NAME'] = '$(EXECUTABLE_NAME).dSYM'
+          config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
+        end
+      end
+    end
+    
+    # Add script to copy Hermes dSYM to archive - Enhanced version
+    main_target = installer.pods_project.targets.find { |target| target.name == 'Mayombe' }
+    if main_target
+      # Remove existing script if it exists
+      existing_script = main_target.shell_script_build_phases.find { |phase| phase.name == 'Copy Hermes dSYM' }
+      main_target.shell_script_build_phases.delete(existing_script) if existing_script
+      
+      script_phase = main_target.new_shell_script_build_phase('Copy Hermes dSYM')
+      script_phase.shell_script = <<~SCRIPT
+        echo "=== Copying Hermes dSYM files ==="
+        
+        # Find and copy Hermes dSYM from various possible locations
+        HERMES_DSYM_PATHS=(
+          "${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework.dSYM"
+          "${PODS_ROOT}/hermes-engine/Pre-built/hermes.framework.dSYM"
+          "${PODS_ROOT}/hermes-engine/hermes.framework.dSYM"
+          "${BUILD_DIR}/hermes-engine/hermes.framework.dSYM"
+          "${PODS_ROOT}/hermes-engine/hermes.framework.dSYM"
+          "${DERIVED_DATA_DIR}/Build/Products/Release-iphoneos/hermes-engine/hermes.framework.dSYM"
+        )
+        
+        FOUND_DSYM=false
+        for dsym_path in "${HERMES_DSYM_PATHS[@]}"; do
+          if [ -d "$dsym_path" ]; then
+            echo "Found Hermes dSYM at: $dsym_path"
+            cp -R "$dsym_path" "${BUILT_PRODUCTS_DIR}/"
+            echo "Copied Hermes dSYM to: ${BUILT_PRODUCTS_DIR}/"
+            FOUND_DSYM=true
+            break
+          else
+            echo "Not found: $dsym_path"
+          fi
+        done
+        
+        # If no dSYM found, try to generate it from the framework
+        if [ "$FOUND_DSYM" = false ]; then
+          echo "No dSYM found, attempting to generate from framework..."
+          HERMES_FRAMEWORK_PATHS=(
+            "${PODS_XCFRAMEWORKS_BUILD_DIR}/hermes-engine/Pre-built/hermes.framework"
+            "${PODS_ROOT}/hermes-engine/Pre-built/hermes.framework"
+            "${BUILT_PRODUCTS_DIR}/hermes.framework"
+          )
+          
+          for framework_path in "${HERMES_FRAMEWORK_PATHS[@]}"; do
+            if [ -d "$framework_path" ]; then
+              echo "Found Hermes framework at: $framework_path"
+              # Generate dSYM using dsymutil
+              dsymutil "$framework_path/hermes" -o "${BUILT_PRODUCTS_DIR}/hermes.framework.dSYM"
+              if [ -d "${BUILT_PRODUCTS_DIR}/hermes.framework.dSYM" ]; then
+                echo "Generated Hermes dSYM successfully"
+                FOUND_DSYM=true
+                break
+              fi
+            fi
+          done
+        fi
+        
+        # Final check
+        if [ -d "${BUILT_PRODUCTS_DIR}/hermes.framework.dSYM" ]; then
+          echo "✅ Hermes dSYM successfully available at: ${BUILT_PRODUCTS_DIR}/hermes.framework.dSYM"
+          ls -la "${BUILT_PRODUCTS_DIR}/hermes.framework.dSYM"
+        else
+          echo "❌ ERROR: Hermes dSYM not found or generated"
+          echo "Available files in BUILT_PRODUCTS_DIR:"
+          ls -la "${BUILT_PRODUCTS_DIR}/"
+          exit 1
+        fi
+      SCRIPT
+    end
+
+    # This is necessary for Xcode 14, because it signs resource bundles by default
+    # when building for devices.
+    installer.target_installation_results.pod_target_installation_results
+      .each do |pod_name, target_installation_result|
+      target_installation_result.resource_bundle_targets.each do |resource_bundle_target|
+        resource_bundle_target.build_configurations.each do |config|
+          config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+        end
+      end
+    end
+  end
+end

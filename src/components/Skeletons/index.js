@@ -1,0 +1,9 @@
+export { default as Skeleton } from '../Skeleton';
+export { default as OrderSkeleton } from '../OrderSkeleton';
+export { default as OrderDetailsSkeleton } from '../OrderDetailsSkeleton';
+export { default as HomeSkeleton } from '../HomeSkeleton';
+export { default as RestaurantDetailsSkeleton } from '../RestaurantDetailsSkeleton';
+export { default as CartSkeleton } from '../CartSkeleton';
+export { default as ProfileSkeleton } from '../ProfileSkeleton';
+export { default as CategorieSkeleton } from '../Home/CategorieSkeleton';
+export { default as TrouverRestaurantSkeleton } from '../Home/TrouverRestaurantSkeleton';

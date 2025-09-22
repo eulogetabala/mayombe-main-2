@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "Mayombe App",
+    "slug": "mayombeclient",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.thprojet.mayombeclient",
+      "buildNumber": "1.0.0",
+      "userInterfaceStyle": "light",
+                       "config": {
+                   "googleMapsApiKey": "AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI"
+                 },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.",
+        "NSLocationAlwaysUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSExceptionDomains": {
+            "mayombe-app.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSExceptionMinimumTLSVersion": "1.0",
+              "NSExceptionRequiresForwardSecrecy": false,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.mayombe.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET"
+      ],
+
+                       "config": {
+                   "googleMaps": {
+                     "apiKey": "AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI"
+                   }
+                 }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6837dea2-ee67-43e8-84ee-89c88d78277c"
+      }
+    },
+    "owner": "thprojet"
+  }
+}
