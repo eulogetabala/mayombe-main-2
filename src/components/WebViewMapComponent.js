@@ -7,16 +7,36 @@ const WebViewMapComponent = React.forwardRef(({
   destinationLocation,
   pickupLocation,
   showRoute = true,
+  orderStatus = 'pending',
   style
 }, ref) => {
   const [mapHtml, setMapHtml] = useState('');
   const [loading, setLoading] = useState(true);
   const webViewRef = useRef(null);
 
+  // Validation des coordonnées
+  const isValidCoordinate = (coord) => {
+    return coord && 
+           typeof coord.latitude === 'number' && 
+           typeof coord.longitude === 'number' &&
+           !isNaN(coord.latitude) && 
+           !isNaN(coord.longitude) &&
+           coord.latitude >= -90 && coord.latitude <= 90 &&
+           coord.longitude >= -180 && coord.longitude <= 180;
+  };
+
   // Générer le HTML de la carte Google Maps
   const generateMapHTML = () => {
-    const centerLat = destinationLocation?.latitude || -4.2634;
-    const centerLng = destinationLocation?.longitude || 15.2429;
+    // Coordonnées par défaut pour Brazzaville, Congo
+    const defaultLat = -4.2634;
+    const defaultLng = 15.2429;
+    
+    const centerLat = (destinationLocation && isValidCoordinate(destinationLocation)) 
+      ? destinationLocation.latitude 
+      : defaultLat;
+    const centerLng = (destinationLocation && isValidCoordinate(destinationLocation)) 
+      ? destinationLocation.longitude 
+      : defaultLng;
     const apiKey = 'AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI';
 
     return `
@@ -114,9 +134,23 @@ const WebViewMapComponent = React.forwardRef(({
                 console.log('✅ Marqueur livreur ajouté');
               }
 
-              // Ligne droite simple entre restaurant et destination
+              // Calcul de l'itinéraire routier seulement si pertinent
               if (pickupMarker && destinationMarker) {
-                drawStraightLine();
+                // Vérifier si on doit tracer l'itinéraire
+                const shouldDrawRoute = ${showRoute} && (
+                  '${orderStatus}'.includes('en_cours') || 
+                  '${orderStatus}'.includes('preparing') || 
+                  '${orderStatus}'.includes('delivered') ||
+                  '${orderStatus}'.includes('completed') ||
+                  '${orderStatus}'.includes('livré')
+                );
+                
+                if (shouldDrawRoute) {
+                  console.log('🗺️ Tracé de l\'itinéraire - Statut:', '${orderStatus}');
+                  drawRoute();
+                } else {
+                  console.log('⏳ Itinéraire non tracé - Statut:', '${orderStatus}', '- En attente du livreur');
+                }
               }
 
               // Masquer le loading
@@ -138,6 +172,59 @@ const WebViewMapComponent = React.forwardRef(({
           }
 
 
+          function drawRoute() {
+            console.log('🗺️ Calcul de l\'itinéraire routier...');
+            if (!pickupMarker || !destinationMarker) return;
+            
+            const directionsService = new google.maps.DirectionsService();
+            const directionsRenderer = new google.maps.DirectionsRenderer({
+              suppressMarkers: true, // On garde nos propres marqueurs
+              polylineOptions: {
+                strokeColor: '#FF5722',
+                strokeOpacity: 0.8,
+                strokeWeight: 4
+              }
+            });
+            
+            directionsRenderer.setMap(map);
+            
+            const request = {
+              origin: pickupMarker.getPosition(),
+              destination: destinationMarker.getPosition(),
+              travelMode: google.maps.TravelMode.DRIVING,
+              avoidHighways: false,
+              avoidTolls: false
+            };
+            
+            directionsService.route(request, function(result, status) {
+              if (status === 'OK' && result && result.routes && result.routes.length > 0) {
+                console.log('✅ Itinéraire calculé avec succès');
+                directionsRenderer.setDirections(result);
+                
+                // Calculer la distance et durée réelles
+                const route = result.routes[0];
+                const leg = route.legs[0];
+                console.log('📏 Distance réelle:', leg.distance.text);
+                console.log('⏱️ Durée réelle:', leg.duration.text);
+                
+                // Notifier React Native des vraies valeurs
+                if (window.ReactNativeWebView) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'routeCalculated',
+                    distance: leg.distance.value, // en mètres
+                    duration: leg.duration.value, // en secondes
+                    distanceText: leg.distance.text,
+                    durationText: leg.duration.text
+                  }));
+                }
+              } else {
+                console.log('⚠️ Erreur calcul itinéraire:', status, '- Pas de ligne droite infinie');
+                // Ne pas dessiner de ligne droite pour éviter les lignes infinies
+                console.log('🚫 Ligne droite désactivée pour éviter les lignes infinies');
+              }
+            });
+          }
+          
           function drawStraightLine() {
             console.log('📏 Dessin d\'une ligne droite (fallback)');
             if (!pickupMarker || !destinationMarker) return;
@@ -145,9 +232,9 @@ const WebViewMapComponent = React.forwardRef(({
             const line = new google.maps.Polyline({
               path: [pickupMarker.getPosition(), destinationMarker.getPosition()],
               geodesic: true,
-              strokeColor: '#FF5722',
-              strokeOpacity: 0.8,
-              strokeWeight: 3
+              strokeColor: '#FF9800',
+              strokeOpacity: 0.6,
+              strokeWeight: 2
             });
             line.setMap(map);
           }
@@ -164,6 +251,23 @@ const WebViewMapComponent = React.forwardRef(({
           window.updateDriverLocation = function(locationData) {
             if (locationData && locationData.latitude && locationData.longitude) {
               updateDriverPosition(locationData.latitude, locationData.longitude);
+            }
+          };
+
+          // Fonction pour tracer l'itinéraire quand le statut change
+          window.drawRouteIfNeeded = function(status) {
+            console.log('🔄 Vérification tracé itinéraire pour statut:', status);
+            const shouldDraw = status && (
+              status.includes('en_cours') || 
+              status.includes('preparing') || 
+              status.includes('delivered') ||
+              status.includes('completed') ||
+              status.includes('livré')
+            );
+            
+            if (shouldDraw && pickupMarker && destinationMarker) {
+              console.log('🗺️ Tracé de l\'itinéraire - Statut changé:', status);
+              drawRoute();
             }
           };
 
@@ -201,10 +305,11 @@ const WebViewMapComponent = React.forwardRef(({
   };
 
   useEffect(() => {
+    console.log('🗺️ WebViewMapComponent - Génération HTML');
     const html = generateMapHTML();
     setMapHtml(html);
     setLoading(true);
-  }, [driverLocation, destinationLocation, pickupLocation, showRoute]);
+  }, [driverLocation, destinationLocation, pickupLocation, showRoute, orderStatus]);
 
   const handleLoadEnd = () => {
     console.log('✅ WebView chargé');
@@ -258,6 +363,9 @@ const WebViewMapComponent = React.forwardRef(({
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
+        mixedContentMode="compatibility"
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
       />
       {loading && (
         <View style={styles.loadingOverlay}>

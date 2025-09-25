@@ -6,7 +6,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  */
 
 // OrderIds Firebase disponibles (d'après l'analyse)
-const FIREBASE_ORDER_IDS = ['123', '324', '325'];
+// Note: Ces IDs doivent correspondre aux vrais IDs Firebase dans votre base de données
+const FIREBASE_ORDER_IDS = ['123', '324', '325', '326', '327', '328', '329', '330', '331', '332', '333', '334', '335', '336', '337', '338', '339', '340'];
 
 // Mapping des commandes client vers Firebase OrderIds
 let orderIdMapping = new Map();
@@ -33,9 +34,13 @@ export const mapClientToFirebaseOrderId = (clientOrderId, orderData = {}) => {
     return orderIdMapping.get(clientOrderId);
   }
 
-  // Sinon, créer un nouveau mapping
-  const firebaseOrderId = getAvailableFirebaseOrderId();
+  // Option 1: Utiliser directement l'ID client comme ID Firebase
+  // (plus simple et évite les problèmes de mapping)
+  const firebaseOrderId = `order_${clientOrderId}`;
   orderIdMapping.set(clientOrderId, firebaseOrderId);
+  
+  // Sauvegarder immédiatement le mapping
+  saveOrderIdMapping();
   
   console.log('🔗 MAPPING - Client OrderId:', clientOrderId, '→ Firebase OrderId:', firebaseOrderId);
   

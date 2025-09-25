@@ -27,7 +27,7 @@
     "@stripe/stripe-react-native": "^0.38.6",
     "axios": "^1.7.9",
     "expo": "~52.0.38",
-    "expo-dev-client": "~5.0.14",
+    "expo-dev-client": "~5.0.20",
     "expo-device": "~7.0.3",
     "expo-font": "~13.0.4",
     "expo-linear-gradient": "~14.0.2",

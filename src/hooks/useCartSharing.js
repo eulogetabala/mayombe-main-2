@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Share, Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import sharedCartService from '../services/sharedCartService';
 
 // Fonction pour générer un ID unique
 const generateUniqueId = () => {
@@ -32,42 +33,34 @@ const useCartSharing = (cartItems, setCartItems, formatPrice = defaultFormatPric
       setIsLoading(true);
       console.log(`Tentative de chargement du panier partagé: ${sharedCartId}`);
       
-      // Récupérer le panier partagé depuis le stockage local
-      const sharedCartJson = await AsyncStorage.getItem(`shared_cart_${sharedCartId}`);
+      // Récupérer le panier partagé (Firebase en priorité, puis local)
+      const sharedCart = await sharedCartService.loadSharedCart(sharedCartId);
       
-      if (sharedCartJson) {
-        const sharedCart = JSON.parse(sharedCartJson);
+      if (sharedCart && sharedCart.length > 0) {
         console.log("Données du panier partagé reçues:", JSON.stringify(sharedCart, null, 2));
         
-        if (sharedCart && sharedCart.length > 0) {
-          // Transformer les données du panier partagé si nécessaire
-          const transformedCart = sharedCart.map(item => ({
-            ...item,
-            productKey: item.id ? item.id.toString() : Math.random().toString(),
-            imageUrl: item.imageUrl || (item.cover 
-              ? `https://www.api-mayombe.mayombe-app.com/public/storage/${item.cover}`
-              : null),
-            image: item.image || require('../../assets/images/2.jpg')
-          }));
-          
-          // Sauvegarder le panier partagé dans le panier actuel
-          await AsyncStorage.setItem('cart', JSON.stringify(transformedCart));
-          setCartItems(transformedCart);
-          
-          Alert.alert(
-            "Panier partagé chargé",
-            "Le panier partagé a été chargé avec succès."
-          );
-        } else {
-          Alert.alert(
-            "Erreur",
-            "Le panier partagé est vide ou n'existe pas."
-          );
-        }
+        // Transformer les données du panier partagé si nécessaire
+        const transformedCart = sharedCart.map(item => ({
+          ...item,
+          productKey: item.id ? item.id.toString() : Math.random().toString(),
+          imageUrl: item.imageUrl || (item.cover 
+            ? `https://www.api-mayombe.mayombe-app.com/public/storage/${item.cover}`
+            : null),
+          image: item.image || require('../../assets/images/2.jpg')
+        }));
+        
+        // Sauvegarder le panier partagé dans le panier actuel
+        await AsyncStorage.setItem('cart', JSON.stringify(transformedCart));
+        setCartItems(transformedCart);
+        
+        Alert.alert(
+          "Panier partagé chargé",
+          "Le panier partagé a été chargé avec succès."
+        );
       } else {
         Alert.alert(
-          "Erreur",
-          "Impossible de trouver le panier partagé."
+          "Panier non trouvé",
+          "Aucun panier trouvé avec cet ID."
         );
       }
     } catch (error) {
@@ -127,18 +120,10 @@ const useCartSharing = (cartItems, setCartItems, formatPrice = defaultFormatPric
 
       console.log("Données du panier à partager:", JSON.stringify(cartData, null, 2));
 
-      // Sauvegarder le panier partagé dans le stockage local
-      await AsyncStorage.setItem(`shared_cart_${sharedCartId}`, JSON.stringify(cartData));
-      console.log(`✅ Panier sauvegardé avec l'ID: shared_cart_${sharedCartId}`);
-      
-      // Vérifier que la sauvegarde a fonctionné
-      const savedData = await AsyncStorage.getItem(`shared_cart_${sharedCartId}`);
-      console.log(`🔍 Vérification sauvegarde:`, savedData ? 'SUCCÈS' : 'ÉCHEC');
-      
-      // Lister tous les paniers partagés pour diagnostic
-      const allKeys = await AsyncStorage.getAllKeys();
-      const sharedCartKeys = allKeys.filter(key => key.startsWith('shared_cart_'));
-      console.log('📋 Tous les paniers partagés stockés:', sharedCartKeys);
+      // Sauvegarder le panier partagé (local + Firebase)
+      await sharedCartService.saveToLocalStorage(sharedCartId, cartData);
+      await sharedCartService.saveSharedCart(sharedCartId, cartData, 24); // Expire dans 24h
+
       
       // Créer les liens de partage avec fallback
       const shareUrl = `mayombe://cart/${sharedCartId}`;

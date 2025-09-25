@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Mayombe App",
+    "name": "mayombeclient",
     "slug": "mayombeclient",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,14 +16,16 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.thprojet.mayombeclient",
-      "buildNumber": "1.0.0",
+      "buildNumber": "13",
       "userInterfaceStyle": "light",
-                       "config": {
-                   "googleMapsApiKey": "AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI"
-                 },
+      "config": {
+        "googleMapsApiKey": "AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.",
         "NSLocationAlwaysUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.",
+        "NSPhotoLibraryUsageDescription": "Cette application nécessite l'accès à votre photothèque pour vous permettre de sélectionner des images pour votre profil ou vos commandes.",
+        "NSCameraUsageDescription": "Cette application nécessite l'accès à la caméra pour vous permettre de prendre des photos pour votre profil ou vos commandes.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": true,
           "NSExceptionDomains": {
@@ -52,12 +54,11 @@
         "WRITE_EXTERNAL_STORAGE",
         "INTERNET"
       ],
-
-                       "config": {
-                   "googleMaps": {
-                     "apiKey": "AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI"
-                   }
-                 }
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"

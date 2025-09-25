@@ -5,7 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { useCart } from '../context/CartContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Location from 'expo-location';
+// import * as Location from 'expo-location'; // Plus utilisé
 import { saveOrder } from '../services/orderHistoryService';
 
 const OrderSuccess = ({ navigation, route }) => {
@@ -13,87 +13,11 @@ const OrderSuccess = ({ navigation, route }) => {
   const { currentLanguage } = useLanguage();
   const { clearCart } = useCart();
   const t = translations[currentLanguage];
-  const [estimatedTime, setEstimatedTime] = useState('...');
-  const [estimatedDistance, setEstimatedDistance] = useState('...');
-  const [userLocation, setUserLocation] = useState(null);
+  // Informations dynamiques supprimées - plus de calculs statiques
 
-  // Fonction de calcul de distance (Haversine)
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Rayon de la Terre en km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return (R * c).toFixed(2);
-  };
+  // Fonctions de calcul supprimées - plus de calculs statiques
 
-  // Calcul de la durée estimée de livraison selon la distance
-  const getEstimatedDeliveryTime = (distance) => {
-    if (!distance) return '...';
-    // Exemple : 5 min de base + 2 min par km
-    const base = 5;
-    const perKm = 2;
-    const estimated = Math.round(base + perKm * parseFloat(distance));
-    return `${estimated}`;
-  };
-
-  // Récupérer la position de l'utilisateur et calculer la vraie distance
-  useEffect(() => {
-    const getLocationAndCalculateDistance = async () => {
-      try {
-        // Demander la permission de localisation
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          console.log('Permission de localisation refusée');
-          return;
-        }
-
-        // Obtenir la position actuelle
-        let location = await Location.getCurrentPositionAsync({});
-        setUserLocation(location.coords);
-
-        // Vérifier si on a les coordonnées du restaurant
-        if (orderDetails.restaurant && orderDetails.restaurant.altitude && orderDetails.restaurant.longitude) {
-          const lat = parseFloat(orderDetails.restaurant.altitude);
-          const lon = parseFloat(orderDetails.restaurant.longitude);
-          
-          // Vérifier que les coordonnées sont plausibles
-          const plausible = lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-          
-          if (plausible) {
-            const distance = calculateDistance(
-              location.coords.latitude,
-              location.coords.longitude,
-              lat,
-              lon
-            );
-            setEstimatedDistance(distance);
-            setEstimatedTime(getEstimatedDeliveryTime(distance));
-          } else {
-            console.log('Coordonnées du restaurant invalides');
-            // Utiliser des valeurs par défaut
-            setEstimatedDistance('2.5');
-            setEstimatedTime('15');
-          }
-        } else {
-          console.log('Coordonnées du restaurant non disponibles');
-          // Utiliser des valeurs par défaut
-          setEstimatedDistance('2.5');
-          setEstimatedTime('15');
-        }
-      } catch (error) {
-        console.error('Erreur lors de la récupération de la position:', error);
-        // Utiliser des valeurs par défaut en cas d'erreur
-        setEstimatedDistance('2.5');
-        setEstimatedTime('15');
-      }
-    };
-
-    getLocationAndCalculateDistance();
-  }, [orderDetails]);
+  // Calculs de distance supprimés - plus de données statiques
 
   // Nettoyer le panier et sauvegarder la commande au montage du composant
   useEffect(() => {
@@ -125,15 +49,23 @@ const OrderSuccess = ({ navigation, route }) => {
   }, [showTracking, orderDetails.payment_method]);
 
   const handleGoToOrders = () => {
-    // Navigation vers l'historique des commandes
-    navigation.navigate('OrdersHistory');
+    // Navigation vers l'historique des commandes via l'onglet Profile
+    navigation.navigate('Profile', { screen: 'OrdersHistory' });
   };
 
   const handleGoHome = () => {
-    // Retour à l'accueil en réinitialisant la pile de navigation
+    // Retour à l'accueil en réinitialisant complètement la navigation
     navigation.reset({
       index: 0,
-      routes: [{ name: 'Home' }],
+      routes: [
+        { 
+          name: 'Home', 
+          state: {
+            routes: [{ name: 'HomeMain' }],
+            index: 0
+          }
+        }
+      ],
     });
   };
 
@@ -161,28 +93,21 @@ const OrderSuccess = ({ navigation, route }) => {
           <View style={styles.orderDetailRow}>
             <Ionicons name="receipt-outline" size={24} color="#51A905" />
             <Text style={styles.orderDetailText}>
-              Montant total : {orderDetails.total} FCFA
+              Commande #{orderDetails.orderId || 'En cours...'}
+            </Text>
+          </View>
+          
+          <View style={styles.orderDetailRow}>
+            <Ionicons name="checkmark-circle-outline" size={24} color="#51A905" />
+            <Text style={styles.orderDetailText}>
+              Statut : {orderDetails.payment_method === 'cash' ? 'En attente de paiement' : 'Paiement confirmé'}
             </Text>
           </View>
           
           <View style={styles.orderDetailRow}>
             <Ionicons name="time-outline" size={24} color="#51A905" />
             <Text style={styles.orderDetailText}>
-              Temps estimé : {estimatedTime === '...' ? 'Calcul en cours...' : `${estimatedTime} minutes`}
-            </Text>
-          </View>
-          
-          <View style={styles.orderDetailRow}>
-            <Ionicons name="location-outline" size={24} color="#51A905" />
-            <Text style={styles.orderDetailText}>
-              Distance : {estimatedDistance === '...' ? 'Calcul en cours...' : `${estimatedDistance} km`}
-            </Text>
-          </View>
-          
-          <View style={styles.orderDetailRow}>
-            <Ionicons name="bicycle-outline" size={24} color="#51A905" />
-            <Text style={styles.orderDetailText}>
-              Livreur : En route vers vous
+              Temps de préparation : 15-30 minutes
             </Text>
           </View>
         </View>

@@ -132,11 +132,40 @@ const OrdersHistory = ({ navigation }) => {
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(order => 
-        order.restaurant?.name?.toLowerCase().includes(term) ||
-        order.restaurant?.title?.toLowerCase().includes(term) ||
-        order.id.includes(term)
-      );
+      filtered = filtered.filter(order => {
+        // Recherche dans le nom du restaurant
+        const restaurantName = order.restaurant?.name?.toLowerCase() || '';
+        const restaurantTitle = order.restaurant?.title?.toLowerCase() || '';
+        
+        // Recherche dans l'ID de commande
+        const orderId = order.id?.toString().toLowerCase() || '';
+        const orderIdAlt = order.orderId?.toString().toLowerCase() || '';
+        
+        // Recherche dans les références générées
+        const fullReference = generateFullOrderReference(order.orderId || order.id, order.date).toLowerCase();
+        const shortReference = generateShortOrderReference(order.orderId || order.id, order.date).toLowerCase();
+        
+        // Recherche dans les noms des produits
+        const productNames = order.items?.map(item => item.name?.toLowerCase() || '').join(' ') || '';
+        
+        // Recherche dans le montant total
+        const totalAmount = order.total?.toString() || '';
+        
+        // Recherche dans la méthode de paiement
+        const paymentMethod = order.payment_method?.toLowerCase() || '';
+        
+        return (
+          restaurantName.includes(term) ||
+          restaurantTitle.includes(term) ||
+          orderId.includes(term) ||
+          orderIdAlt.includes(term) ||
+          fullReference.includes(term) ||
+          shortReference.includes(term) ||
+          productNames.includes(term) ||
+          totalAmount.includes(term) ||
+          paymentMethod.includes(term)
+        );
+      });
     }
 
     setFilteredOrders(filtered);
@@ -220,14 +249,49 @@ const OrdersHistory = ({ navigation }) => {
         </View>
 
         <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Rechercher une commande..."
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-            placeholderTextColor="#999"
-            editable={false}
-          />
+          <TouchableOpacity 
+            style={styles.searchInputContainer}
+            activeOpacity={1}
+            onPress={() => {
+              console.log('🔍 Container de recherche cliqué');
+              // Le TextInput devrait automatiquement recevoir le focus
+            }}
+          >
+            <Ionicons name="search-outline" size={20} color="#999" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher une commande..."
+              value={searchTerm}
+              onChangeText={(text) => {
+                console.log('🔍 Texte saisi:', text);
+                setSearchTerm(text);
+              }}
+              onFocus={() => {
+                console.log('🔍 TextInput focusé');
+              }}
+              onBlur={() => {
+                console.log('🔍 TextInput perdu le focus');
+              }}
+              placeholderTextColor="#999"
+              editable={true}
+              selectTextOnFocus={true}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+              onSubmitEditing={() => {
+                console.log('🔍 Recherche soumise:', searchTerm);
+              }}
+            />
+            {searchTerm.length > 0 && (
+              <TouchableOpacity 
+                onPress={() => setSearchTerm('')}
+                style={styles.clearButton}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close-circle" size={20} color="#999" />
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
         </View>
 
         <FlatList
@@ -255,13 +319,49 @@ const OrdersHistory = ({ navigation }) => {
       </View>
 
       <View style={styles.searchContainer}>
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Rechercher une commande..."
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-          placeholderTextColor="#999"
-        />
+        <TouchableOpacity 
+          style={styles.searchInputContainer}
+          activeOpacity={1}
+          onPress={() => {
+            console.log('🔍 Container de recherche cliqué');
+            // Le TextInput devrait automatiquement recevoir le focus
+          }}
+        >
+          <Ionicons name="search-outline" size={20} color="#999" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Rechercher une commande..."
+            value={searchTerm}
+            onChangeText={(text) => {
+              console.log('🔍 Texte saisi:', text);
+              setSearchTerm(text);
+            }}
+            onFocus={() => {
+              console.log('🔍 TextInput focusé');
+            }}
+            onBlur={() => {
+              console.log('🔍 TextInput perdu le focus');
+            }}
+            placeholderTextColor="#999"
+            editable={true}
+            selectTextOnFocus={true}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            onSubmitEditing={() => {
+              console.log('🔍 Recherche soumise:', searchTerm);
+            }}
+          />
+          {searchTerm.length > 0 && (
+            <TouchableOpacity 
+              onPress={() => setSearchTerm('')}
+              style={styles.clearButton}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close-circle" size={20} color="#999" />
+            </TouchableOpacity>
+          )}
+        </TouchableOpacity>
       </View>
 
       <FlatList
@@ -339,14 +439,33 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     backgroundColor: '#fff',
   },
-  searchInput: {
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#f8f8f8',
     borderRadius: 12,
     paddingHorizontal: 15,
     paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    minHeight: 48,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  searchInput: {
+    flex: 1,
     fontSize: 16,
     fontFamily: 'Montserrat',
     color: '#333',
+    padding: 0,
+    minHeight: 24,
+    textAlignVertical: 'center',
+  },
+  clearButton: {
+    marginLeft: 10,
+    padding: 4,
+    borderRadius: 12,
   },
   ordersList: {
     padding: 20,

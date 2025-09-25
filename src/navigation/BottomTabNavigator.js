@@ -19,10 +19,12 @@ import PaymentScreen from '../screens/PaymentScreen';
 import OrderSuccess from '../screens/OrderSuccess';
 import OrdersHistory from '../screens/OrdersHistory';
 import OrderDetails from '../screens/OrderDetails';
+import OrderTrackingScreen from '../screens/OrderTrackingScreen';
 import AllRestaurants from '../screens/AllRestaurants';
 import AllProducts from '../screens/AllProducts';
 import MapScreen from '../screens/MapScreen';
 import ProcessPayment from '../screens/ProcessPayment';
+import StripePaymentScreen from '../screens/StripePaymentScreen';
 import ListeLivreursScreen from '../screens/ListeLivreursScreen';
 
 
@@ -57,8 +59,23 @@ function CartStack() {
         }}
       />
       <Stack.Screen 
+        name="StripePaymentScreen" 
+        component={StripePaymentScreen}
+        options={{
+          title: "Paiement par carte",
+          headerShown: false
+        }}
+      />
+      <Stack.Screen 
         name="OrderSuccess" 
         component={OrderSuccess}
+        options={{
+          headerShown: false
+        }}
+      />
+      <Stack.Screen 
+        name="OrderTracking" 
+        component={OrderTrackingScreen}
         options={{
           headerShown: false
         }}
@@ -176,6 +193,13 @@ function ProfileStack() {
       <Stack.Screen 
         name="OrderDetails" 
         component={OrderDetails}
+        options={{
+          headerShown: false
+        }}
+      />
+      <Stack.Screen 
+        name="OrderTracking" 
+        component={OrderTrackingScreen}
         options={{
           headerShown: false
         }}

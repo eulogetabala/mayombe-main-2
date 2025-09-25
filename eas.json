@@ -14,7 +14,14 @@
         "buildType": "apk"
       }
     },
-    "production": {}
+    "production": {
+      "ios": {
+        "autoIncrement": "buildNumber",
+        "buildConfiguration": "Release",
+        "distribution": "store",
+        "scheme": "mayombeclient"
+      }
+    }
   },
   "submit": {
     "production": {

@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocation, pickupLocation, onMessage }, ref) => {
-  const [mapHtml, setMapHtml] = useState('');
+const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocation, pickupLocation, orderStatus = 'pending', onMessage }, ref) => {
   const [loading, setLoading] = useState(true);
-  const webViewRef = React.useRef(null);
+  const [mapHtml, setMapHtml] = useState('');
+  const webViewRef = useRef(null);
 
   // Debug: Vérifier les props reçues
   console.log('🔍 SimpleMapComponent - Props reçues:', {
@@ -17,9 +17,46 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
     pickupLocationType: typeof pickupLocation
   });
 
+  // Vérification des coordonnées
+  if (destinationLocation) {
+    console.log('📍 Destination coords:', {
+      lat: destinationLocation.latitude,
+      lng: destinationLocation.longitude,
+      latValid: typeof destinationLocation.latitude === 'number' && !isNaN(destinationLocation.latitude),
+      lngValid: typeof destinationLocation.longitude === 'number' && !isNaN(destinationLocation.longitude)
+    });
+  }
+  
+  if (pickupLocation) {
+    console.log('🏪 Pickup coords:', {
+      lat: pickupLocation.latitude,
+      lng: pickupLocation.longitude,
+      latValid: typeof pickupLocation.latitude === 'number' && !isNaN(pickupLocation.latitude),
+      lngValid: typeof pickupLocation.longitude === 'number' && !isNaN(pickupLocation.longitude)
+    });
+  }
+
+  // Validation stricte des coordonnées
+  const isValidCoordinate = (coord) => {
+    return coord && 
+           typeof coord.latitude === 'number' && 
+           typeof coord.longitude === 'number' &&
+           !isNaN(coord.latitude) && 
+           !isNaN(coord.longitude) &&
+           coord.latitude >= -90 && coord.latitude <= 90 &&
+           coord.longitude >= -180 && coord.longitude <= 180;
+  };
+
   // Vérification immédiate pour éviter l'erreur
-  if (!destinationLocation || !pickupLocation) {
-    console.log('⚠️ Données manquantes - retour composant de chargement');
+  if (!destinationLocation || !pickupLocation || 
+      !isValidCoordinate(destinationLocation) || 
+      !isValidCoordinate(pickupLocation)) {
+    console.log('⚠️ Coordonnées invalides ou manquantes:', {
+      destinationValid: isValidCoordinate(destinationLocation),
+      pickupValid: isValidCoordinate(pickupLocation),
+      destinationLocation,
+      pickupLocation
+    });
     return (
       <View style={styles.container}>
         <View style={styles.loadingOverlay}>
@@ -121,7 +158,7 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
                 });
               }
 
-              // Ligne droite entre restaurant et destination
+              // Ligne droite entre restaurant et destination (version simple qui fonctionne)
               const line = new google.maps.Polyline({
                 path: [
                   { lat: ${safePickupLocation.latitude}, lng: ${safePickupLocation.longitude} },
@@ -169,7 +206,6 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
             };
             document.head.appendChild(script);
           }
-
 
           // Écouter les messages de React Native
           document.addEventListener('message', function(event) {
@@ -232,7 +268,6 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
     updateDriverPosition
   }));
 
-
   return (
     <View style={styles.container}>
       <WebView
@@ -285,5 +320,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
 });
+
+SimpleMapComponent.displayName = 'SimpleMapComponent';
 
 export default SimpleMapComponent;

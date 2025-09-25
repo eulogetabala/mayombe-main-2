@@ -11,6 +11,7 @@ import { getDistanceToRestaurant, formatDistance, getCurrentLocation } from '../
 import CustomHeader from '../components/common/CustomHeader';
 import ShareInstructionsModal from '../components/ShareInstructionsModal';
 import FirebaseTrackingService from '../services/firebase';
+import sharedCartService from '../services/sharedCartService';
 import { CartSkeleton } from '../components/Skeletons';
 
 
@@ -513,6 +514,9 @@ const CartScreen = ({ navigation, route }) => {
 
       // Sauvegarder le panier partagé dans le stockage local
       await AsyncStorage.setItem(`shared_cart_${sharedCartId}`, JSON.stringify(cartData));
+      
+      // Sauvegarder le panier partagé sur Firebase
+      await sharedCartService.saveSharedCart(sharedCartId, cartData, 24); // Expire dans 24h
       
       // Essayer de partager via le système normal
       try {

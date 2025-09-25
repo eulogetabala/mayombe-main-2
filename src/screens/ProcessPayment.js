@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CountryPicker, { DEFAULT_THEME, DARK_THEME } from 'react-native-country-picker-modal';
 import { useLanguage } from '../context/LanguageContext';
+import { useCart } from '../context/CartContext';
 import { translations } from '../translations';
 
 
@@ -30,6 +31,7 @@ const ProcessPayment = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { currentLanguage } = useLanguage();
+  const { clearCart } = useCart();
   const t = translations[currentLanguage];
   
   const { orderDetails, onPaymentSuccess } = route.params || {};
@@ -49,6 +51,18 @@ const ProcessPayment = () => {
   const paymentMethod = orderDetails?.paymentMethod || 'cash';
   console.log('🔍 ProcessPayment - orderDetails:', orderDetails);
   console.log('🔍 ProcessPayment - paymentMethod:', paymentMethod);
+
+  // Rediriger vers StripePaymentScreen si le paiement par carte bancaire est sélectionné
+  useEffect(() => {
+    if (orderDetails && orderDetails.paymentMethod === 'cb') {
+      console.log('💳 Redirection vers StripePaymentScreen...');
+      navigation.navigate('StripePaymentScreen', {
+        orderDetails: orderDetails,
+        onPaymentSuccess: onPaymentSuccess
+      });
+      return;
+    }
+  }, [orderDetails, navigation, onPaymentSuccess]);
 
   const proceedWithPayment = async () => {
     setIsLoading(true);
@@ -250,6 +264,15 @@ const ProcessPayment = () => {
             // Continuer quand même avec l'ID existant
           }
           
+          // Vider le panier après une commande cash confirmée
+          try {
+            await clearCart();
+            await AsyncStorage.removeItem('cart');
+            console.log('✅ Panier vidé après commande cash confirmée');
+          } catch (error) {
+            console.error('❌ Erreur lors du vidage du panier:', error);
+          }
+
           Alert.alert(
             'Paiement cash confirmé',
             'Votre commande a été confirmée. Vous paierez à la livraison. Vous recevrez un SMS de confirmation.',
@@ -279,6 +302,15 @@ const ProcessPayment = () => {
             ]
           );
         } else {
+          // Vider le panier après un paiement réussi
+          try {
+            await clearCart();
+            await AsyncStorage.removeItem('cart');
+            console.log('✅ Panier vidé après paiement réussi (ProcessPayment)');
+          } catch (error) {
+            console.error('❌ Erreur lors du vidage du panier:', error);
+          }
+
           // Pour les autres modes de paiement (cb), continuer avec le flow existant
           Alert.alert(
             'Paiement réussi',

@@ -94,12 +94,21 @@ const OrderDetails = ({ navigation, route }) => {
 
   // Informations du produit/restaurant
   const productInfo = useMemo(() => {
-    const hasRestaurant = order?.restaurant?.name || order?.restaurant?.title;
-    return {
-      title: hasRestaurant ? 'Restaurant' : 'Produit',
-      name: hasRestaurant || (order?.items && order.items.length > 0 ? order.items[0].name : 'Produit'),
-      address: order?.restaurant?.address
-    };
+    try {
+      const hasRestaurant = order?.restaurant?.name || order?.restaurant?.title;
+      return {
+        title: hasRestaurant ? 'Restaurant' : 'Produit',
+        name: String(hasRestaurant || (order?.items && order.items.length > 0 ? order.items[0]?.name : 'Produit') || 'Produit'),
+        address: order?.restaurant?.address ? String(order.restaurant.address) : null
+      };
+    } catch (error) {
+      console.error('Erreur calcul productInfo:', error);
+      return {
+        title: 'Produit',
+        name: 'Produit',
+        address: null
+      };
+    }
   }, [order?.restaurant, order?.items]);
 
   // Fonction pour supprimer la commande
@@ -132,20 +141,61 @@ const OrderDetails = ({ navigation, route }) => {
 
   // Fonction pour rendre un article
   const renderOrderItem = (item, index) => {
+    // Protection contre les items null/undefined
+    if (!item) {
+      return null;
+    }
+    
     return (
       <View key={index} style={styles.orderItem}>
         <View style={styles.itemInfo}>
-          <Text style={styles.itemName}>{item?.name || 'Article'}</Text>
-          <Text style={styles.itemQuantity}>x{item?.quantity || 1}</Text>
+          <Text style={styles.itemName}>{String(item?.name || 'Article')}</Text>
+          <Text style={styles.itemQuantity}>x{String(item?.quantity || 1)}</Text>
           <Text style={styles.itemUnitPrice}>
-            {`${item?.unitPrice || item?.price || 0} FCFA l'unité`}
+            {`${String(item?.unitPrice || item?.price || 0)} FCFA l'unité`}
           </Text>
         </View>
         <Text style={styles.itemPrice}>
-          {`${item?.total || ((item?.price || 0) * (item?.quantity || 1))} FCFA`}
+          {`${String(item?.total || ((item?.price || 0) * (item?.quantity || 1)))} FCFA`}
         </Text>
       </View>
     );
+  };
+
+  // Protection supplémentaire
+  if (!order) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Détails de la commande</Text>
+          <View style={{ width: 24 }} />
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 16, color: '#666' }}>Commande non trouvée</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Vérification supplémentaire des données critiques
+  const safeOrder = {
+    ...order,
+    items: Array.isArray(order.items) ? order.items.filter(item => item != null) : [],
+    restaurant: order.restaurant || {},
+    status: String(order.status || 'unknown'),
+    total: Number(order.total) || 0,
+    subtotal: Number(order.subtotal) || 0,
+    deliveryFee: Number(order.deliveryFee) || 0,
+    orderId: String(order.orderId || order.id || 'N/A'),
+    payment_method: String(order.payment_method || 'unknown'),
+    address: String(order.address || order.delivery_address || ''),
+    phone: String(order.phone || ''),
+    distance: Number(order.distance) || 0,
+    payment_ref: String(order.payment_ref || ''),
+    date: order.date || new Date().toISOString()
   };
 
   return (
@@ -177,15 +227,15 @@ const OrderDetails = ({ navigation, route }) => {
         {/* Section Restaurant/Produit */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>
-            {productInfo.title}
+            {String(productInfo.title || 'Information')}
           </Text>
           <View style={styles.restaurantInfo}>
             <Text style={styles.restaurantName}>
-              {productInfo.name}
+              {String(productInfo.name || 'Non spécifié')}
             </Text>
             {productInfo.address && (
               <Text style={styles.restaurantAddress}>
-                {productInfo.address}
+                {String(productInfo.address)}
               </Text>
             )}
           </View>
@@ -198,46 +248,47 @@ const OrderDetails = ({ navigation, route }) => {
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Numéro de commande:</Text>
               <Text style={styles.infoValue}>
-                # {order?.orderId || order?.id?.slice(-6) || 'N/A'}
+                # {safeOrder.orderId}
               </Text>
             </View>
-            {order?.payment_ref && (
+            {safeOrder.payment_ref && (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Référence de paiement:</Text>
-                <Text style={styles.infoValue}>{order.payment_ref}</Text>
+                <Text style={styles.infoValue}>{safeOrder.payment_ref}</Text>
               </View>
             )}
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Date:</Text>
-              <Text style={styles.infoValue}>{formattedDate}</Text>
+              <Text style={styles.infoValue}>{String(formattedDate || 'Date non disponible')}</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Méthode de paiement:</Text>
               <Text style={styles.infoValue}>
-                {order?.payment_method === 'cash' ? 'Espèces' :
-                 order?.payment_method === 'mtn' ? 'MTN Money' :
-                 order?.payment_method === 'airtel' ? 'Airtel Money' : 'Carte'}
+                {safeOrder.payment_method === 'cash' ? 'Espèces' :
+                 safeOrder.payment_method === 'mtn' ? 'MTN Money' :
+                 safeOrder.payment_method === 'airtel' ? 'Airtel Money' : 
+                 safeOrder.payment_method === 'unknown' ? 'Non spécifié' : safeOrder.payment_method}
               </Text>
             </View>
-            {(order?.address || order?.delivery_address) && (
+            {safeOrder.address && (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Adresse de livraison:</Text>
                 <Text style={styles.infoValue}>
-                  {order?.address || order?.delivery_address}
+                  {safeOrder.address}
                 </Text>
               </View>
             )}
-            {order?.phone && (
+            {safeOrder.phone && (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Téléphone:</Text>
-                <Text style={styles.infoValue}>{order.phone}</Text>
+                <Text style={styles.infoValue}>{safeOrder.phone}</Text>
               </View>
             )}
-            {order?.distance && (
+            {safeOrder.distance > 0 && (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Distance:</Text>
                 <Text style={styles.infoValue}>
-                  {`${order.distance} km`}
+                  {`${safeOrder.distance} km`}
                 </Text>
               </View>
             )}
@@ -248,7 +299,7 @@ const OrderDetails = ({ navigation, route }) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Articles commandés</Text>
           <View style={styles.itemsContainer}>
-            {order?.items?.map((item, index) => renderOrderItem(item, index))}
+            {safeOrder.items.map((item, index) => renderOrderItem(item, index))}
           </View>
         </View>
 
@@ -257,17 +308,35 @@ const OrderDetails = ({ navigation, route }) => {
           <Text style={styles.sectionTitle}>Statut de la commande</Text>
           <View style={styles.statusContainer}>
             <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-              <Text style={styles.statusText}>{statusText}</Text>
+              <Text style={styles.statusText}>{String(statusText || 'Statut inconnu')}</Text>
             </View>
-            {orderStatus.isInProgress && (
+            {orderStatus?.isInProgress && (
               <Text style={styles.statusInfo}>
                 Votre commande est en cours de préparation et sera bientôt en route
               </Text>
             )}
-            {orderStatus.isCompleted && (
+            {orderStatus?.isCompleted && (
               <Text style={styles.statusInfo}>
                 Votre commande a été livrée avec succès
               </Text>
+            )}
+            
+            {/* Bouton de suivi pour les commandes en cours */}
+            {(orderStatus?.isInProgress || orderStatus?.isPending) && (
+              <TouchableOpacity 
+                style={styles.trackingButton}
+                onPress={() => {
+                  console.log('🚀 Navigation vers OrderTracking avec:', safeOrder);
+                  navigation.navigate('OrderTracking', { 
+                    order: safeOrder,
+                    orderId: safeOrder.orderId,
+                    restaurant: safeOrder.restaurant
+                  });
+                }}
+              >
+                <Ionicons name="location" size={20} color="#fff" />
+                <Text style={styles.trackingButtonText}>Suivre la commande</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -279,19 +348,19 @@ const OrderDetails = ({ navigation, route }) => {
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Sous-total:</Text>
               <Text style={styles.summaryValue}>
-                {`${order?.subtotal || 0} FCFA`}
+                {`${safeOrder.subtotal} FCFA`}
               </Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Frais de livraison:</Text>
               <Text style={styles.summaryValue}>
-                {`${order?.deliveryFee || 0} FCFA`}
+                {`${safeOrder.deliveryFee} FCFA`}
               </Text>
             </View>
             <View style={[styles.summaryRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total:</Text>
               <Text style={styles.totalValue}>
-                {`${order?.total || 0} FCFA`}
+                {`${safeOrder.total} FCFA`}
               </Text>
             </View>
           </View>
@@ -360,24 +429,26 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   restaurantInfo: {
-    gap: 8,
+    // gap: 8, // Non supporté dans toutes les versions
   },
   restaurantName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+    marginBottom: 8,
   },
   restaurantAddress: {
     fontSize: 14,
     color: '#666',
   },
   orderInfo: {
-    gap: 12,
+    // gap: 12, // Non supporté dans toutes les versions
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
   },
   infoLabel: {
     fontSize: 14,
@@ -392,7 +463,7 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   itemsContainer: {
-    gap: 16,
+    // gap: 16, // Non supporté dans toutes les versions
   },
   orderItem: {
     flexDirection: 'row',
@@ -401,19 +472,22 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
+    marginBottom: 16,
   },
   itemInfo: {
     flex: 1,
-    gap: 4,
+    // gap: 4, // Non supporté dans toutes les versions
   },
   itemName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+    marginBottom: 4,
   },
   itemQuantity: {
     fontSize: 14,
     color: '#666',
+    marginBottom: 4,
   },
   itemUnitPrice: {
     fontSize: 12,
@@ -426,7 +500,7 @@ const styles = StyleSheet.create({
   },
   statusContainer: {
     alignItems: 'center',
-    gap: 12,
+    // gap: 12, // Non supporté dans toutes les versions
   },
   statusBadge: {
     paddingHorizontal: 20,
@@ -442,14 +516,40 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     textAlign: 'center',
+    marginTop: 12,
+  },
+  trackingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginTop: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  trackingButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
   summary: {
-    gap: 12,
+    // gap: 12, // Non supporté dans toutes les versions
   },
   summaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
   },
   summaryLabel: {
     fontSize: 14,

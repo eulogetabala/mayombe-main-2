@@ -38,7 +38,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>1.0.0</string>
+    <string>13</string>
     <key>GMSApiKey</key>
     <string>AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI</string>
     <key>LSMinimumSystemVersion</key>
@@ -48,7 +48,7 @@
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>
-      <true/>
+      <false/>
       <key>NSExceptionDomains</key>
       <dict>
         <key>mayombe-app.com</key>
@@ -56,7 +56,7 @@
           <key>NSExceptionAllowsInsecureHTTPLoads</key>
           <true/>
           <key>NSExceptionMinimumTLSVersion</key>
-          <string>1.0</string>
+          <string>1.2</string>
           <key>NSExceptionRequiresForwardSecrecy</key>
           <false/>
           <key>NSIncludesSubdomains</key>
@@ -65,11 +65,15 @@
       </dict>
     </dict>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your location</string>
+    <string>Mayombe needs access to your location to find nearby restaurants and provide delivery services.</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.</string>
+    <string>Mayombe needs access to your location to find nearby restaurants and provide delivery services.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.</string>
+    <string>Mayombe needs access to your location to find nearby restaurants and provide delivery services.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Mayombe needs access to your photo library to allow you to select images for your profile or orders.</string>
+    <key>NSCameraUsageDescription</key>
+    <string>Mayombe needs access to your camera to allow you to take photos for your profile or orders.</string>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

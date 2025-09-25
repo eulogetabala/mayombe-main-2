@@ -17,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as Animatable from 'react-native-animatable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../context/CartContext';
+import sharedCartService from '../services/sharedCartService';
 
 const SharedCartScreen = () => {
   const navigation = useNavigation();
@@ -49,19 +50,8 @@ const SharedCartScreen = () => {
 
     setIsLoading(true);
     try {
-      // Diagnostic : Lister tous les paniers partagés stockés
-      const allKeys = await AsyncStorage.getAllKeys();
-      const sharedCartKeys = allKeys.filter(key => key.startsWith('shared_cart_'));
-      console.log('🔍 Tous les paniers partagés stockés:', sharedCartKeys);
-      
-      // Récupérer le panier partagé depuis le stockage local
-      const sharedCartJson = await AsyncStorage.getItem(`shared_cart_${cartId.trim()}`);
-      console.log('🔍 ID recherché:', `shared_cart_${cartId.trim()}`);
-      console.log('🔍 Données trouvées:', sharedCartJson ? 'OUI' : 'NON');
-      
-      if (sharedCartJson) {
-        const cartData = JSON.parse(sharedCartJson);
-        console.log('🔍 Données du panier:', cartData);
+      // Récupérer le panier partagé (Firebase en priorité, puis local)
+      const cartData = await sharedCartService.loadSharedCart(cartId.trim());
         
         if (cartData && cartData.length > 0) {
           // Transformer les données du panier partagé
@@ -112,17 +102,7 @@ const SharedCartScreen = () => {
             ]
           );
         } else {
-          Alert.alert('Erreur', 'Le panier partagé est vide');
-        }
-      } else {
-        // Afficher les IDs disponibles pour le débogage
-        const availableIds = sharedCartKeys.map(key => key.replace('shared_cart_', ''));
-        console.log('🔍 IDs disponibles:', availableIds);
-        
-        Alert.alert(
-          'Aucun panier trouvé', 
-          `Aucun panier trouvé avec l'ID: ${cartId.trim()}\n\nIDs disponibles: ${availableIds.join(', ')}`
-        );
+        Alert.alert('Panier non trouvé', 'Aucun panier trouvé avec cet ID.');
       }
     } catch (error) {
       console.error('Erreur lors du chargement du panier partagé:', error);

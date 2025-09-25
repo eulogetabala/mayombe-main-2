@@ -64,8 +64,8 @@ const PaymentScreen = ({ route, navigation }) => {
       id: 'cb',
       name: 'Carte Bancaire',
       logo: require('../../assets/images/visa-mastercard.webp'),
-      disabled: true,
-      description: 'Disponible bientôt'
+      disabled: false,
+      description: 'Paiement sécurisé par Stripe'
     },
     {
       id: 'cash',
