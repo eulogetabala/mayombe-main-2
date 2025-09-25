@@ -123,7 +123,6 @@ const useCartSharing = (cartItems, setCartItems, formatPrice = defaultFormatPric
       // Sauvegarder le panier partagé (local + Firebase)
       await sharedCartService.saveToLocalStorage(sharedCartId, cartData);
       await sharedCartService.saveSharedCart(sharedCartId, cartData, 24); // Expire dans 24h
-
       
       // Créer les liens de partage avec fallback
       const shareUrl = `mayombe://cart/${sharedCartId}`;

@@ -65,8 +65,17 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateAuthStatus = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      setIsAuthenticated(!!token);
+    } catch (error) {
+      console.error('Erreur de mise à jour du statut d\'authentification:', error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, register, login, logout, getCurrentUser }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading, register, login, logout, getCurrentUser, updateAuthStatus }}>
       {children}
     </AuthContext.Provider>
   );
