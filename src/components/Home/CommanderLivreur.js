@@ -48,27 +48,7 @@ const CommanderLivreur = () => {
               <Ionicons name="bicycle" size={scaleFont(24)} color="#FF9800" />
             </View>
             <Text style={styles.title}>Livraison Express</Text>
-            <Text style={styles.subtitle}>Commandez et faites-vous livrer en 30 minutes</Text>
-          </Animatable.View>
-
-          <Animatable.View 
-            animation="fadeInRight"
-            delay={400}
-            duration={800}
-            style={styles.featuresContainer}
-          >
-            <View style={styles.featureItem}>
-              <Ionicons name="time-outline" size={scaleFont(16)} color="#fff" />
-              <Text style={styles.featureText}>30 min</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="location-outline" size={scaleFont(16)} color="#fff" />
-              <Text style={styles.featureText}>Partout</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="shield-checkmark-outline" size={scaleFont(16)} color="#fff" />
-              <Text style={styles.featureText}>Sécurisé</Text>
-            </View>
+            <Text style={styles.subtitle}>Commandez et faites-vous livrer rapidement</Text>
           </Animatable.View>
         </View>
 
@@ -158,29 +138,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-  featuresContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 15,
-  },
-  featureItem: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 15,
-    minWidth: 60,
-  },
-  featureText: {
-    color: '#fff',
-    fontSize: scaleFont(12),
-    fontFamily: 'Montserrat',
-    marginTop: 4,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
   },
   buttonContainer: {
     alignItems: 'center',

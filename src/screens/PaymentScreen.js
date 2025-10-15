@@ -47,11 +47,11 @@ const PaymentScreen = ({ route, navigation }) => {
 
   const paymentMethods = [
     {
-      id: 'airtel',
-      name: 'Airtel Money',
-      logo: require('../../assets/images/airtel.png'),
-      disabled: true,
-      description: 'Disponible bientôt'
+      id: 'mambopay',
+      name: 'MamboPay',
+      logo: require('../../assets/images/mambo.jpeg'),
+      disabled: false,
+      description: 'Paiement mobile sécurisé'
     },
     {
       id: 'mtn',
@@ -236,8 +236,8 @@ const PaymentScreen = ({ route, navigation }) => {
     if (method && method.disabled) {
       Alert.alert(
         'Mode de paiement non disponible',
-        method.id === 'airtel' 
-          ? 'Le paiement par Airtel Money n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.'
+        method.id === 'mambopay' 
+          ? 'Le paiement par MamboPay n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.'
           : 'Le paiement par carte bancaire n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.',
         [{ text: 'OK' }]
       );
@@ -284,26 +284,28 @@ const PaymentScreen = ({ route, navigation }) => {
               ]}
               onPress={() => handleMethodSelection(method.id)}
             >
-              <Image 
-                source={method.logo} 
-                style={[
-                  styles.methodLogo,
-                  method.disabled && styles.disabledLogo
-                ]} 
-              />
-              <View style={styles.methodInfo}>
-                <Text style={[
-                  styles.methodName,
-                  method.disabled && styles.disabledText
-                ]}>
-                  {method.name}
-                </Text>
-                <Text style={[
-                  styles.methodDescription,
-                  method.disabled && styles.disabledText
-                ]}>
-                  {method.description}
-                </Text>
+              <View style={styles.methodContent}>
+                <Image 
+                  source={method.logo} 
+                  style={[
+                    styles.methodLogo,
+                    method.disabled && styles.disabledLogo
+                  ]} 
+                />
+                <View style={styles.methodInfo}>
+                  <Text style={[
+                    styles.methodName,
+                    method.disabled && styles.disabledText
+                  ]}>
+                    {method.name}
+                  </Text>
+                  <Text style={[
+                    styles.methodDescription,
+                    method.disabled && styles.disabledText
+                  ]}>
+                    {method.description}
+                  </Text>
+                </View>
               </View>
               {method.disabled && (
                 <View style={styles.comingSoonBadge}>
@@ -495,36 +497,46 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
-    padding: scaleFont(12),
+    padding: scaleFont(15),
     borderRadius: 12,
     marginBottom: 10,
     borderWidth: 1,
     borderColor: '#ddd',
+    minHeight: 120,
   },
   selectedMethod: {
     borderColor: '#51A905',
     backgroundColor: '#F0F9ED',
   },
+  methodContent: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+  },
   methodLogo: {
-    width: scaleFont(40),
-    height: scaleFont(40),
+    width: scaleFont(50),
+    height: scaleFont(50),
     resizeMode: 'contain',
+    marginBottom: 8,
   },
   methodInfo: {
-    flex: 1,
-    marginLeft: 12,
+    alignItems: 'center',
   },
   methodName: {
-    fontSize: scaleFont(15),
+    fontSize: scaleFont(12),
     fontWeight: 'bold',
     color: '#333',
     fontFamily: 'Montserrat-Bold',
+    textAlign: 'center',
   },
   methodDescription: {
-    fontSize: scaleFont(12),
+    fontSize: scaleFont(10),
     color: '#666',
-    marginTop: 2,
+    marginTop: 4,
     fontFamily: 'Montserrat',
+    textAlign: 'center',
+    lineHeight: scaleFont(12),
   },
   summaryContainer: {
     backgroundColor: '#fff',

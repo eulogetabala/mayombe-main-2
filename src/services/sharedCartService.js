@@ -1,6 +1,22 @@
 import { ref, set, get, remove } from 'firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { database } from './firebase';
+import { getDatabase } from 'firebase/database';
+import { initializeApp } from 'firebase/app';
+
+// Configuration Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyB6Foh29YS-VQLMhw-gO83L_OSVullVvI8",
+  authDomain: "mayombe-ba11b.firebaseapp.com",
+  databaseURL: "https://mayombe-ba11b-default-rtdb.firebaseio.com",
+  projectId: "mayombe-ba11b",
+  storageBucket: "mayombe-ba11b.firebasestorage.app",
+  messagingSenderId: "784517096614",
+  appId: "1:784517096614:android:41b02898b40426e23fc067"
+};
+
+// Initialiser Firebase
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
 
 /**
  * Service pour gérer les paniers partagés via Firebase
@@ -19,20 +35,42 @@ class SharedCartService {
    */
   async saveSharedCart(cartId, cartData, expirationHours = 24) {
     try {
-      const cartRef = ref(this.database, `shared_carts/${cartId}`);
+      console.log(`🔄 Tentative de sauvegarde Firebase pour: ${cartId}`);
+      console.log(`📊 Données à sauvegarder:`, cartData.length, 'articles');
+      
+      // Nettoyer les données pour Firebase (supprimer les valeurs undefined)
+      const cleanedCartData = cartData.map(item => {
+        const cleanedItem = {};
+        Object.keys(item).forEach(key => {
+          if (item[key] !== undefined && item[key] !== null) {
+            cleanedItem[key] = item[key];
+          }
+        });
+        return cleanedItem;
+      });
+      
+      console.log(`🧹 Données nettoyées:`, cleanedCartData.length, 'articles');
+      
+      const cartRef = ref(database, `shared_carts/${cartId}`);
       const expiresAt = new Date(Date.now() + expirationHours * 60 * 60 * 1000);
       
-      await set(cartRef, {
-        cart_data: cartData,
+      const cartPayload = {
+        cart_data: cleanedCartData,
         created_at: new Date().toISOString(),
         expires_at: expiresAt.toISOString(),
         cart_id: cartId
-      });
+      };
+      
+      console.log(`📦 Payload Firebase nettoyé:`, JSON.stringify(cartPayload, null, 2));
+      
+      await set(cartRef, cartPayload);
       
       console.log(`✅ Panier sauvegardé sur Firebase: ${cartId}`);
       return true;
     } catch (error) {
       console.error(`❌ Erreur sauvegarde Firebase:`, error);
+      console.error(`❌ Détails de l'erreur:`, error.message);
+      console.error(`❌ Stack trace:`, error.stack);
       return false;
     }
   }

@@ -105,7 +105,7 @@ const RegisterScreen = ({ navigation }) => {
   
     try {
       const response = await fetch(
-        ' ',
+        'https://www.api-mayombe.mayombe-app.com/public/api/register',
         {
           method: 'POST',
           headers: {

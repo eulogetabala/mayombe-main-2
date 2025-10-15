@@ -9,6 +9,8 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -43,6 +45,7 @@ const formatPhoneNumber = (phone) => {
 export default function OtpScreen({ navigation, route }) {
   const rawPhoneNumber = route?.params?.phoneNumber || 'Numéro inconnu';
   const phoneNumber = formatPhoneNumber(rawPhoneNumber);
+  const { updateAuthStatus } = useAuth();
 
   const [otp, setOtp] = useState(['', '', '', '']); // 4 champs pour OTP
   const [timer, setTimer] = useState(300); // Timer pour le renvoi (5 minutes)
@@ -111,6 +114,16 @@ export default function OtpScreen({ navigation, route }) {
       console.log('Réponse activation:', data);
 
       if (response.ok) {
+        // Vérifier si l'API retourne un token
+        if (data.token) {
+          console.log('✅ Token reçu lors de l\'activation, sauvegarde...');
+          await AsyncStorage.setItem('userToken', data.token);
+          // Mettre à jour l'état d'authentification
+          await updateAuthStatus();
+        } else {
+          console.log('⚠️ Aucun token reçu lors de l\'activation');
+        }
+        
         // Redirection automatique sans Alert bloquant
         console.log('Compte activé avec succès, redirection vers MainApp...');
         navigation.reset({

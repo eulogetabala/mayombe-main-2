@@ -29,6 +29,15 @@ const ResetPasswordScreen = ({ navigation, route }) => {
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
 
+  // Log des paramètres reçus pour debug
+  console.log("🔍 ResetPasswordScreen - Paramètres reçus:", {
+    phone,
+    receivedOtp,
+    callingCode,
+    phoneNumber,
+    allParams: route.params
+  });
+
   const validateInputs = () => {
     if (!newPassword.trim()) {
       Alert.alert("Erreur", "Veuillez entrer un nouveau mot de passe.");
@@ -38,6 +47,20 @@ const ResetPasswordScreen = ({ navigation, route }) => {
       Alert.alert("Erreur", "Le mot de passe doit contenir au moins 6 caractères.");
       return false;
     }
+    
+    // Vérifier si le mot de passe contient seulement des chiffres
+    const isNumericOnly = /^\d+$/.test(newPassword);
+    if (!isNumericOnly) {
+      Alert.alert(
+        "Format de mot de passe", 
+        "Pour la réinitialisation, le mot de passe doit contenir uniquement des chiffres (0-9).\n\nExemple: 123456\n\nNote: Après la réinitialisation, vous pourrez utiliser des mots de passe avec lettres et chiffres lors des prochaines connexions.",
+        [
+          { text: "Compris", style: "default" }
+        ]
+      );
+      return false;
+    }
+    
     if (newPassword !== confirmPassword) {
       Alert.alert("Erreur", "Les mots de passe ne correspondent pas.");
       return false;
@@ -48,12 +71,24 @@ const ResetPasswordScreen = ({ navigation, route }) => {
   const handleResetPassword = async () => {
     if (!validateInputs()) return;
 
+    // Vérifier que l'OTP est présent
+    if (!receivedOtp) {
+      Alert.alert("Erreur", "Code OTP manquant. Veuillez recommencer le processus.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      console.log("Réinitialisation avec OTP:", receivedOtp);
+      console.log("🔑 Réinitialisation avec OTP:", {
+        receivedOtp,
+        otpType: typeof receivedOtp,
+        otpLength: receivedOtp.length,
+        newPassword
+      });
+      
       const response = await api.resetPassword(receivedOtp, newPassword);
-      console.log("Réponse API reset password:", response);
+      console.log("📥 Réponse API reset password:", response);
 
       if (response.status === 200 || response.data?.success) {
         Alert.alert(
@@ -97,6 +132,14 @@ const ResetPasswordScreen = ({ navigation, route }) => {
               Entrez votre nouveau mot de passe
             </Animatable.Text>
 
+            <Animatable.Text animation="fadeInUp" style={styles.hint}>
+              ⚠️ Pour la réinitialisation, utilisez uniquement des chiffres (0-9)
+            </Animatable.Text>
+
+            <Animatable.Text animation="fadeInUp" style={styles.info}>
+              💡 Note: Cette limitation ne s'applique qu'à la réinitialisation. Après la réinitialisation, vous pourrez utiliser des mots de passe avec lettres et chiffres.
+            </Animatable.Text>
+
             {/* Nouveau mot de passe */}
             <Animatable.View animation="fadeInRight" style={styles.inputContainer}>
               <Ionicons
@@ -107,11 +150,12 @@ const ResetPasswordScreen = ({ navigation, route }) => {
               />
               <TextInput
                 style={styles.input}
-                placeholder="Nouveau mot de passe"
+                placeholder="123456 (chiffres uniquement)"
                 placeholderTextColor="#aaa"
                 secureTextEntry={!showPassword}
                 value={newPassword}
                 onChangeText={setNewPassword}
+                keyboardType="numeric"
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons
@@ -132,11 +176,12 @@ const ResetPasswordScreen = ({ navigation, route }) => {
               />
               <TextInput
                 style={styles.input}
-                placeholder="Confirmer le mot de passe"
+                placeholder="123456 (confirmer)"
                 placeholderTextColor="#aaa"
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
+                keyboardType="numeric"
               />
               <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
                 <Ionicons
@@ -218,8 +263,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#666",
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 15,
     fontFamily: "Montserrat",
+  },
+  hint: {
+    fontSize: 14,
+    color: "#FF9800",
+    textAlign: "center",
+    marginBottom: 10,
+    fontFamily: "Montserrat",
+    fontWeight: "500",
+    backgroundColor: "#FFF3E0",
+    padding: 10,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: "#FF9800",
+  },
+  info: {
+    fontSize: 12,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 20,
+    fontFamily: "Montserrat",
+    fontStyle: "italic",
+    backgroundColor: "#F5F5F5",
+    padding: 8,
+    borderRadius: 6,
   },
   inputContainer: {
     flexDirection: "row",

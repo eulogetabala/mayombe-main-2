@@ -84,11 +84,7 @@ const ProductModal = ({
 
           <View style={styles.contentContainer}>
             <Image 
-              source={
-                product.hasValidImage 
-                  ? { uri: product.imageUrl }
-                  : require('../../assets/images/2.jpg')
-              }
+              source={product.image || require('../../assets/images/2.jpg')}
               style={styles.productImage}
               onError={handleImageError}
             />

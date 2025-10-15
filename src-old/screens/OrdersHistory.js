@@ -220,7 +220,6 @@ const OrdersHistory = ({ navigation }) => {
           <Text style={styles.paymentMethod}>
             {item.payment_method === 'cash' ? 'Espèces' : 
              item.payment_method === 'mtn' ? 'MTN Money' :
-             item.payment_method === 'mambopay' ? 'MamboPay' : 
              item.payment_method === 'airtel' ? 'Airtel Money' : 'Carte'}
           </Text>
         )}

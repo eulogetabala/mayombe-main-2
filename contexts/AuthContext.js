@@ -6,16 +6,25 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
+        console.log("🔐 Vérification du statut d'authentification...");
         const token = await AsyncStorage.getItem('userToken');
+        const guestStatus = await AsyncStorage.getItem('isGuest');
+        
+        console.log("🔑 Token trouvé:", !!token);
+        console.log("👤 Statut invité:", !!guestStatus);
+        
         setIsAuthenticated(!!token);
+        setIsGuest(!!guestStatus);
       } catch (error) {
-        console.error('Erreur de vérification du token:', error);
+        console.error('❌ Erreur de vérification du token:', error);
       } finally {
+        console.log("✅ AuthContext prêt");
         setIsLoading(false);
       }
     };
@@ -26,7 +35,9 @@ export const AuthProvider = ({ children }) => {
   const login = async (token) => {
     try {
       await AsyncStorage.setItem('userToken', token);
+      await AsyncStorage.removeItem('isGuest'); // Supprimer le statut invité
       setIsAuthenticated(true);
+      setIsGuest(false);
     } catch (error) {
       console.error('Erreur lors de la connexion:', error);
     }
@@ -35,7 +46,9 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       await AsyncStorage.removeItem('userToken');
+      await AsyncStorage.removeItem('isGuest');
       setIsAuthenticated(false);
+      setIsGuest(false);
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
     }
@@ -68,14 +81,27 @@ export const AuthProvider = ({ children }) => {
   const updateAuthStatus = async () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
+      const guestStatus = await AsyncStorage.getItem('isGuest');
       setIsAuthenticated(!!token);
+      setIsGuest(!!guestStatus);
     } catch (error) {
       console.error('Erreur de mise à jour du statut d\'authentification:', error);
     }
   };
 
+  const setGuestMode = async () => {
+    try {
+      await AsyncStorage.setItem('isGuest', 'true');
+      await AsyncStorage.removeItem('userToken');
+      setIsGuest(true);
+      setIsAuthenticated(false);
+    } catch (error) {
+      console.error('Erreur lors de l\'activation du mode invité:', error);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, register, login, logout, getCurrentUser, updateAuthStatus }}>
+    <AuthContext.Provider value={{ isAuthenticated, isGuest, isLoading, register, login, logout, getCurrentUser, updateAuthStatus, setGuestMode }}>
       {children}
     </AuthContext.Provider>
   );

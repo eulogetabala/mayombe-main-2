@@ -47,6 +47,7 @@ const ProcessPayment = () => {
   const [callingCode, setCallingCode] = useState('242');
   const [isCheckingPayment, setIsCheckingPayment] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState('');
+  const [isVoucherFocused, setIsVoucherFocused] = useState(false);
 
   const paymentMethod = orderDetails?.paymentMethod || 'cash';
   console.log('🔍 ProcessPayment - orderDetails:', orderDetails);
@@ -104,6 +105,12 @@ const ProcessPayment = () => {
         paymentData.payment_method = 'mtn';
         paymentData.operator = 'mtn';
         console.log("📱 Numéro MTN envoyé (format international):", internationalPhoneNumber);
+      } else if (paymentMethod === 'mambopay') {
+        // Format selon la doc API : voucher_code requis pour MamboPay
+        paymentData.voucher_code = phoneNumber; // phoneNumber contient le code coupon
+        paymentData.payment_method = 'mambopay';
+        paymentData.operator = 'mambopay';
+        console.log("🎫 Code coupon MamboPay envoyé:", phoneNumber);
       } else if (paymentMethod === 'cash') {
         console.log("🔍 Entrée dans le bloc cash");
         // Données spécifiques pour paiement cash selon la doc API
@@ -301,6 +308,42 @@ const ProcessPayment = () => {
               },
             ]
           );
+        } else if (paymentMethod === 'mambopay') {
+          // Vider le panier après un paiement MamboPay réussi
+          try {
+            await clearCart();
+            await AsyncStorage.removeItem('cart');
+            console.log('✅ Panier vidé après paiement MamboPay réussi');
+          } catch (error) {
+            console.error('❌ Erreur lors du vidage du panier:', error);
+          }
+
+          // Message de succès spécifique pour MamboPay
+          Alert.alert(
+            'Commande passée avec succès',
+            'Votre paiement MamboPay a été traité avec succès. Vous recevrez un SMS de confirmation.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  navigation.reset({
+                    index: 0,
+                    routes: [
+                      { 
+                        name: 'OrderSuccess',
+                        params: { 
+                          orderDetails: {
+                            ...orderDetails,
+                            paymentStatus: 'paid',
+                          }
+                        }
+                      }
+                    ],
+                  });
+                },
+              },
+            ]
+          );
         } else {
           // Vider le panier après un paiement réussi
           try {
@@ -379,7 +422,21 @@ const ProcessPayment = () => {
         let errorMessage = "Une erreur est survenue lors du traitement du paiement. Veuillez réessayer.";
         let errorTitle = "Erreur de paiement";
         
-        if (paymentMethod === 'mtn') {
+        if (paymentMethod === 'mambopay') {
+          // Messages d'erreur spécifiques pour MamboPay
+          if (apiError.message.includes("Coupon does not exist") || apiError.message.includes("voucher_code")) {
+            errorTitle = "Code non valide";
+            errorMessage = "Code non valide, veuillez entrer un code valide";
+          } else if (apiError.message.includes("Coupon expired")) {
+            errorTitle = "Code expiré";
+            errorMessage = "Ce code coupon a expiré, veuillez utiliser un code valide";
+          } else if (apiError.message.includes("MamboPay")) {
+            errorTitle = "Erreur MamboPay";
+            errorMessage = apiError.message;
+          }
+          
+          Alert.alert(errorTitle, errorMessage, [{ text: 'OK', style: 'default' }]);
+        } else if (paymentMethod === 'mtn') {
           // Messages d'erreur spécifiques pour MTN Mobile Money
           if (apiError.message.includes("Solde insuffisant")) {
             errorTitle = "Solde insuffisant";
@@ -603,13 +660,11 @@ const ProcessPayment = () => {
   };
 
   const handlePayment = async () => {
-    // Empêcher le paiement si Airtel ou carte bancaire est sélectionné
-    if (paymentMethod === 'airtel' || paymentMethod === 'cb') {
+    // Empêcher le paiement si carte bancaire est sélectionné
+    if (paymentMethod === 'cb') {
       Alert.alert(
         'Mode de paiement non disponible',
-        paymentMethod === 'airtel' 
-          ? 'Le paiement par Airtel Money n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.'
-          : 'Le paiement par carte bancaire n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.',
+        'Le paiement par carte bancaire n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.',
         [{ text: 'OK' }]
       );
       return;
@@ -619,6 +674,13 @@ const ProcessPayment = () => {
     if (paymentMethod === 'mtn') {
       if (!phoneNumber || phoneNumber.length < 8) {
         Alert.alert('Erreur', 'Veuillez entrer un numéro de téléphone valide');
+        return;
+      }
+    }
+    
+    if (paymentMethod === 'mambopay') {
+      if (!phoneNumber || phoneNumber.length < 8) {
+        Alert.alert('Erreur', 'Veuillez entrer un code coupon valide');
         return;
       }
     }
@@ -647,22 +709,84 @@ const ProcessPayment = () => {
 
   // Rendu du formulaire selon le mode de paiement
   const renderPaymentForm = () => {
-    if (paymentMethod === 'airtel') {
+    if (paymentMethod === 'mambopay') {
       return (
         <View style={styles.formContainer}>
           <Image 
-            source={require('../../assets/images/airtel.png')} 
+            source={require('../../assets/images/mambo.jpeg')} 
             style={styles.paymentLogo} 
           />
           <Text style={styles.formTitle}>
-            {t.payment.airtelPayment}
+            {t.payment.mambopayPayment}
           </Text>
-          <View style={styles.comingSoonContainer}>
-            <Ionicons name="time-outline" size={48} color="#FFA500" />
-            <Text style={styles.comingSoonTitle}>Disponible bientôt</Text>
-            <Text style={styles.comingSoonDescription}>
-              Le paiement par Airtel Money sera bientôt disponible. Veuillez choisir un autre mode de paiement pour le moment.
-            </Text>
+          <View style={styles.mambopayContainer}>
+            <View style={styles.voucherSection}>
+              <View style={styles.voucherHeader}>
+                <Ionicons name="card-outline" size={24} color="#FF9800" />
+                <Text style={styles.voucherTitle}>Entrez votre code coupon</Text>
+              </View>
+              
+              <View style={styles.voucherInputContainer}>
+                <TextInput
+                  style={[
+                    styles.voucherInput,
+                    isVoucherFocused && styles.voucherInputFocused
+                  ]}
+                  placeholder="13456"
+                  placeholderTextColor="#999"
+                  value={phoneNumber}
+                  onChangeText={setPhoneNumber}
+                  keyboardType="default"
+                  autoCapitalize="characters"
+                  maxLength={20}
+                  selectionColor="#FF9800"
+                  onFocus={() => setIsVoucherFocused(true)}
+                  onBlur={() => setIsVoucherFocused(false)}
+                />
+                <View style={styles.voucherIconContainer}>
+                  <Ionicons 
+                    name="key-outline" 
+                    size={20} 
+                    color={isVoucherFocused ? "#FF9800" : "#999"} 
+                  />
+                </View>
+              </View>
+              
+              <View style={styles.voucherHint}>
+                <Ionicons 
+                  name={phoneNumber.length >= 8 ? "checkmark-circle" : "information-circle"} 
+                  size={16} 
+                  color={phoneNumber.length >= 8 ? "#4CAF50" : "#666"} 
+                />
+                <Text style={[
+                  styles.voucherHintText,
+                  phoneNumber.length >= 8 && styles.voucherHintValid
+                ]}>
+                  {phoneNumber.length >= 8 
+                    ? "Code coupon valide" 
+                    : "Entrez le code coupon fourni par MamboPay pour finaliser votre paiement"
+                  }
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.mambopayInfoCard}>
+              <View style={styles.infoHeader}>
+                <Ionicons name="shield-checkmark" size={20} color="#4CAF50" />
+                <Text style={styles.infoTitle}>Paiement sécurisé</Text>
+              </View>
+              <Text style={styles.infoDescription}>
+                Le Code coupon est généré automatiquement par MamboPay
+              </Text>
+            </View>
+            
+            {phoneNumber.length > 0 && (
+              <View style={styles.characterCounter}>
+                <Text style={styles.characterCounterText}>
+                  {phoneNumber.length}/20 caractères
+                </Text>
+              </View>
+            )}
           </View>
         </View>
       );
@@ -762,10 +886,10 @@ const ProcessPayment = () => {
           <TouchableOpacity
             style={[
               styles.payButton, 
-              (isLoading || paymentMethod === 'airtel' || paymentMethod === 'cb' || isCheckingPayment) && styles.payButtonDisabled
+              (isLoading || paymentMethod === 'cb' || isCheckingPayment) && styles.payButtonDisabled
             ]}
             onPress={handlePayment}
-            disabled={isLoading || paymentMethod === 'airtel' || paymentMethod === 'cb' || isCheckingPayment}
+            disabled={isLoading || paymentMethod === 'cb' || isCheckingPayment}
           >
             {isLoading ? (
               <ActivityIndicator color="#fff" size="small" />
@@ -776,7 +900,7 @@ const ProcessPayment = () => {
                   Vérification...
                 </Text>
               </View>
-            ) : paymentMethod === 'airtel' || paymentMethod === 'cb' ? (
+            ) : paymentMethod === 'cb' ? (
               <Text style={styles.payButtonText}>
                 Non disponible
               </Text>
@@ -810,7 +934,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 30 : 30,
   },
   header: {
     flexDirection: 'row',
@@ -821,7 +945,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 12 : 12,
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 35 : 35,
+    marginTop: 35,
   },
   backButton: {
     padding: 5,
@@ -997,6 +1122,113 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 10,
     fontFamily: 'Montserrat-Bold',
+  },
+  // Styles MamboPay améliorés
+  mambopayContainer: {
+    marginTop: 20,
+  },
+  voucherSection: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  voucherHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  voucherTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginLeft: 12,
+    fontFamily: 'Montserrat-Bold',
+  },
+  voucherInputContainer: {
+    position: 'relative',
+    marginBottom: 12,
+  },
+  voucherInput: {
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    padding: 16,
+    paddingRight: 50,
+    fontSize: 16,
+    fontFamily: 'Montserrat-Medium',
+    backgroundColor: '#FAFAFA',
+    color: '#333',
+    letterSpacing: 1,
+  },
+  voucherInputFocused: {
+    borderColor: '#FF9800',
+    backgroundColor: '#FFF8E1',
+    shadowColor: '#FF9800',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  voucherIconContainer: {
+    position: 'absolute',
+    right: 16,
+    top: '50%',
+    transform: [{ translateY: -10 }],
+  },
+  voucherHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  voucherHintText: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 6,
+    fontFamily: 'Montserrat',
+  },
+  voucherHintValid: {
+    color: '#4CAF50',
+    fontWeight: '500',
+  },
+  mambopayInfoCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#2E7D32',
+    marginLeft: 8,
+    fontFamily: 'Montserrat-Bold',
+  },
+  infoDescription: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+    fontFamily: 'Montserrat',
+  },
+  characterCounter: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+  },
+  characterCounterText: {
+    fontSize: 12,
+    color: '#999',
+    fontFamily: 'Montserrat',
   },
 });
 

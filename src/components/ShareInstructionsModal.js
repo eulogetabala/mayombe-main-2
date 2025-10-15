@@ -20,56 +20,41 @@ const ShareInstructionsModal = ({ visible, onClose, cartItems, sharedCartId }) =
   };
 
   const handleShareWhatsApp = () => {
-    const cartSummary = cartItems.map(item => `• ${item.name} (${item.quantity}x)`).join('\n');
     const totalAmount = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
     
-    const message = `🛒 Mon panier Mayombe
-
-${cartSummary}
+    const message = `🛒 Panier Mayombe à payer
 
 💰 Total: ${totalAmount.toLocaleString()} FCFA
+🆔 ID: ${sharedCartId}
 
-📱 Pour payer ce panier :
-1. Téléchargez l'app Mayombe
-2. Ouvrez l'app et cliquez sur "Panier partagé"
-3. Entrez l'ID: ${sharedCartId}
-4. Cliquez sur "Payer maintenant" pour régler directement
-
-💳 Paiement sécurisé par MTN Money, Airtel Money ou carte bancaire
-
-#Mayombe #Livraison #Congo`;
+📱 Téléchargez l'app Mayombe → Panier partagé → Entrez l'ID → Payer`;
 
     Share.share({
       message: message,
-      title: 'Mon panier Mayombe'
+      title: 'Panier Mayombe'
     });
   };
 
   const handlePayViaWhatsApp = () => {
-    const cartSummary = cartItems.map(item => `• ${item.name} (${item.quantity}x)`).join('\n');
     const totalAmount = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
     
-    const message = `Bonjour ! Je souhaite payer un panier partagé Mayombe.
-
-🛒 Détails du panier :
-${cartSummary}
+    const message = `Bonjour ! Je souhaite payer un panier Mayombe.
 
 💰 Total: ${totalAmount.toLocaleString()} FCFA
-🆔 ID du panier: ${sharedCartId}
+🆔 ID: ${sharedCartId}
 
 Pouvez-vous m'aider à finaliser le paiement ?`;
 
     Share.share({
       message: message,
-      title: 'Paiement panier partagé'
+      title: 'Paiement panier'
     });
   };
 
   const handleShareSMS = () => {
-    const cartSummary = cartItems.map(item => `• ${item.name} (${item.quantity}x)`).join('\n');
     const totalAmount = cartItems.reduce((sum, item) => sum + (item.total || 0), 0);
     
-    const message = `Mon panier Mayombe: ${cartSummary} - Total: ${totalAmount.toLocaleString()} FCFA. ID: ${sharedCartId}. Téléchargez l'app Mayombe et cliquez sur "Panier partagé" puis "Payer maintenant".`;
+    const message = `Panier Mayombe - Total: ${totalAmount.toLocaleString()} FCFA - ID: ${sharedCartId} - Téléchargez l'app Mayombe → Panier partagé → Payer`;
     
     Share.share({
       message: message,
@@ -98,13 +83,6 @@ Pouvez-vous m'aider à finaliser le paiement ?`;
           </View>
 
           <ScrollView style={styles.content}>
-            <View style={styles.infoSection}>
-              <Ionicons name="information-circle" size={24} color="#FF9800" />
-              <Text style={styles.infoText}>
-                Le lien web n'est pas accessible pour le moment. Utilisez une de ces méthodes :
-              </Text>
-            </View>
-
             <View style={styles.cartSummary}>
               <Text style={styles.summaryTitle}>Résumé du panier :</Text>
               {cartItems.map((item, index) => (
@@ -135,33 +113,22 @@ Pouvez-vous m'aider à finaliser le paiement ?`;
             </View>
 
             <View style={styles.instructionsSection}>
-              <Text style={styles.instructionsTitle}>Instructions pour le destinataire :</Text>
+              <Text style={styles.instructionsTitle}>Instructions :</Text>
               <View style={styles.instructionItem}>
                 <Ionicons name="download" size={16} color="#FF9800" />
-                <Text style={styles.instructionText}>Téléchargez l'app Mayombe depuis le Play Store</Text>
+                <Text style={styles.instructionText}>Téléchargez l'app Mayombe</Text>
               </View>
               <View style={styles.instructionItem}>
                 <Ionicons name="share" size={16} color="#FF9800" />
-                <Text style={styles.instructionText}>Ouvrez l'app et cliquez sur "Panier partagé"</Text>
+                <Text style={styles.instructionText}>Cliquez sur "Panier partagé"</Text>
               </View>
               <View style={styles.instructionItem}>
                 <Ionicons name="key" size={16} color="#FF9800" />
-                <Text style={styles.instructionText}>Entrez l'ID du panier : {sharedCartId}</Text>
+                <Text style={styles.instructionText}>Entrez l'ID : {sharedCartId}</Text>
               </View>
               <View style={styles.instructionItem}>
                 <Ionicons name="card" size={16} color="#FF9800" />
-                <Text style={styles.instructionText}>Cliquez sur "Payer maintenant" pour régler directement</Text>
-              </View>
-              <View style={styles.instructionItem}>
-                <Ionicons name="shield-checkmark" size={16} color="#FF9800" />
-                <Text style={styles.instructionText}>Paiement sécurisé par MTN Money, Airtel Money ou carte bancaire</Text>
-              </View>
-              
-              <View style={styles.alternativeSection}>
-                <Text style={styles.alternativeTitle}>💡 Alternative sans inscription :</Text>
-                <Text style={styles.alternativeText}>
-                  Si vous ne voulez pas télécharger l'app, vous pouvez payer directement via WhatsApp en contactant notre service client avec l'ID : {sharedCartId}
-                </Text>
+                <Text style={styles.instructionText}>Cliquez sur "Payer maintenant"</Text>
               </View>
             </View>
 

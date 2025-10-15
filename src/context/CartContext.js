@@ -16,6 +16,21 @@ export const CartProvider = ({ children }) => {
     loadCartFromStorage();
   }, []);
 
+  // Protection contre le vidage accidentel du panier
+  useEffect(() => {
+    const handleBeforeRemove = () => {
+      console.log('🛡️ Protection du panier - sauvegarde avant navigation');
+      if (cartItems.length > 0) {
+        saveCartToStorage();
+      }
+    };
+
+    // Écouter les changements de navigation pour protéger le panier
+    return () => {
+      handleBeforeRemove();
+    };
+  }, [cartItems]);
+
   // Sauvegarder le panier dans le stockage local
   useEffect(() => {
     saveCartToStorage();
@@ -25,18 +40,25 @@ export const CartProvider = ({ children }) => {
     try {
       const storedCart = await AsyncStorage.getItem('cart');
       if (storedCart) {
-        setCartItems(JSON.parse(storedCart));
+        const parsedCart = JSON.parse(storedCart);
+        console.log('📦 Chargement du panier depuis le stockage:', parsedCart.length, 'articles');
+        setCartItems(parsedCart);
+      } else {
+        console.log('📦 Aucun panier trouvé dans le stockage');
       }
     } catch (error) {
-      console.error('Erreur lors du chargement du panier:', error);
+      console.error('❌ Erreur lors du chargement du panier:', error);
     }
   };
 
   const saveCartToStorage = async () => {
     try {
-      await AsyncStorage.setItem('cart', JSON.stringify(cartItems));
+      if (cartItems.length > 0) {
+        console.log('💾 Sauvegarde du panier:', cartItems.length, 'articles');
+        await AsyncStorage.setItem('cart', JSON.stringify(cartItems));
+      }
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde du panier:', error);
+      console.error('❌ Erreur lors de la sauvegarde du panier:', error);
     }
   };
 
@@ -164,10 +186,13 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = async () => {
     try {
+      console.log('🧹 clearCart appelé - suppression du panier');
+      console.log('📦 Panier avant suppression:', cartItems.length, 'articles');
       await AsyncStorage.removeItem('cart');
       setCartItems([]);
+      console.log('✅ Panier vidé avec succès');
     } catch (error) {
-      console.error('Erreur lors de la suppression du panier:', error);
+      console.error('❌ Erreur lors de la suppression du panier:', error);
     }
   };
 
@@ -181,14 +206,21 @@ export const CartProvider = ({ children }) => {
   };
 
   const completeOrder = () => {
+    console.log('✅ completeOrder appelé - finalisation de la commande');
     setOrderInProgress(false);
     setPendingOrder(null);
     clearCart();
   };
 
   const cancelOrder = () => {
+    console.log('❌ cancelOrder appelé - annulation de la commande');
     setOrderInProgress(false);
     setPendingOrder(null);
+  };
+
+  const reloadCartFromStorage = async () => {
+    console.log('🔄 Rechargement forcé du panier depuis le stockage');
+    await loadCartFromStorage();
   };
 
   const value = {
@@ -203,7 +235,8 @@ export const CartProvider = ({ children }) => {
     pendingOrder,
     startOrder,
     completeOrder,
-    cancelOrder
+    cancelOrder,
+    reloadCartFromStorage
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

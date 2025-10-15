@@ -11,6 +11,7 @@ import { getDistanceToRestaurant, formatDistance, getCurrentLocation } from '../
 import CustomHeader from '../components/common/CustomHeader';
 import ShareInstructionsModal from '../components/ShareInstructionsModal';
 import FirebaseTrackingService from '../services/firebase';
+import sharedCartService from '../services/sharedCartService';
 import { CartSkeleton } from '../components/Skeletons';
 
 
@@ -493,30 +494,29 @@ const CartScreen = ({ navigation, route }) => {
       setCurrentSharedCartId(sharedCartId);
       
       // Préparer les données du panier pour le stockage
-      const cartData = {
-        items: cartItems.map(item => {
-          const isMenu = item.type === 'menu';
-          return {
-            id: item.id,
-            type: isMenu ? 'menu' : 'product',
-            menu_id: isMenu ? item.id : null,
-            product_id: !isMenu ? item.id : null,
-            quantity: item.quantity,
-            price_at_order: formatPrice(item.unitPrice),
-            name: item.name,
-            unitPrice: item.unitPrice,
-            total: item.total,
-            imageUrl: item.imageUrl,
-            cover: item.cover,
-            complements: item.complements || []
-          };
-        }),
-        createdAt: Date.now(),
-        expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000) // 7 jours
-      };
+      const cartData = cartItems.map(item => {
+        const isMenu = item.type === 'menu';
+        return {
+          id: item.id,
+          type: isMenu ? 'menu' : 'product',
+          menu_id: isMenu ? item.id : null,
+          product_id: !isMenu ? item.id : null,
+          quantity: item.quantity,
+          price_at_order: formatPrice(item.unitPrice),
+          name: item.name,
+          unitPrice: item.unitPrice,
+          total: item.total,
+          imageUrl: item.imageUrl,
+          cover: item.cover,
+          complements: item.complements || []
+        };
+      });
 
       // Sauvegarder le panier partagé dans le stockage local
       await AsyncStorage.setItem(`shared_cart_${sharedCartId}`, JSON.stringify(cartData));
+      
+      // Sauvegarder le panier partagé sur Firebase
+      await sharedCartService.saveSharedCart(sharedCartId, cartData, 24); // Expire dans 24h
       
       // Essayer de partager via le système normal
       try {

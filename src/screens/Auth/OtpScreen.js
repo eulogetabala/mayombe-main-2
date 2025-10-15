@@ -45,11 +45,12 @@ const formatPhoneNumber = (phone) => {
 export default function OtpScreen({ navigation, route }) {
   const rawPhoneNumber = route?.params?.phoneNumber || 'Numéro inconnu';
   const phoneNumber = formatPhoneNumber(rawPhoneNumber);
-  const { updateAuthStatus } = useAuth();
+  const { login } = useAuth();
 
   const [otp, setOtp] = useState(['', '', '', '']); // 4 champs pour OTP
   const [timer, setTimer] = useState(300); // Timer pour le renvoi (5 minutes)
   const [isResending, setIsResending] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // Éviter les appels multiples
   const inputRefs = useRef([]);
 
   useEffect(() => {
@@ -58,6 +59,31 @@ export default function OtpScreen({ navigation, route }) {
       return () => clearInterval(interval);
     }
   }, [timer]);
+
+  // Effet pour surveiller les changements d'OTP et déclencher l'activation automatique
+  useEffect(() => {
+    const completeOtp = otp.join('');
+    const isComplete = otp.every(digit => digit !== '');
+    
+    console.log('🔍 useEffect OTP:', { 
+      otp, 
+      completeOtp, 
+      length: completeOtp.length,
+      isComplete,
+      isProcessing
+    });
+    
+    // Si tous les 4 chiffres sont saisis et qu'aucun traitement n'est en cours
+    if (isComplete && completeOtp.length === 4 && !isProcessing) {
+      console.log('🚀 useEffect: Activation automatique déclenchée');
+      // Petit délai pour éviter les conflits
+      setTimeout(() => {
+        if (!isProcessing) {
+          handleActivateAccount();
+        }
+      }, 1000);
+    }
+  }, [otp, isProcessing]);
 
   const handleInputChange = (text, index) => {
     // Accepter uniquement les chiffres
@@ -74,27 +100,55 @@ export default function OtpScreen({ navigation, route }) {
       inputRefs.current[index - 1]?.focus();
     }
 
-    // Vérification automatique quand tous les 4 chiffres sont saisis
-    if (text && index === otp.length - 1) {
-      const completeOtp = newOtp.join('');
-      if (completeOtp.length === 4) {
-        // Attendre un peu pour que l'utilisateur voie le dernier chiffre
-        setTimeout(() => {
-          handleActivateAccount();
-        }, 500);
-      }
-    }
+    // L'activation automatique est maintenant gérée par useEffect
+    // Pas besoin de logique ici, le useEffect se déclenchera automatiquement
   };
 
   const handleActivateAccount = async () => {
-    const enteredOtp = otp.join('');
-    if (enteredOtp.length < 4) {
+    // Éviter les appels multiples
+    if (isProcessing) {
+      console.log('⚠️ Activation déjà en cours, ignoré');
+      return;
+    }
+
+    // Utiliser une fonction pour obtenir l'état le plus récent
+    const getCurrentOtp = () => {
+      const currentOtp = otp.join('');
+      const isComplete = otp.every(digit => digit !== '');
+      return { currentOtp, isComplete, otpArray: otp };
+    };
+
+    const { currentOtp, isComplete, otpArray } = getCurrentOtp();
+    console.log('🔍 Validation OTP:', { 
+      currentOtp, 
+      length: currentOtp.length, 
+      isComplete,
+      otpArray 
+    });
+    
+    // Vérifier que tous les champs sont remplis
+    if (!isComplete || currentOtp.length < 4) {
+      console.log('❌ OTP incomplet:', { isComplete, length: currentOtp.length, otpArray });
       Alert.alert('Erreur', 'Veuillez entrer un code OTP complet.');
       return;
     }
 
+    setIsProcessing(true);
+
     try {
-      console.log('Tentative d\'activation avec le numéro:', phoneNumber);
+      console.log('🔍 Tentative d\'activation avec:', {
+        phone: phoneNumber,
+        otp: currentOtp,
+        otpLength: currentOtp.length
+      });
+
+      const requestBody = { 
+        otp: currentOtp,
+        phone: phoneNumber
+      };
+
+      console.log('📤 Corps de la requête:', requestBody);
+
       const response = await fetch(
         'https://www.api-mayombe.mayombe-app.com/public/api/activate-account',
         {
@@ -103,40 +157,84 @@ export default function OtpScreen({ navigation, route }) {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
           },
-          body: JSON.stringify({ 
-            otp: enteredOtp,
-            phone: phoneNumber
-          }),
+          body: JSON.stringify(requestBody),
         }
       );
 
       const data = await response.json();
-      console.log('Réponse activation:', data);
+      console.log('📥 Réponse activation complète:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: data,
+        hasToken: !!data.token,
+        tokenType: typeof data.token,
+        tokenValue: data.token
+      });
 
+      // Vérifier si l'activation a réussi
       if (response.ok) {
-        // Vérifier si l'API retourne un token
-        if (data.token) {
-          console.log('✅ Token reçu lors de l\'activation, sauvegarde...');
-          await AsyncStorage.setItem('userToken', data.token);
-          // Mettre à jour l'état d'authentification
-          await updateAuthStatus();
-        } else {
-          console.log('⚠️ Aucun token reçu lors de l\'activation');
-        }
+        // Succès - redirection vers login
+        console.log('✅ Compte activé avec succès');
         
-        // Redirection automatique sans Alert bloquant
-        console.log('Compte activé avec succès, redirection vers MainApp...');
+        console.log('Compte activé avec succès, redirection vers Login...');
         navigation.reset({
           index: 0,
-          routes: [{ name: 'MainApp' }],
+          routes: [{ name: 'Login' }],
         });
       } else {
-        console.error('Erreur activation:', data);
+        // Gestion des erreurs - vérifier si c'est un faux positif
+        console.log('⚠️ API retourne une erreur, mais vérifions si le compte est activé...');
+        
+        // Attendre un peu pour que l'activation se propage
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Essayer de se connecter pour vérifier si le compte est vraiment activé
+        try {
+          const loginResponse = await fetch(
+            'https://www.api-mayombe.mayombe-app.com/public/api/login',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+              },
+              body: JSON.stringify({
+                phone: phoneNumber,
+                password: '123456' // Mot de passe par défaut après activation
+              }),
+            }
+          );
+          
+          const loginData = await loginResponse.json();
+          console.log('🔍 Test de connexion après erreur OTP:', {
+            status: loginResponse.status,
+            data: loginData
+          });
+          
+          // Si la connexion fonctionne, c'est que le compte est activé
+          if (loginResponse.ok && loginData.token) {
+            console.log('✅ Compte activé malgré l\'erreur OTP, redirection...');
+            await login(loginData.token);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'MainApp' }],
+            });
+            return;
+          }
+        } catch (loginError) {
+          console.log('❌ Test de connexion échoué:', loginError);
+        }
+        
+        // Si on arrive ici, il y a vraiment une erreur
+        console.error('❌ Erreur activation:', data);
         Alert.alert('Erreur', data.message || 'Code OTP invalide ou expiré.');
       }
     } catch (error) {
-      console.error('Erreur activation:', error);
+      console.error('❌ Erreur activation:', error);
       Alert.alert('Erreur', 'Impossible de se connecter au serveur.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -225,8 +323,14 @@ export default function OtpScreen({ navigation, route }) {
         </TouchableOpacity>
       )}
 
-      <TouchableOpacity style={styles.continueButton} onPress={handleActivateAccount}>
-        <Text style={styles.continueButtonText}>Continuer</Text>
+      <TouchableOpacity 
+        style={[styles.continueButton, isProcessing && styles.disabledButton]} 
+        onPress={handleActivateAccount}
+        disabled={isProcessing}
+      >
+        <Text style={styles.continueButtonText}>
+          {isProcessing ? 'Traitement...' : 'Continuer'}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -319,5 +423,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFF',
     fontWeight: 'bold',
+  },
+  disabledButton: {
+    backgroundColor: '#CCCCCC',
+    opacity: 0.6,
   },
 });

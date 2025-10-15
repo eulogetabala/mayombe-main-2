@@ -37,13 +37,38 @@ const HeaderSection = ({ navigation }) => {
   const [searching, setSearching] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productModalVisible, setProductModalVisible] = useState(false);
+  const [searchHistory, setSearchHistory] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
   const [showLocationModal, setShowLocationModal] = useState(false);
 
 
   // Charger l'historique de recherche au montage
+  useEffect(() => {
+    loadSearchHistory();
+  }, []);
 
+  const loadSearchHistory = async () => {
+    try {
+      const history = await AsyncStorage.getItem('searchHistory');
+      if (history) {
+        setSearchHistory(JSON.parse(history));
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement de l\'historique de recherche:', error);
+    }
+  };
+
+  const saveSearchHistory = async (searchTerm) => {
+    try {
+      const newHistory = [searchTerm, ...searchHistory.filter(item => item !== searchTerm)].slice(0, 10);
+      setSearchHistory(newHistory);
+      await AsyncStorage.setItem('searchHistory', JSON.stringify(newHistory));
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde de l\'historique de recherche:', error);
+    }
+  };
 
   useEffect(() => {
     const initializeLocation = async () => {
@@ -132,31 +157,27 @@ const HeaderSection = ({ navigation }) => {
   }, 0) || 0;
 
   const handleSearch = async (text) => {
+    console.log("🔍 Recherche déclenchée avec:", text);
     setSearch(text);
     
     if (text.length === 0) {
+      console.log("❌ Texte vide, masquage des modals");
       setSearchResults([]);
       setShowSearchModal(false);
-      setShowSuggestions(true);
-      return;
-    }
-    
-    // Pas de suggestions du tout - seulement la recherche à partir de 2 caractères
-    if (text.length < 2) {
       setShowSuggestions(false);
-      setShowSearchModal(false);
       return;
     }
     
-    // Recherche directe à partir de 2 caractères
+    // Recherche immédiate dès qu'on tape quelque chose
+    console.log("🔎 Recherche API pour:", text);
     setShowSuggestions(false);
-    setShowSearchModal(false);
-    
-    // Recherche immédiate pour 2+ caractères
     setSearching(true);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/products-list?search=${encodeURIComponent(text)}`, {
+      const url = `${API_BASE_URL}/products-list?search=${encodeURIComponent(text)}`;
+      console.log("🌐 URL de recherche:", url);
+      
+      const response = await fetch(url, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -164,11 +185,15 @@ const HeaderSection = ({ navigation }) => {
         },
       });
 
+      console.log("📡 Réponse HTTP:", response.status, response.ok);
+
       if (!response.ok) {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log("📦 Données reçues:", data);
+      console.log("📊 Type de données:", typeof data, "Est un tableau:", Array.isArray(data));
 
       if (!Array.isArray(data)) {
         throw new Error("Format de données incorrect, un tableau est attendu.");
@@ -177,23 +202,40 @@ const HeaderSection = ({ navigation }) => {
       // Filtrer et reformater les résultats
       const filteredResults = data
         .filter(item => {
-          const itemName = item.libelle || item.name || "";
-          return typeof itemName === 'string' && itemName.toLowerCase().includes(text.toLowerCase());
+          const itemName = item.name || item.libelle || "";
+          const matches = typeof itemName === 'string' && itemName.toLowerCase().includes(text.toLowerCase());
+          console.log("🔍 Item:", itemName, "Match:", matches);
+          return matches;
         })
-        .map(item => ({
-          id: item.id || 0,
-          name: String(item.libelle || item.name || "Produit sans nom"),
-          price: item.price ? `${String(item.price)} FCFA` : "Prix non disponible",
-          description: String(item.desc || "Aucune description"),
-          image: item.image_url ? { uri: String(item.image_url) } : require("../../../assets/images/2.jpg"),
-          category: String(item.category || "Produit"),
-          rating: item.rating ? String(item.rating) : null,
-        }));
+        .map(item => {
+          // S'assurer que toutes les valeurs sont correctement formatées
+          const cleanItem = {
+            id: parseInt(item.id) || 0,
+            name: String(item.name || item.libelle || "Produit sans nom").trim(),
+            price: item.price ? `${String(item.price).trim()} FCFA` : "Prix non disponible",
+            description: String(item.desc || item.description || "Aucune description").trim(),
+            image: item.image_url ? { uri: `https://www.mayombe-app.com/uploads_admin/${String(item.image_url).trim()}` } : require("../../../assets/images/2.jpg"),
+            category: String(item.category?.libelle || item.category || "Produit").trim(),
+            rating: item.rating ? String(item.rating).trim() : null,
+          };
+          
+          // Validation supplémentaire pour éviter les valeurs [object Object]
+          Object.keys(cleanItem).forEach(key => {
+            if (typeof cleanItem[key] === 'string' && cleanItem[key].includes('[object Object]')) {
+              cleanItem[key] = "Donnée non disponible";
+            }
+          });
+          
+          return cleanItem;
+        });
+
+      console.log("✅ Résultats filtrés:", filteredResults.length, "produits");
+      console.log("📋 Détails des résultats:", filteredResults);
 
       setSearchResults(filteredResults);
       setShowSearchModal(true);
     } catch (error) {
-      console.error("Erreur lors de la recherche :", error);
+      console.error("❌ Erreur lors de la recherche :", error);
       setSearchResults([]);
       Toast.show({
         type: "error",
@@ -212,17 +254,39 @@ const HeaderSection = ({ navigation }) => {
     setSearch('');
     setSelectedProduct(item);
     setProductModalVisible(true);
+    // Sauvegarder dans l'historique
+    saveSearchHistory(item.name);
+  };
+
+  const handleSuggestionPress = (suggestion) => {
+    setSearch(suggestion);
+    setShowSuggestions(false);
+    // Déclencher la recherche avec la suggestion
+    handleSearch(suggestion);
+  };
+
+  const closeSearchModal = () => {
+    console.log("🔴 Fermeture du modal de recherche");
+    setShowSearchModal(false);
+    setSearch('');
+    setSearchResults([]);
   };
 
 
 
   const renderSearchResult = ({ item }) => {
-    // S'assurer que toutes les valeurs sont des chaînes
-    const safeName = String(item.name || "Produit sans nom");
-    const safePrice = String(item.price || "Prix non disponible");
-    const safeDescription = String(item.description || "Aucune description");
-    const safeCategory = String(item.category || "Produit");
-    const safeRating = item.rating ? String(item.rating) : null;
+    // S'assurer que toutes les valeurs sont des chaînes et nettoyer les données
+    const safeName = String(item.name || "Produit sans nom").trim();
+    const safePrice = String(item.price || "Prix non disponible").trim();
+    const safeDescription = String(item.description || "Aucune description").trim();
+    const safeCategory = String(item.category || "Produit").trim();
+    const safeRating = item.rating ? String(item.rating).trim() : null;
+
+    // Vérifier et corriger les valeurs [object Object]
+    const cleanName = safeName.includes('[object Object]') ? "Produit sans nom" : safeName;
+    const cleanPrice = safePrice.includes('[object Object]') ? "Prix non disponible" : safePrice;
+    const cleanDescription = safeDescription.includes('[object Object]') ? "Aucune description" : safeDescription;
+    const cleanCategory = safeCategory.includes('[object Object]') ? "Produit" : safeCategory;
 
     return (
       <TouchableOpacity
@@ -230,21 +294,27 @@ const HeaderSection = ({ navigation }) => {
         onPress={() => handleSearchItemPress(item)}
       >
         <View style={styles.searchResultImageContainer}>
-          <Image source={item.image} style={styles.searchResultImage} />
-
+          <Image 
+            source={item.image || require("../../../assets/images/2.jpg")} 
+            style={styles.searchResultImage}
+            onError={() => {
+              // En cas d'erreur d'image, utiliser l'image par défaut
+              item.image = require("../../../assets/images/2.jpg");
+            }}
+          />
         </View>
         <View style={styles.searchResultText}>
           <View style={styles.searchResultHeader}>
             <Text style={styles.searchResultTitle} numberOfLines={1}>
-              {safeName}
+              {cleanName}
             </Text>
             <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{safeCategory}</Text>
+              <Text style={styles.categoryText}>{cleanCategory}</Text>
             </View>
           </View>
-          <Text style={styles.searchResultPrice}>{safePrice}</Text>
+          <Text style={styles.searchResultPrice}>{cleanPrice}</Text>
           <Text style={styles.searchResultDescription} numberOfLines={2}>
-            {safeDescription}
+            {cleanDescription}
           </Text>
         </View>
         <View style={styles.searchResultActions}>
@@ -352,7 +422,7 @@ const HeaderSection = ({ navigation }) => {
               <TouchableOpacity 
                 onPress={() => {
                   setSearch('');
-                  setShowSearchModal(false);
+                  closeSearchModal();
                 }}
                 style={styles.clearButton}
               >
@@ -366,17 +436,19 @@ const HeaderSection = ({ navigation }) => {
         </View>
       </LinearGradient>
 
-      {/* Modal de recherche uniquement */}
+      {/* Modal de recherche et suggestions */}
       <Modal
         visible={showSearchModal}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          setShowSearchModal(false);
-        }}
+        onRequestClose={closeSearchModal}
       >
+        {console.log("🎭 Modal visible:", showSearchModal, "searching:", searching, "results:", searchResults.length)}
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
+            {/* Poignée pour indiquer qu'on peut glisser */}
+            <View style={styles.modalHandle} />
+            
             {/* Header du modal */}
             <View style={styles.searchModalHeader}>
               <Text style={styles.searchModalTitle}>
@@ -391,28 +463,32 @@ const HeaderSection = ({ navigation }) => {
               </View>
             ) : (
               // Affichage des résultats de recherche
-              <FlatList
-                data={searchResults}
-                renderItem={renderSearchResult}
-                keyExtractor={(item) => item.id.toString()}
-                ListEmptyComponent={
-                  <View style={styles.emptyResultContainer}>
-                    <Ionicons name="search-outline" size={50} color="#ccc" />
-                    <Text style={styles.noResults}>Aucun résultat trouvé</Text>
-                    <Text style={styles.noResultsSubtext}>
-                      Essayez avec d'autres mots-clés
-                    </Text>
-                  </View>
-                }
-                contentContainerStyle={styles.searchResultsList}
-                showsVerticalScrollIndicator={false}
-              />
+              (() => {
+                console.log("🔍 Affichage résultats - Nombre de résultats:", searchResults.length);
+                console.log("🔍 Résultats à afficher:", searchResults);
+                return (
+                  <FlatList
+                    data={searchResults}
+                    renderItem={renderSearchResult}
+                    keyExtractor={(item) => item.id.toString()}
+                    ListEmptyComponent={
+                      <View style={styles.emptyResultContainer}>
+                        <Ionicons name="search-outline" size={50} color="#ccc" />
+                        <Text style={styles.noResults}>Aucun résultat trouvé</Text>
+                        <Text style={styles.noResultsSubtext}>
+                          Essayez avec d'autres mots-clés
+                        </Text>
+                      </View>
+                    }
+                    contentContainerStyle={styles.searchResultsList}
+                    showsVerticalScrollIndicator={false}
+                  />
+                );
+              })()
             )}
             
             <TouchableOpacity 
-              onPress={() => {
-                setShowSearchModal(false);
-              }} 
+              onPress={closeSearchModal}
               style={styles.closeButton}
             >
               <Text style={styles.closeButtonText}>Fermer</Text>
@@ -560,14 +636,24 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    width: '80%',
+    width: '100%',
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: 20,
+    maxHeight: '70%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#ddd',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 15,
   },
   modalIcon: {
     marginBottom: 20,
@@ -643,6 +729,22 @@ const styles = StyleSheet.create({
 
   searchResultsList: {
     paddingHorizontal: 15,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#fff',
+    marginVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  suggestionText: {
+    marginLeft: 10,
+    fontSize: 16,
+    fontFamily: 'Montserrat-Regular',
+    color: '#333',
   },
   searchResultItem: {
     flexDirection: 'row',

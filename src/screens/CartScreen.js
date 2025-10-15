@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, SafeAreaView, ScrollView, Platform, StatusBar, Alert, ActivityIndicator, Dimensions, RefreshControl, Clipboard, Share } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
@@ -19,7 +20,7 @@ const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const { width, height } = Dimensions.get('window');
 
 const CartScreen = ({ navigation, route }) => {
-  const { cartItems, setCartItems, removeFromCart, updateQuantity, calculateCartTotal } = useCart();
+  const { cartItems, setCartItems, removeFromCart, updateQuantity, calculateCartTotal, reloadCartFromStorage } = useCart();
   const { currentLanguage } = useLanguage();
   const { getCurrentUser } = useAuth();
   const t = translations[currentLanguage];
@@ -42,6 +43,16 @@ const CartScreen = ({ navigation, route }) => {
     });
     return unsubscribe;
   }, []);
+
+  // Recharger le panier depuis le stockage quand on revient sur l'écran
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 Focus sur CartScreen - rechargement du panier');
+      if (reloadCartFromStorage) {
+        reloadCartFromStorage();
+      }
+    }, [])
+  );
 
   useEffect(() => {
     const total = calculateCartTotal();
@@ -199,17 +210,23 @@ const CartScreen = ({ navigation, route }) => {
   };
 
   const createOrder = async () => {
+    console.log('🛒 createOrder appelé - début de la fonction');
+    console.log('📦 Nombre d\'articles dans le panier:', cartItems.length);
+    
     if (cartItems.length === 0) {
+      console.log('❌ Panier vide - arrêt de la fonction');
       Alert.alert("Erreur", "Votre panier est vide");
       return;
     }
 
+    console.log('✅ Panier non vide - début du processus de commande');
     setIsSubmitting(true);
 
     try {
       const userToken = await AsyncStorage.getItem('userToken');
+      const isGuest = await AsyncStorage.getItem('isGuest');
       
-      if (!userToken) {
+      if (!userToken && !isGuest) {
         Alert.alert(
           "Connexion requise",
           "Vous devez être connecté pour passer une commande",
@@ -218,6 +235,26 @@ const CartScreen = ({ navigation, route }) => {
             { 
               text: "Se connecter", 
               onPress: () => navigation.navigate('Login', { returnToCart: true })
+            }
+          ]
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (isGuest) {
+        Alert.alert(
+          "Connexion requise",
+          "Pour passer une commande, vous devez créer un compte ou vous connecter",
+          [
+            { text: "Annuler", style: "cancel" },
+            { 
+              text: "Se connecter", 
+              onPress: () => navigation.navigate('Login', { returnToCart: true })
+            },
+            { 
+              text: "Créer un compte", 
+              onPress: () => navigation.navigate('Register', { returnToCart: true })
             }
           ]
         );
@@ -713,7 +750,10 @@ const CartScreen = ({ navigation, route }) => {
                           styles.checkoutButton,
                           isSubmitting && styles.disabledButton
                         ]}
-                        onPress={createOrder}
+                        onPress={() => {
+                          console.log('🔘 Bouton "Choisir le mode de paiement" cliqué');
+                          createOrder();
+                        }}
                         disabled={isSubmitting}
                       >
                         {isSubmitting ? (

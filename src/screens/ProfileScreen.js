@@ -6,6 +6,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { useFocusEffect } from '@react-navigation/native';
 import { ProfileSkeleton } from '../components/Skeletons';
+import { useAuth } from '../../contexts/AuthContext';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -18,22 +19,65 @@ const ProfileScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   const { currentLanguage, changeLanguage } = useLanguage();
+  const { logout } = useAuth();
   const t = translations[currentLanguage];
 
   // Recharger les données à chaque fois qu'on revient sur cet écran
   useFocusEffect(
     React.useCallback(() => {
       console.log('🔄 Focus sur ProfileScreen - Rechargement des données...');
-      loadUserData();
+      
+      // Vérifier d'abord le contexte d'authentification
+      const checkAuthAndLoad = async () => {
+        try {
+          const userToken = await AsyncStorage.getItem('userToken');
+          console.log('🔍 Vérification auth au focus:', { 
+            hasToken: !!userToken,
+            isAuthenticated: !!userToken
+          });
+          
+          if (userToken) {
+            loadUserData();
+          } else {
+            console.log('❌ Aucun token trouvé au focus, affichage non connecté');
+            setUserData({
+              name: 'Non connecté',
+              phone: 'Non disponible',
+              email: 'Non disponible',
+            });
+            setIsLoading(false); // Arrêter le chargement
+          }
+        } catch (error) {
+          console.error('❌ Erreur vérification auth:', error);
+          setIsLoading(false); // Arrêter le chargement en cas d'erreur
+        }
+      };
+      
+      checkAuthAndLoad();
     }, [])
   );
 
-  const loadUserData = async () => {
+  const loadUserData = async (retryCount = 0) => {
     try {
       setIsLoading(true);
+      
+      // Vérifier le token avec plus de détails
       const userToken = await AsyncStorage.getItem('userToken');
+      console.log('🔍 Vérification du token:', { 
+        hasToken: !!userToken, 
+        tokenLength: userToken?.length,
+        tokenPreview: userToken ? userToken.substring(0, 20) + '...' : 'null'
+      });
+      
       if (userToken) {
-        console.log('🔄 Rechargement des données utilisateur...');
+        console.log(`🔄 Rechargement des données utilisateur... (tentative ${retryCount + 1})`);
+        
+        // Attendre un peu plus longtemps pour les nouvelles activations
+        if (retryCount === 0) {
+          console.log('⏳ Attente initiale de 3 secondes pour la synchronisation...');
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+        
         const response = await fetch(`${API_BASE_URL}/user`, {
           headers: {
             'Authorization': `Bearer ${userToken}`,
@@ -49,10 +93,49 @@ const ProfileScreen = ({ navigation }) => {
 
         const data = await response.json();
         console.log('✅ Données utilisateur reçues:', data);
-        setUserData(data);
+        
+        // Vérifier si les données sont complètes
+        if (data && data.name && data.phone && data.name !== 'Utilisateur') {
+          console.log('✅ Données complètes trouvées:', data);
+          setUserData(data);
+        } else if (retryCount < 5) {
+          // Augmenter le nombre de tentatives et les délais
+          const delay = (retryCount + 1) * 2000; // 2s, 4s, 6s, 8s, 10s
+          console.log(`⚠️ Données incomplètes (${data?.name || 'vide'}), nouvelle tentative dans ${delay/1000} secondes...`);
+          setTimeout(() => {
+            loadUserData(retryCount + 1);
+          }, delay);
+          return;
+        } else {
+          // Après 5 tentatives, utiliser les données partielles ou par défaut
+          console.log('⚠️ Après 5 tentatives, utilisation des données par défaut');
+          setUserData({
+            name: data?.name || 'Utilisateur non enregistré',
+            phone: data?.phone || 'Non renseigné',
+            email: data?.email || 'email@example.com',
+          });
+        }
+      } else {
+        console.log('❌ Aucun token utilisateur trouvé');
+        setUserData({
+          name: 'Non connecté',
+          phone: 'Non disponible',
+          email: 'Non disponible',
+        });
       }
     } catch (error) {
       console.error('❌ Erreur lors du chargement des données utilisateur:', error);
+      
+      // Si c'est une erreur de réseau ou serveur, réessayer
+      if (retryCount < 3) {
+        const delay = (retryCount + 1) * 3000; // 3s, 6s, 9s
+        console.log(`⚠️ Erreur réseau, nouvelle tentative dans ${delay/1000} secondes...`);
+        setTimeout(() => {
+          loadUserData(retryCount + 1);
+        }, delay);
+        return;
+      }
+      
       // Gérer l'erreur de manière appropriée
       setUserData({
         name: 'Erreur de chargement',
@@ -84,7 +167,8 @@ const ProfileScreen = ({ navigation }) => {
 
   const handleLogout = async () => {
     try {
-      await AsyncStorage.removeItem('userToken');
+      // Utiliser la fonction logout du contexte d'authentification
+      await logout();
       await AsyncStorage.removeItem('selectedLanguage');
       navigation.reset({
         index: 0,
@@ -93,6 +177,91 @@ const ProfileScreen = ({ navigation }) => {
     } catch (error) {
       console.error('Erreur lors de la déconnexion:', error);
     }
+  };
+
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      "Supprimer le compte",
+      "Êtes-vous sûr de vouloir supprimer définitivement votre compte ? Cette action est irréversible.",
+      [
+        {
+          text: "Annuler",
+          style: "cancel"
+        },
+        {
+          text: "Supprimer",
+          style: "destructive",
+          onPress: async () => {
+            // Confirmation supplémentaire
+            Alert.alert(
+              "Confirmation finale",
+              "Cette action supprimera définitivement votre compte et toutes vos données. Voulez-vous vraiment continuer ?",
+              [
+                {
+                  text: "Non, annuler",
+                  style: "cancel"
+                },
+                {
+                  text: "Oui, supprimer",
+                  style: "destructive",
+                  onPress: async () => {
+                    try {
+                      const userToken = await AsyncStorage.getItem('userToken');
+                      if (!userToken) {
+                        Alert.alert('Erreur', 'Vous devez être connecté pour supprimer votre compte');
+                        return;
+                      }
+
+                      console.log('🗑️ Suppression du compte utilisateur...');
+                      
+                      const response = await fetch(`${API_BASE_URL}/delete-account`, {
+                        method: 'DELETE',
+                        headers: {
+                          'Authorization': `Bearer ${userToken}`,
+                          'Accept': 'application/json',
+                          'Content-Type': 'application/json',
+                        },
+                      });
+
+                      const data = await response.json();
+                      console.log('📥 Réponse suppression compte:', data);
+
+                      if (response.ok) {
+                        // Supprimer toutes les données locales
+                        await AsyncStorage.removeItem('userToken');
+                        await AsyncStorage.removeItem('selectedLanguage');
+                        await AsyncStorage.removeItem('isGuest');
+                        
+                        Alert.alert(
+                          "Compte supprimé",
+                          "Votre compte a été supprimé avec succès.",
+                          [
+                            {
+                              text: "OK",
+                              onPress: () => {
+                                navigation.reset({
+                                  index: 0,
+                                  routes: [{ name: 'LanguageSelection' }],
+                                });
+                              }
+                            }
+                          ]
+                        );
+                      } else {
+                        Alert.alert('Erreur', data.message || 'Erreur lors de la suppression du compte');
+                      }
+                    } catch (error) {
+                      console.error('❌ Erreur lors de la suppression du compte:', error);
+                      Alert.alert('Erreur', 'Impossible de supprimer le compte. Veuillez réessayer.');
+                    }
+                  }
+                }
+              ]
+            );
+          }
+        }
+      ]
+    );
   };
 
   // Afficher le skeleton pendant le chargement
@@ -108,6 +277,15 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.headerTitle}>{t.profile.title}</Text>
             <Text style={styles.headerSubtitle}>Gérez votre profil et vos commandes</Text>
           </View>
+          <TouchableOpacity 
+            style={styles.refreshButton}
+            onPress={() => {
+              console.log('🔄 Rechargement manuel des données utilisateur...');
+              loadUserData();
+            }}
+          >
+            <Ionicons name="refresh" size={24} color="#FF9800" />
+          </TouchableOpacity>
         </View>
         <ScrollView style={styles.scrollView}>
 
@@ -123,6 +301,7 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.userEmail}>{userData.email}</Text>
             </View>
           </View>
+
 
           <View style={styles.menuSection}>
             {menuItems.map((item, index) => (
@@ -145,6 +324,13 @@ const ProfileScreen = ({ navigation }) => {
             onPress={handleLogout}
           >
             <Text style={styles.logoutText}>{t.profile.logout}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.deleteAccountButton} 
+            onPress={handleDeleteAccount}
+          >
+            <Text style={styles.deleteAccountText}>Supprimer le compte</Text>
           </TouchableOpacity>
 
           <Text style={styles.version}>Version 1.0.0</Text>
@@ -179,10 +365,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 5,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   headerContent: {
     alignItems: 'center',
+    flex: 1,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
   },
   headerTitle: {
     fontSize: 24,
@@ -290,6 +484,24 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   logoutText: {
+    color: '#fff',
+    fontSize: 16,
+    fontFamily: 'Montserrat-Bold',
+  },
+  deleteAccountButton: {
+    marginTop: 15,
+    marginHorizontal: 20,
+    backgroundColor: '#FF4444',
+    padding: 15,
+    borderRadius: 15,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  deleteAccountText: {
     color: '#fff',
     fontSize: 16,
     fontFamily: 'Montserrat-Bold',

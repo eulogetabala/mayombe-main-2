@@ -1,20 +1,19 @@
 import React from 'react';
-import { CartProvider } from '../context/CartContext';
+import { View, Text, StyleSheet } from 'react-native';
 import SharedCartScreen from './SharedCartScreen';
 
-/**
- * Wrapper pour SharedCartScreen qui fournit le contexte CartProvider
- * Ceci est nécessaire car SharedCartScreen est utilisé dans AppNavigator
- * qui n'a pas accès au CartProvider
- */
-const SharedCartScreenWrapper = (props) => {
+const SharedCartScreenWrapper = () => {
   return (
-    <CartProvider>
-      <SharedCartScreen {...props} />
-    </CartProvider>
+    <View style={styles.container}>
+      <SharedCartScreen />
+    </View>
   );
 };
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
+
 export default SharedCartScreenWrapper;
-
-

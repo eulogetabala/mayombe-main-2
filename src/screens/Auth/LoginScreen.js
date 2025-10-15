@@ -23,6 +23,7 @@ import CountryPicker, {
 import { useLanguage } from '../../context/LanguageContext';
 import { translations } from '../../translations';
 import { api } from '../../services/api';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState("");
@@ -33,6 +34,7 @@ const LoginScreen = ({ navigation }) => {
   const [callingCode, setCallingCode] = useState("242"); // Indicatif par défaut
 
   const { currentLanguage } = useLanguage();
+  const { setGuestMode, login } = useAuth();
   const t = translations[currentLanguage];
 
   useEffect(() => {
@@ -72,13 +74,21 @@ const LoginScreen = ({ navigation }) => {
 
     try {
       const fullPhone = `+${callingCode}${phone}`;
-      console.log("Tentative de connexion avec:", { phone: fullPhone, passwordLength: password.length });
+      console.log("Tentative de connexion avec:", { 
+        phone: fullPhone, 
+        passwordLength: password.length
+      });
       
       const result = await api.login(fullPhone, password);
       console.log("Résultat API login:", result);
 
       if (result.status === 200) {
-        await AsyncStorage.setItem("userToken", result.data.token);
+        // Utiliser la fonction login du contexte pour mettre à jour l'état d'authentification
+        await login(result.data.token);
+        
+        // Attendre un peu pour que le contexte se mette à jour
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         navigation.replace("MainApp");
       } else {
         const errorMessage = result.data.data?.erreur || result.data.message || "Échec de la connexion.";
@@ -92,6 +102,20 @@ const LoginScreen = ({ navigation }) => {
       setLoading(false);
     }
   };
+
+  const handleContinueAsGuest = async () => {
+    try {
+      // Utiliser le contexte d'authentification pour activer le mode invité
+      await setGuestMode();
+      
+      // Naviguer vers l'app principale
+      navigation.replace("MainApp");
+    } catch (error) {
+      console.error("Erreur lors de la continuation en tant qu'invité:", error);
+      Alert.alert("Erreur", "Une erreur est survenue. Veuillez réessayer.");
+    }
+  };
+
 
   const onSelectCountry = (country) => {
     setCountryCode(country.cca2);
@@ -215,8 +239,18 @@ const LoginScreen = ({ navigation }) => {
                 </TouchableOpacity>
               </Animatable.View>
 
-              {/* Lien mot de passe oublié */}
+              {/* Bouton continuer sans compte */}
               <Animatable.View animation="fadeInUp" delay={800}>
+                <TouchableOpacity
+                  style={styles.guestButton}
+                  onPress={handleContinueAsGuest}
+                >
+                  <Text style={styles.guestButtonText}>Continuer sans compte</Text>
+                </TouchableOpacity>
+              </Animatable.View>
+
+              {/* Lien mot de passe oublié */}
+              <Animatable.View animation="fadeInUp" delay={1000}>
                 <TouchableOpacity
                   style={styles.linkContainer}
                   onPress={() => navigation.navigate("ForgotPassword")}
@@ -228,7 +262,7 @@ const LoginScreen = ({ navigation }) => {
               </Animatable.View>
 
               {/* Lien vers l'inscription */}
-              <Animatable.View animation="fadeInUp" delay={1000}>
+              <Animatable.View animation="fadeInUp" delay={1200}>
                 <TouchableOpacity
                   style={styles.linkContainer}
                   onPress={() => navigation.navigate("Register")}
@@ -239,6 +273,7 @@ const LoginScreen = ({ navigation }) => {
                   </Text>
                 </TouchableOpacity>
               </Animatable.View>
+
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -336,6 +371,21 @@ const styles = StyleSheet.create({
   linkContainer: { alignItems: "center", marginTop: 10 },
   linkText: { fontSize: 14, color: "#555" },
   linkHighlight: { color: "#FF9800", fontWeight: "bold" },
+  guestButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#FF9800',
+    borderRadius: 20,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  guestButtonText: {
+    color: '#FF9800',
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'Montserrat-Bold',
+  },
 });
 
 export default LoginScreen;

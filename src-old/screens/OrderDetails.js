@@ -266,7 +266,6 @@ const OrderDetails = ({ navigation, route }) => {
               <Text style={styles.infoValue}>
                 {safeOrder.payment_method === 'cash' ? 'Espèces' :
                  safeOrder.payment_method === 'mtn' ? 'MTN Money' :
-                 safeOrder.payment_method === 'mambopay' ? 'MamboPay' :
                  safeOrder.payment_method === 'airtel' ? 'Airtel Money' : 
                  safeOrder.payment_method === 'unknown' ? 'Non spécifié' : safeOrder.payment_method}
               </Text>

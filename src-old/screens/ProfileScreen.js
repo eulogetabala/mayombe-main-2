@@ -23,6 +23,7 @@ const ProfileScreen = ({ navigation }) => {
   // Recharger les données à chaque fois qu'on revient sur cet écran
   useFocusEffect(
     React.useCallback(() => {
+      console.log('🔄 Focus sur ProfileScreen - Rechargement des données...');
       loadUserData();
     }, [])
   );
