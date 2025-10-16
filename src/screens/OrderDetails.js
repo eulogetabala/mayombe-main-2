@@ -191,12 +191,11 @@ const OrderDetails = ({ navigation, route }) => {
     deliveryFee: Number(order.deliveryFee) || 0,
     orderId: String(order.orderId || order.id || 'N/A'),
     payment_method: String(order.payment_method || 'unknown'),
-    address: String(order.address || order.delivery_address || ''),
-    phone: String(order.phone || ''),
     distance: Number(order.distance) || 0,
     payment_ref: String(order.payment_ref || ''),
     date: order.date || new Date().toISOString()
   };
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -271,20 +270,6 @@ const OrderDetails = ({ navigation, route }) => {
                  safeOrder.payment_method === 'unknown' ? 'Non spécifié' : safeOrder.payment_method}
               </Text>
             </View>
-            {safeOrder.address && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Adresse de livraison:</Text>
-                <Text style={styles.infoValue}>
-                  {safeOrder.address}
-                </Text>
-              </View>
-            )}
-            {safeOrder.phone && (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Téléphone:</Text>
-                <Text style={styles.infoValue}>{safeOrder.phone}</Text>
-              </View>
-            )}
             {safeOrder.distance > 0 && (
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Distance:</Text>

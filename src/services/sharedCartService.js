@@ -66,6 +66,17 @@ class SharedCartService {
       await set(cartRef, cartPayload);
       
       console.log(`✅ Panier sauvegardé sur Firebase: ${cartId}`);
+      
+      // Vérifier que la sauvegarde a bien fonctionné
+      const verificationSnapshot = await get(cartRef);
+      if (verificationSnapshot.exists()) {
+        console.log(`✅ VÉRIFICATION: Panier confirmé sur Firebase`);
+        const savedData = verificationSnapshot.val();
+        console.log(`📊 ARTICLES SAUVEGARDÉS: ${savedData.cart_data?.length || 0}`);
+      } else {
+        console.log(`❌ VÉRIFICATION: Panier NON trouvé après sauvegarde !`);
+      }
+      
       return true;
     } catch (error) {
       console.error(`❌ Erreur sauvegarde Firebase:`, error);
@@ -82,18 +93,28 @@ class SharedCartService {
    */
   async getSharedCart(cartId) {
     try {
+      console.log(`🔍 RECHERCHE FIREBASE - ID: ${cartId}`);
       const cartRef = ref(this.database, `shared_carts/${cartId}`);
       const snapshot = await get(cartRef);
       
+      console.log(`📊 SNAPSHOT EXISTS: ${snapshot.exists()}`);
+      
       if (snapshot.exists()) {
         const firebaseData = snapshot.val();
+        console.log(`📦 DONNÉES FIREBASE RÉCUPÉRÉES:`, JSON.stringify(firebaseData, null, 2));
         
         // Vérifier si le panier n'a pas expiré
         const now = new Date();
         const expiresAt = new Date(firebaseData.expires_at);
         
+        console.log(`⏰ VÉRIFICATION EXPIRATION:`);
+        console.log(`   - Maintenant: ${now.toISOString()}`);
+        console.log(`   - Expire à: ${expiresAt.toISOString()}`);
+        console.log(`   - Expiré: ${now >= expiresAt}`);
+        
         if (now < expiresAt) {
           console.log(`✅ Panier récupéré depuis Firebase: ${cartId}`);
+          console.log(`📊 NOMBRE D'ARTICLES: ${firebaseData.cart_data?.length || 0}`);
           
           // Sauvegarder localement pour un accès plus rapide
           await this.saveToLocalStorage(cartId, firebaseData.cart_data);
@@ -107,10 +128,23 @@ class SharedCartService {
         }
       } else {
         console.log(`⚠️ Panier non trouvé sur Firebase: ${cartId}`);
+        console.log(`🔍 Vérification de la structure Firebase...`);
+        
+        // Vérifier la structure générale
+        const allCartsRef = ref(this.database, 'shared_carts');
+        const allSnapshot = await get(allCartsRef);
+        if (allSnapshot.exists()) {
+          const allCarts = allSnapshot.val();
+          console.log(`📋 PANIERS DISPONIBLES:`, Object.keys(allCarts));
+        } else {
+          console.log(`❌ AUCUN PANIER DANS FIREBASE`);
+        }
+        
         return null;
       }
     } catch (error) {
       console.error(`❌ Erreur récupération Firebase:`, error);
+      console.error(`❌ Détails:`, error.message);
       return null;
     }
   }
@@ -169,12 +203,25 @@ class SharedCartService {
    * @returns {Array|null} Données du panier ou null si non trouvé
    */
   async loadSharedCart(cartId) {
+    console.log(`🔄 DÉBUT CHARGEMENT PANIER: ${cartId}`);
+    
     // Essayer d'abord Firebase
+    console.log(`🔍 ÉTAPE 1: Recherche sur Firebase...`);
     let cartData = await this.getSharedCart(cartId);
     
+    if (cartData) {
+      console.log(`✅ TROUVÉ SUR FIREBASE: ${cartData.length} articles`);
+      return cartData;
+    }
+    
     // Si pas trouvé sur Firebase, essayer le stockage local
-    if (!cartData) {
-      cartData = await this.getFromLocalStorage(cartId);
+    console.log(`🔍 ÉTAPE 2: Recherche en local...`);
+    cartData = await this.getFromLocalStorage(cartId);
+    
+    if (cartData) {
+      console.log(`✅ TROUVÉ EN LOCAL: ${cartData.length} articles`);
+    } else {
+      console.log(`❌ PANIER NON TROUVÉ: Ni sur Firebase ni en local`);
     }
     
     return cartData;

@@ -17,6 +17,7 @@ import WebViewMapComponent from '../components/WebViewMapComponent';
 import SimpleMapComponent from '../components/SimpleMapComponent';
 import DeliveryStepsComponent from '../components/DeliveryStepsComponent';
 import RealtimeTrackingService from '../services/RealtimeTrackingService';
+import FirebaseTrackingService from '../services/firebase';
 import pushNotificationService from '../services/pushNotifications';
 import geofencingService from '../services/geofencingService';
 import geocodingService from '../services/geocodingService';
@@ -45,7 +46,78 @@ const OrderTrackingScreen = ({ route, navigation }) => {
   const userLocation = route.params?.userLocation || null;
   const isPendingOrder = route.params?.isPendingOrder || false;
 
+  // 🔍 DIAGNOSTIC: Logs des paramètres reçus
+  console.log('🔍 DIAGNOSTIC - OrderTrackingScreen - Paramètres reçus:', {
+    orderId: orderId,
+    orderDetails: orderDetails,
+    orderDetailsOrderId: orderDetails?.orderId,
+    orderDetailsId: orderDetails?.id,
+    userLocation: userLocation,
+    hasRestaurant: !!orderDetails?.restaurant,
+    restaurantCoords: orderDetails?.restaurant?.coordinates,
+    restaurantAddress: orderDetails?.restaurant?.address,
+    deliveryAddress: orderDetails?.address || orderDetails?.delivery_address
+  });
+
   const lastNotificationDistance = useRef(null);
+
+  // Récupérer les données de commande depuis Firebase
+  const fetchOrderDataFromFirebase = async () => {
+    try {
+      console.log('🔍 DIAGNOSTIC - Récupération données Firebase pour:', orderId);
+      console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
+      
+      // Corriger le format de l'OrderId pour être compatible avec le driver
+      const firebaseOrderId = orderId.startsWith('order_') ? orderId : `order_${orderId}`;
+      console.log('🔗 FORMAT - OrderId client:', orderId, '→ Firebase:', firebaseOrderId);
+      
+      // Récupérer toutes les données d'un coup
+      const orderData = await FirebaseTrackingService.getOrderData(firebaseOrderId);
+      
+      if (orderData) {
+        console.log('✅ DIAGNOSTIC - Données Firebase récupérées:', JSON.stringify(orderData, null, 2));
+        
+        // Récupérer la position du driver si disponible
+        const driverLocation = await FirebaseTrackingService.getDriverLocation(firebaseOrderId);
+        if (driverLocation) {
+          console.log('✅ DIAGNOSTIC - Position driver récupérée:', driverLocation);
+        }
+        
+        // Récupérer le statut de livraison si disponible
+        const deliveryStatus = await FirebaseTrackingService.getDeliveryStatus(firebaseOrderId);
+        if (deliveryStatus) {
+          console.log('✅ DIAGNOSTIC - Statut livraison récupéré:', deliveryStatus);
+        }
+        
+        // Mettre à jour les détails de commande avec les vraies données Firebase
+        setCommandeDetails({
+          delivery_address: orderData.delivery_address?.address || orderData.customer?.address || 'Adresse de livraison',                                                                                             
+          delivery_phone: orderData.customer?.phone || 'N/A',
+          order: {
+            total_amount: orderData.order?.total_amount || 0
+          }
+        });
+        
+        // Mettre à jour le tracking avec les données Firebase
+        setTrackingData(prev => ({
+          ...prev,
+          status: orderData.status || 'pending',
+          destinationLocation: orderData.delivery_address && orderData.delivery_address.latitude && orderData.delivery_address.longitude ? {
+            latitude: orderData.delivery_address.latitude,
+            longitude: orderData.delivery_address.longitude
+          } : prev.destinationLocation,
+          driverLocation: driverLocation && driverLocation.latitude && driverLocation.longitude ? driverLocation : prev.driverLocation,
+          lastUpdate: new Date().toISOString()
+        }));
+        
+        console.log('✅ DIAGNOSTIC - Détails de commande et tracking mis à jour avec Firebase');
+      } else {
+        console.log('⚠️ DIAGNOSTIC - Aucune donnée Firebase trouvée pour:', firebaseOrderId);
+      }
+    } catch (error) {
+      console.error('❌ DIAGNOSTIC - Erreur récupération Firebase:', error);
+    }
+  };
 
   // Initialiser le tracking
   const initializeTracking = async () => {
@@ -71,12 +143,14 @@ const OrderTrackingScreen = ({ route, navigation }) => {
         try {
           console.log('📍 Géocodage adresse de livraison:', orderDetails.address);
           const geocodedLocation = await geocodingService.geocodeAddress(orderDetails.address);
-          if (geocodedLocation) {
+          if (geocodedLocation && geocodedLocation.latitude && geocodedLocation.longitude) {
             currentUserLocation = {
               latitude: geocodedLocation.latitude,
               longitude: geocodedLocation.longitude
             };
             console.log('✅ Position utilisateur depuis adresse de livraison:', currentUserLocation);
+          } else {
+            console.log('⚠️ Géocodage échoué pour:', orderDetails.address);
           }
         } catch (error) {
           console.log('⚠️ Erreur géocodage adresse de livraison:', error);
@@ -104,8 +178,8 @@ const OrderTrackingScreen = ({ route, navigation }) => {
           if (status === 'granted') {
             const location = await Location.getCurrentPositionAsync({
               accuracy: Location.Accuracy.High,
-              maximumAge: 10000,
-              timeout: 15000
+              maximumAge: 5000, // Plus récent
+              timeout: 10000 // Plus rapide
             });
 
             currentUserLocation = {
@@ -117,6 +191,37 @@ const OrderTrackingScreen = ({ route, navigation }) => {
           }
         } catch (error) {
           console.log('⚠️ Impossible de récupérer la position GPS:', error);
+        }
+      }
+
+      // VÉRIFICATION: Éviter les positions par défaut comme "Union Square"
+      if (currentUserLocation) {
+        // Vérifier si c'est une position par défaut (Union Square = -4.2634, 15.2429)
+        const isDefaultPosition = 
+          (Math.abs(currentUserLocation.latitude - (-4.2634)) < 0.001 && 
+           Math.abs(currentUserLocation.longitude - 15.2429) < 0.001);
+        
+        if (isDefaultPosition) {
+          console.log('⚠️ Position par défaut détectée, tentative de récupération GPS...');
+          try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status === 'granted') {
+              const location = await Location.getCurrentPositionAsync({
+                accuracy: Location.Accuracy.High,
+                maximumAge: 0, // Forcer une nouvelle position
+                timeout: 15000
+              });
+
+              currentUserLocation = {
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude
+              };
+              
+              console.log('✅ Position GPS forcée récupérée:', currentUserLocation);
+            }
+          } catch (error) {
+            console.log('⚠️ Impossible de forcer la position GPS:', error);
+          }
         }
       }
       
@@ -202,11 +307,22 @@ const OrderTrackingScreen = ({ route, navigation }) => {
       };
       
       console.log('🎯 CENTRAGE CARTE - Adresse de livraison:', currentUserLocation);
+      console.log('🏪 CENTRAGE CARTE - Position restaurant:', restaurantLocation);
+      console.log('📊 CENTRAGE CARTE - BaseData complète:', baseData);
 
       setTrackingData(baseData);
+      
+      // 🔧 CORRECTION: Récupérer les vraies données de livraison
+      const realDeliveryAddress = orderDetails.address || orderDetails.delivery_address || 'Adresse de livraison';
+      const realDeliveryPhone = orderDetails.phone || orderDetails.delivery_phone || orderDetails.customer?.phone || 'N/A';
+      
+      console.log('🔍 DIAGNOSTIC - OrderTrackingScreen - Adresse récupérée:', realDeliveryAddress);
+      console.log('🔍 DIAGNOSTIC - OrderTrackingScreen - Téléphone récupéré:', realDeliveryPhone);
+      console.log('🔍 DIAGNOSTIC - OrderTrackingScreen - OrderDetails complètes:', JSON.stringify(orderDetails, null, 2));
+      
       setCommandeDetails({
-        delivery_address: orderDetails.address || 'Adresse de livraison',
-        delivery_phone: 'N/A',
+        delivery_address: realDeliveryAddress,
+        delivery_phone: realDeliveryPhone,
         order: {
           total_amount: orderDetails.total || 0
         }
@@ -222,6 +338,9 @@ const OrderTrackingScreen = ({ route, navigation }) => {
         }
       }
 
+      // Récupérer les données depuis Firebase
+      await fetchOrderDataFromFirebase();
+      
       setLoading(false);
       console.log('✅ Tracking client initialisé avec Firebase:', isFirebaseConnected);
       
@@ -231,16 +350,21 @@ const OrderTrackingScreen = ({ route, navigation }) => {
     }
   };
 
-  // Démarrer le tracking temps réel avec Firebase - VERSION AMÉLIORÉE
+  // Démarrer le tracking temps réel avec Firebase - COMPATIBLE AVEC DRIVER
   const startRealtimeTracking = () => {
     try {
       console.log('🔄 Démarrage tracking temps réel avec Firebase');
       setIsRealtime(true);
       
-      // Démarrer le tracking Firebase avec fréquence optimisée
-      const cleanup = RealtimeTrackingService.startTracking(orderId, {
+      // Corriger le format de l'OrderId pour être compatible avec le driver
+      const firebaseOrderId = orderId.startsWith('order_') ? orderId : `order_${orderId}`;
+      console.log('🔗 COMPATIBILITÉ - OrderId client:', orderId, '→ Firebase:', firebaseOrderId);
+      console.log('🔗 COMPATIBILITÉ - Driver écrit dans: orders/' + firebaseOrderId + '/driver/location');
+      
+      const cleanup = FirebaseTrackingService.startTracking(firebaseOrderId, {
         onLocationUpdate: (update) => {
           console.log('📍 Mise à jour position Firebase reçue:', update);
+          
           if (update.type === 'location' && update.data) {
             const driverLocation = {
               latitude: update.data.latitude,
@@ -251,8 +375,22 @@ const OrderTrackingScreen = ({ route, navigation }) => {
               timestamp: update.data.timestamp || Date.now()
             };
             
-            console.log('🗺️ Coordonnées driver:', driverLocation);
+            console.log('📍 Position driver reçue:', driverLocation);
+            
+            // Vérifier que driverLocation est valide
+            if (!driverLocation || !driverLocation.latitude || !driverLocation.longitude) {
+              console.log('⚠️ Position driver invalide, ignorée');
+              return;
+            }
+            
+            console.log('🚗 Vitesse driver:', driverLocation.speed, 'km/h');
             console.log('🗺️ Coordonnées destination:', trackingData.destinationLocation);
+            
+            // Vérifier que destinationLocation est valide
+            if (!trackingData.destinationLocation || !trackingData.destinationLocation.latitude || !trackingData.destinationLocation.longitude) {
+              console.log('⚠️ Destination invalide, impossible de calculer la distance');
+              return;
+            }
             
             // Calculer la distance réelle avec le service avancé
             const distance = DistanceCalculationService.calculateDistance(
@@ -264,12 +402,15 @@ const OrderTrackingScreen = ({ route, navigation }) => {
             
             console.log('📏 Distance calculée:', distance, 'km');
             
-            // Calculer le temps estimé avec le service avancé
+            // Calculer le temps estimé DYNAMIQUE avec le service avancé
             const timeEstimate = DistanceCalculationService.calculateEstimatedTime(
               distance,
               driverLocation.speed,
               'motorbike' // Type de véhicule par défaut
             );
+            
+            console.log('⏱️ Temps estimé:', timeEstimate, 'min');
+            console.log('🚗 Vitesse utilisée:', driverLocation.speed, 'km/h');
             
             const newDistance = Math.round(distance * 1000); // Convertir en mètres
             
@@ -292,8 +433,13 @@ const OrderTrackingScreen = ({ route, navigation }) => {
             }));
             
             // Mettre à jour la carte en temps réel
-            if (mapRef.current && mapRef.current.updateDriverPosition) {
+            if (mapRef.current && mapRef.current.updateDriverPosition && driverLocation && driverLocation.latitude && driverLocation.longitude) {
+              console.log('🗺️ DIAGNOSTIC - Mise à jour carte avec position:', driverLocation.latitude, driverLocation.longitude);
               mapRef.current.updateDriverPosition(driverLocation.latitude, driverLocation.longitude);
+            } else {
+              console.log('❌ DIAGNOSTIC - Impossible de mettre à jour la carte - mapRef, updateDriverPosition ou position driver manquant');
+              console.log('❌ DIAGNOSTIC - mapRef.current:', !!mapRef.current);
+              console.log('❌ DIAGNOSTIC - updateDriverPosition:', !!mapRef.current?.updateDriverPosition);
             }
             
             console.log('✅ Données Firebase mises à jour:', {
@@ -308,8 +454,10 @@ const OrderTrackingScreen = ({ route, navigation }) => {
         },
         onStatusUpdate: (update) => {
           console.log('📊 Mise à jour statut Firebase reçue:', update);
+          
           if (update.type === 'status' && update.data) {
             const newStatus = update.data.status || update.data;
+            console.log('🔄 Statut mis à jour:', newStatus);
             
             setTrackingData(prev => ({
               ...prev,
@@ -350,39 +498,63 @@ const OrderTrackingScreen = ({ route, navigation }) => {
     
     switch (status) {
       case 'Arrivé à destination':
-        pushNotificationService.sendLocalNotification(
-          'Livreur arrivé !',
-          'Votre livreur est arrivé à destination. Il va bientôt sonner.'
-        );
+        // Notification supprimée pour éviter l'erreur
+        console.log('📍 Livreur arrivé à destination');
         lastNotificationDistance.current = now;
         break;
       case 'Presque arrivé':
-        pushNotificationService.sendLocalNotification(
-          'Presque arrivé !',
-          'Votre livreur est à moins de 50 mètres de chez vous.'
-        );
+        // Notification supprimée pour éviter l'erreur
+        console.log('🎯 Livreur presque arrivé');
         lastNotificationDistance.current = now;
         break;
       case 'À proximité':
-        pushNotificationService.sendLocalNotification(
-          'À proximité',
-          'Votre livreur est à moins de 200 mètres de chez vous.'
-        );
+        // Notification supprimée pour éviter l'erreur
+        console.log('📍 Livreur à proximité');
         lastNotificationDistance.current = now;
         break;
       case 'Dans le quartier':
-        pushNotificationService.sendLocalNotification(
-          'Dans le quartier',
-          'Votre livreur est dans votre quartier.'
-        );
+        // Notification supprimée pour éviter l'erreur
+        console.log('🏘️ Livreur dans le quartier');
         lastNotificationDistance.current = now;
         break;
       case 'En route rapide':
-        pushNotificationService.sendLocalNotification(
-          'En route rapide',
-          'Votre livreur se déplace rapidement vers vous.'
-        );
+        // Notification supprimée pour éviter l'erreur
+        console.log('🚗 Livreur en route rapide');
         lastNotificationDistance.current = now;
+        break;
+      case 'terminé':
+      case 'delivered':
+      case 'completed':
+      case 'livré':
+        // Notification supprimée pour éviter l'erreur
+        console.log('🎉 Livraison terminée !');
+        lastNotificationDistance.current = now;
+        
+        // Afficher une alerte de confirmation
+        Alert.alert(
+          '🎉 Livraison terminée !',
+          'Votre commande a été livrée avec succès. Merci d\'avoir utilisé Mayombe !',
+          [
+            {
+              text: 'Noter le livreur',
+              onPress: () => {
+                console.log('✅ Utilisateur veut noter le livreur');
+                // Rediriger vers la page de notation
+                navigation.navigate('DriverRating', {
+                  orderId: orderId,
+                  driverName: 'Le livreur'
+                });
+              }
+            },
+            {
+              text: 'Retour à l\'accueil',
+              onPress: () => {
+                console.log('✅ Utilisateur retourne à l\'accueil');
+                navigation.navigate('Home');
+              }
+            }
+          ]
+        );
         break;
     }
   };
@@ -480,9 +652,29 @@ const OrderTrackingScreen = ({ route, navigation }) => {
 
 
 
-  // Obtenir la référence de commande
+  // Obtenir la référence de commande - VERSION SIMPLE ET CORRECTE
   const getCommandeReference = (details) => {
-    return `CMD-${orderId.slice(-6)}`;
+    // PRIORITÉ 1: Utiliser la référence complète si disponible dans les détails
+    if (details?.orderId && typeof details.orderId === 'string' && details.orderId.includes('CMD-')) {
+      console.log('🔍 DIAGNOSTIC - Référence depuis details.orderId:', details.orderId);
+      return details.orderId;
+    }
+    
+    // PRIORITÉ 2: Utiliser l'OrderId tel quel s'il contient déjà CMD-
+    if (orderId && typeof orderId === 'string' && orderId.includes('CMD-')) {
+      console.log('🔍 DIAGNOSTIC - Référence depuis orderId:', orderId);
+      return orderId;
+    }
+    
+    // PRIORITÉ 3: Utiliser l'ID depuis les détails
+    if (details?.id && typeof details.id === 'string' && details.id.includes('CMD-')) {
+      console.log('🔍 DIAGNOSTIC - Référence depuis details.id:', details.id);
+      return details.id;
+    }
+    
+    // PRIORITÉ 4: Sinon, utiliser l'OrderId tel quel (sans ajouter de zéros)
+    console.log('🔍 DIAGNOSTIC - Référence fallback:', orderId);
+    return orderId || 'CMD-N/A';
   };
 
   // Gérer les messages du WebView
@@ -546,8 +738,9 @@ const OrderTrackingScreen = ({ route, navigation }) => {
         }
       }
       
-      // Arrêter le service de tracking
-      RealtimeTrackingService.stopTracking();
+      // Arrêter le service de tracking (compatible driver)
+      const firebaseOrderId = orderId.startsWith('order_') ? orderId : `order_${orderId}`;
+      FirebaseTrackingService.stopTracking(firebaseOrderId);
     };
   }, [orderId]);
 
@@ -583,6 +776,8 @@ const OrderTrackingScreen = ({ route, navigation }) => {
             color="#FFF" 
           />
         </TouchableOpacity>
+        
+        
       </View>
 
       {/* Carte Google Maps ou Étapes de livraison */}
@@ -592,7 +787,7 @@ const OrderTrackingScreen = ({ route, navigation }) => {
           <View style={styles.stepsViewContainer}>
             <DeliveryStepsComponent 
               currentStatus={trackingData.status}
-              orderStatus={orderDetails?.status || 'pending'}
+              orderStatus={trackingData.status || orderDetails?.status || 'pending'}
             />
           </View>
         ) : (
@@ -601,23 +796,43 @@ const OrderTrackingScreen = ({ route, navigation }) => {
             {console.log('🗺️ OrderTrackingScreen - Données envoyées à SimpleMapComponent:', {
               driverLocation: trackingData.driverLocation,
               destinationLocation: trackingData.destinationLocation,
-              pickupLocation: trackingData.restaurantLocation
+              pickupLocation: trackingData.restaurantLocation,
+              hasDestination: !!trackingData.destinationLocation,
+              hasRestaurant: !!trackingData.restaurantLocation,
+              destinationLat: trackingData.destinationLocation?.latitude,
+              destinationLng: trackingData.destinationLocation?.longitude,
+              restaurantLat: trackingData.restaurantLocation?.latitude,
+              restaurantLng: trackingData.restaurantLocation?.longitude
             })}
-            {trackingData.destinationLocation && trackingData.restaurantLocation ? (
-              <SimpleMapComponent
-                ref={mapRef}
-                driverLocation={trackingData.driverLocation}
-                destinationLocation={trackingData.destinationLocation}
-                pickupLocation={trackingData.restaurantLocation}
-                orderStatus={trackingData.status}
-                onMessage={handleWebViewMessage}
-              />
-            ) : (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color="#4CAF50" />
-                <Text style={styles.loadingText}>Chargement de la carte...</Text>
-              </View>
-            )}
+            {/* Carte masquée si livraison terminée */}
+            {!(trackingData.status === 'terminé' || trackingData.status === 'delivered' || trackingData.status === 'completed' || trackingData.status === 'livré') ? (
+              trackingData.destinationLocation && trackingData.restaurantLocation ? (
+                <SimpleMapComponent
+                  ref={mapRef}
+                  driverLocation={trackingData.driverLocation}
+                  destinationLocation={trackingData.destinationLocation}
+                  pickupLocation={trackingData.restaurantLocation}
+                  orderStatus={trackingData.status}
+                  onMessage={handleWebViewMessage}
+                />
+              ) : (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#4CAF50" />
+                  <Text style={styles.loadingText}>
+                    {!trackingData.destinationLocation && !trackingData.restaurantLocation 
+                      ? 'Initialisation de la carte...' 
+                      : !trackingData.destinationLocation 
+                        ? 'Récupération de l\'adresse de livraison...'
+                        : 'Récupération de la position du restaurant...'
+                    }
+                  </Text>
+                  <Text style={styles.loadingSubText}>
+                    Destination: {trackingData.destinationLocation ? '✅' : '❌'} | 
+                    Restaurant: {trackingData.restaurantLocation ? '✅' : '❌'}
+                  </Text>
+                </View>
+              )
+            ) : null}
           </>
         )}
       </View>
@@ -629,7 +844,7 @@ const OrderTrackingScreen = ({ route, navigation }) => {
           <View style={styles.statusIndicator}>
             <View style={[styles.statusDot, { backgroundColor: firebaseConnected ? '#4CAF50' : '#FF9800' }]} />
             <Text style={styles.statusText}>
-              {firebaseConnected ? 'En attente du driver' : 'Connexion lente'}
+              {firebaseConnected ? 'Firebase connecté' : 'Firebase déconnecté'}
             </Text>
           </View>
           <Text style={styles.orderId}>
@@ -637,32 +852,186 @@ const OrderTrackingScreen = ({ route, navigation }) => {
           </Text>
         </View>
         
-        {/* Métriques compactes - VERSION AMÉLIORÉE */}
-        <View style={styles.compactMetrics}>
-          <View style={styles.compactMetric}>
-            <Ionicons name="location" size={20} color="#FF9800" />
-            <Text style={styles.compactMetricValue}>
-              {trackingData.distance > 0 ? formatDistance(trackingData.distance) : '--'}
+        
+        {/* Message d'information */}
+        {!trackingData.driverLocation && trackingData.status !== 'terminé' && trackingData.status !== 'delivered' && trackingData.status !== 'completed' && trackingData.status !== 'livré' && (
+          <View style={styles.infoContainer}>
+            <Text style={styles.infoText}>
+              ⚠️ En attente de la position du livreur. 
+              Le livreur doit démarrer sa course pour que vous puissiez le suivre en temps réel.
             </Text>
-            <Text style={styles.compactMetricLabel}>Distance</Text>
+            
+            <TouchableOpacity 
+              style={styles.refreshButton}
+              onPress={async () => {
+                console.log('🔄 Récupération manuelle des données Firebase');
+                try {
+                  // Corriger le format de l'OrderId pour être compatible avec le driver
+                  const firebaseOrderId = orderId.startsWith('order_') ? orderId : `order_${orderId}`;
+                  console.log('🔗 FORMAT - OrderId client:', orderId, '→ Firebase:', firebaseOrderId);
+                  
+                  // Récupérer la position du driver
+                  const driverLocation = await FirebaseTrackingService.getDriverLocation(firebaseOrderId);
+                  console.log('🔄 Position driver récupérée:', driverLocation);
+                  
+                  // Récupérer le statut de livraison
+                  const deliveryStatus = await FirebaseTrackingService.getDeliveryStatus(firebaseOrderId);
+                  console.log('🔄 Statut livraison récupéré:', deliveryStatus);
+                  
+                  if (driverLocation && driverLocation.latitude && driverLocation.longitude) {
+                    setTrackingData(prev => ({
+                      ...prev,
+                      driverLocation: driverLocation,
+                      lastUpdate: new Date().toISOString()
+                    }));
+                    console.log('✅ Position driver mise à jour dans l\'interface');
+                  } else if (driverLocation) {
+                    console.log('⚠️ Position driver invalide (latitude/longitude manquantes)');
+                  }
+                  
+                  if (deliveryStatus) {
+                    setTrackingData(prev => ({
+                      ...prev,
+                      status: deliveryStatus.status,
+                      lastUpdate: new Date().toISOString()
+                    }));
+                    console.log('✅ Statut livraison mis à jour dans l\'interface');
+                  }
+                  
+                  if (!driverLocation && !deliveryStatus) {
+                    console.log('⚠️ Aucune donnée driver trouvée');
+                  }
+                } catch (error) {
+                  console.error('❌ Erreur récupération manuelle:', error);
+                }
+              }}
+            >
+              <Text style={styles.refreshButtonText}>🔄 Vérifier les données</Text>
+            </TouchableOpacity>
           </View>
-          
-          <View style={styles.compactMetric}>
-            <Ionicons name="time" size={20} color="#FF9800" />
-            <Text style={styles.compactMetricValue}>
-              {trackingData.estimatedTime > 0 ? formatEstimatedTime(trackingData.estimatedTime) : '--'}
+        )}
+
+        
+        {/* Message de livraison terminée */}
+        {(trackingData.status === 'terminé' || trackingData.status === 'delivered' || trackingData.status === 'completed' || trackingData.status === 'livré') && (
+          <View style={styles.successContainer}>
+            <Text style={styles.successText}>
+              🎉 Livraison terminée avec succès !
             </Text>
-            <Text style={styles.compactMetricLabel}>Temps estimé</Text>
-          </View>
-          
-          <View style={styles.compactMetric}>
-            <Ionicons name="speedometer" size={20} color="#FF9800" />
-            <Text style={styles.compactMetricValue}>
-              {trackingData.speed ? `${Math.round(trackingData.speed)} km/h` : '--'}
+            <Text style={styles.successSubText}>
+              Votre commande a été livrée. Merci d'avoir utilisé Mayombe !
             </Text>
-            <Text style={styles.compactMetricLabel}>Vitesse</Text>
+            
+            <TouchableOpacity 
+              style={styles.ratingButton}
+              onPress={() => {
+                console.log('⭐ Navigation vers la page de notation du livreur');
+                // Rediriger vers la page de notation
+                navigation.navigate('DriverRating', {
+                  orderId: orderId,
+                  driverName: 'Le livreur'
+                });
+              }}
+            >
+              <Ionicons name="star" size={20} color="#FFF" />
+              <Text style={styles.ratingButtonText}>Noter le livreur</Text>
+            </TouchableOpacity>
           </View>
-        </View>
+        )}
+        
+        {/* Métriques compactes - VERSION AMÉLIORÉE - Masquées si livraison terminée */}
+        {!(trackingData.status === 'terminé' || trackingData.status === 'delivered' || trackingData.status === 'completed' || trackingData.status === 'livré') && (
+          <View style={styles.compactMetrics}>
+            <View style={styles.compactMetric}>
+              <Ionicons name="location" size={20} color="#FF9800" />
+              <Text style={styles.compactMetricValue}>
+                {trackingData.distance > 0 ? formatDistance(trackingData.distance) : '--'}
+              </Text>
+              <Text style={styles.compactMetricLabel}>Distance</Text>
+            </View>
+            
+            <View style={styles.compactMetric}>
+              <Ionicons name="time" size={20} color="#FF9800" />
+              <Text style={styles.compactMetricValue}>
+                {trackingData.estimatedTime > 0 ? formatEstimatedTime(trackingData.estimatedTime) : '--'}
+              </Text>
+              <Text style={styles.compactMetricLabel}>Temps estimé</Text>
+            </View>
+            
+            <View style={styles.compactMetric}>
+              <Ionicons name="speedometer" size={20} color="#FF9800" />
+              <Text style={styles.compactMetricValue}>
+                {trackingData.speed ? `${Math.round(trackingData.speed)} km/h` : '--'}
+              </Text>
+              <Text style={styles.compactMetricLabel}>Vitesse</Text>
+            </View>
+          </View>
+        )}
+
+        {/* Bouton Terminer la course - Après les métriques */}
+        {trackingData.driverLocation && trackingData.status !== 'terminé' && trackingData.status !== 'delivered' && trackingData.status !== 'completed' && trackingData.status !== 'livré' && (
+          <View style={styles.completeDeliveryContainer}>
+            <TouchableOpacity 
+              style={styles.completeDeliveryButton}
+              onPress={async () => {
+                Alert.alert(
+                  'Terminer la course',
+                  'Confirmez-vous avoir reçu votre commande ?',
+                  [
+                    {
+                      text: 'Annuler',
+                      style: 'cancel'
+                    },
+                    {
+                      text: 'Confirmer',
+                      onPress: async () => {
+                        try {
+                          console.log('🏁 Client termine la course pour:', orderId);
+                          
+                          // Corriger le format de l'OrderId pour être compatible avec le driver
+                          const firebaseOrderId = orderId.startsWith('order_') ? orderId : `order_${orderId}`;
+                          
+                          // Mettre à jour le statut dans Firebase
+                          await FirebaseTrackingService.updateDeliveryStatus(firebaseOrderId, 'terminé');
+                          console.log('✅ Statut mis à jour vers "terminé" dans Firebase');
+                          
+                          // Mettre à jour l'état local
+                          setTrackingData(prev => ({
+                            ...prev,
+                            status: 'terminé',
+                            lastUpdate: Date.now()
+                          }));
+                          
+                          console.log('✅ Statut local mis à jour vers "terminé"');
+                          
+                          // Déclencher les notifications de fin de livraison
+                          handleStatusNotifications('terminé');
+                          
+                        } catch (error) {
+                          console.error('❌ Erreur lors de la fin de course:', error);
+                          Alert.alert('Erreur', 'Impossible de terminer la course. Veuillez réessayer.');
+                        }
+                      }
+                    }
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={20} color="#FFF" />
+              <Text style={styles.completeDeliveryButtonText}>Terminer la course</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        
+        {/* DIAGNOSTIC: Logs des métriques */}
+        {console.log('🔍 DIAGNOSTIC - Métriques tracking:', {
+          distance: trackingData.distance,
+          estimatedTime: trackingData.estimatedTime,
+          driverSpeed: trackingData.driverLocation?.speed,
+          driverLocation: trackingData.driverLocation,
+          status: trackingData.status,
+          orderId: orderId
+        })}
         
         {/* Statut détaillé */}
         <View style={styles.statusContainer}>
@@ -676,6 +1045,31 @@ const OrderTrackingScreen = ({ route, navigation }) => {
               {trackingData.status}
             </Text>
           </View>
+          
+          {/* Indicateurs dynamiques */}
+          {trackingData.driverLocation && (
+            <View style={styles.dynamicIndicators}>
+              <View style={styles.indicatorRow}>
+                <Ionicons name="speedometer" size={16} color="#FF9800" />
+                <Text style={styles.indicatorText}>
+                  Vitesse: {trackingData.driverLocation.speed || 0} km/h
+                </Text>
+              </View>
+              <View style={styles.indicatorRow}>
+                <Ionicons name="location" size={16} color="#4CAF50" />
+                <Text style={styles.indicatorText}>
+                  Distance: {trackingData.distance?.toFixed(2) || 0} km
+                </Text>
+              </View>
+              <View style={styles.indicatorRow}>
+                <Ionicons name="time" size={16} color="#2196F3" />
+                <Text style={styles.indicatorText}>
+                  ETA: {trackingData.estimatedTime || 0} min
+                </Text>
+              </View>
+            </View>
+          )}
+          
           {trackingData.lastUpdate && (
             <Text style={styles.lastUpdateText}>
               Dernière mise à jour: {formatLastUpdate(trackingData.lastUpdate)}
@@ -683,18 +1077,12 @@ const OrderTrackingScreen = ({ route, navigation }) => {
           )}
         </View>
         
-        {/* Informations de livraison */}
+        {/* Informations de livraison - Seulement l'adresse */}
         <View style={styles.deliveryInfo}>
           <View style={styles.deliveryRow}>
             <Ionicons name="location" size={16} color="#666" />
-            <Text style={styles.deliveryText} numberOfLines={1}>
+            <Text style={styles.deliveryText} numberOfLines={2}>
               {commandeDetails?.delivery_address}
-            </Text>
-          </View>
-          <View style={styles.deliveryRow}>
-            <Ionicons name="card" size={16} color="#666" />
-            <Text style={styles.deliveryText}>
-              {commandeDetails?.order?.total_amount} FCFA
             </Text>
           </View>
         </View>
@@ -785,6 +1173,12 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 18,
     color: '#9E9E9E',
+  },
+  loadingSubText: {
+    color: '#666',
+    fontSize: 12,
+    marginTop: 5,
+    textAlign: 'center'
   },
   mapContainer: {
     flex: 1,
@@ -905,6 +1299,148 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#999',
     fontStyle: 'italic',
+  },
+  dynamicIndicators: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef'
+  },
+  indicatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6
+  },
+  indicatorText: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+    fontWeight: '500'
+  },
+  diagnosticContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    padding: 8,
+    borderRadius: 4,
+    marginBottom: 8
+  },
+  diagnosticText: {
+    color: '#FFF',
+    fontSize: 10,
+    textAlign: 'center',
+    fontFamily: 'monospace'
+  },
+  infoContainer: {
+    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+    borderColor: '#FF9800',
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8
+  },
+  infoText: {
+    color: '#FF9800',
+    fontSize: 12,
+    textAlign: 'center',
+    fontWeight: '500'
+  },
+  refreshButton: {
+    backgroundColor: '#4CAF50',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
+    alignSelf: 'center'
+  },
+  refreshButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600'
+  },
+  successContainer: {
+    backgroundColor: '#4CAF50',
+    padding: 20,
+    borderRadius: 12,
+    margin: 16,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#45A049'
+  },
+  successText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8
+  },
+  successSubText: {
+    color: '#E8F5E8',
+    fontSize: 14,
+    textAlign: 'center',
+    fontWeight: '500'
+  },
+  ratingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginTop: 16,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  ratingButtonText: {
+    color: '#333',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8
+  },
+  completeDeliveryContainer: {
+    backgroundColor: '#E3F2FD',
+    padding: 16,
+    borderRadius: 12,
+    margin: 16,
+    borderWidth: 2,
+    borderColor: '#2196F3'
+  },
+  completeDeliveryText: {
+    color: '#1976D2',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8
+  },
+  completeDeliverySubText: {
+    color: '#1976D2',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 16,
+    fontStyle: 'italic'
+  },
+  completeDeliveryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  completeDeliveryButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8
   },
   deliveryInfo: {
     marginBottom: 8,

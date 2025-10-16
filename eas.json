@@ -20,6 +20,10 @@
         "buildConfiguration": "Release",
         "distribution": "store",
         "scheme": "mayombeclient"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "autoIncrement": "versionCode"
       }
     }
   },

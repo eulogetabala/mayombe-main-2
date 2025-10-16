@@ -174,24 +174,33 @@ const LivreurSimulatorScreen = ({ navigation }) => {
         const newOrderId = `order_${Date.now()}`;
         setOrderId(newOrderId);
         
-        // Créer la commande dans Firebase
+        // Créer la commande dans Firebase avec des données réalistes
         FirebaseTrackingService.createOrder(newOrderId, {
           customer: {
-            name: "Client Test",
-            phone: "+242000000000",
-            address: "123 Rue de la Paix, Brazzaville"
+            phone: "+242000000000" // Seulement le téléphone (pas de nom ni email)
           },
-          driver: selectedLivreur,
-          destination: {
+          delivery_address: {
             latitude: destinationPosition.current.lat,
             longitude: destinationPosition.current.lng,
-            address: "123 Rue de la Paix, Brazzaville"
+            address: "Adresse de livraison simulée"
           },
-          pickup: {
-            latitude: currentPosition.current.lat,
-            longitude: currentPosition.current.lng,
-            address: "456 Avenue du Commerce, Brazzaville"
-          }
+          order: {
+            id: newOrderId,
+            items: [
+              {
+                name: "Produit de test",
+                quantity: 1,
+                price: 5000,
+                total: 5000
+              }
+            ],
+            total_amount: 6000,
+            delivery_fee: 1000,
+            subtotal: 5000,
+            distance: 2.5
+          },
+          status: 'pending',
+          created_at: new Date().toISOString()
         });
         
         Alert.alert('Étape 2', `Commande créée: ${newOrderId}`);

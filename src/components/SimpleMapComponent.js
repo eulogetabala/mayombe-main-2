@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
 const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocation, pickupLocation, orderStatus = 'pending', onMessage }, ref) => {
-  const [loading, setLoading] = useState(true);
   const [mapHtml, setMapHtml] = useState('');
   const webViewRef = useRef(null);
 
@@ -107,16 +106,10 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
           * { margin: 0; padding: 0; box-sizing: border-box; }
           html, body { width: 100%; height: 100%; background: #1a1a1a; }
           #map { width: 100% !important; height: 100% !important; }
-          .loading { 
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            z-index: 1000; background: rgba(0, 0, 0, 0.8); color: white; 
-            padding: 20px; border-radius: 10px; font-family: Arial, sans-serif;
-          }
         </style>
       </head>
       <body>
         <div id="map"></div>
-        <div class="loading" id="loading">Chargement carte simple...</div>
 
         <script>
           let map;
@@ -128,58 +121,183 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
               map = new google.maps.Map(document.getElementById('map'), {
                 center: { lat: ${centerLat}, lng: ${centerLng} },
                 zoom: 13,
-                mapTypeId: google.maps.MapTypeId.ROADMAP
+                mapTypeId: google.maps.MapTypeId.ROADMAP,
+                styles: [
+                  {
+                    featureType: 'poi',
+                    elementType: 'labels',
+                    stylers: [{ visibility: 'off' }]
+                  },
+                  {
+                    featureType: 'transit',
+                    elementType: 'labels',
+                    stylers: [{ visibility: 'off' }]
+                  }
+                ],
+                mapTypeControl: true,
+                streetViewControl: false,
+                fullscreenControl: true,
+                zoomControl: true
               });
 
-              // Marqueur destination
-              new google.maps.Marker({
+              // Marqueur destination (rouge)
+              const destinationMarker = new google.maps.Marker({
                 position: { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} },
                 map: map,
-                title: 'Destination',
-                icon: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png'
+                title: 'Destination de livraison',
+                icon: {
+                  url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                  scaledSize: new google.maps.Size(40, 40)
+                },
+                animation: google.maps.Animation.DROP
               });
 
-              // Marqueur restaurant
-              new google.maps.Marker({
+              // InfoWindow pour la destination
+              const destinationInfoWindow = new google.maps.InfoWindow({
+                content: '<div style="padding: 8px;"><strong>📍 Destination</strong><br/>Livraison prévue</div>'
+              });
+              destinationMarker.addListener('click', () => {
+                destinationInfoWindow.open(map, destinationMarker);
+              });
+
+              // Marqueur restaurant (bleu)
+              const restaurantMarker = new google.maps.Marker({
                 position: { lat: ${safePickupLocation.latitude}, lng: ${safePickupLocation.longitude} },
                 map: map,
                 title: 'Restaurant',
-                icon: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+                icon: {
+                  url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
+                  scaledSize: new google.maps.Size(40, 40)
+                },
+                animation: google.maps.Animation.DROP
               });
 
-              // Marqueur driver
+              // InfoWindow pour le restaurant
+              const restaurantInfoWindow = new google.maps.InfoWindow({
+                content: '<div style="padding: 8px;"><strong>🏪 Restaurant</strong><br/>Point de départ</div>'
+              });
+              restaurantMarker.addListener('click', () => {
+                restaurantInfoWindow.open(map, restaurantMarker);
+              });
+
+              // Marqueur driver (vert avec animation)
               let driverMarker = null;
               if (${safeDriverLocation ? 'true' : 'false'}) {
                 driverMarker = new google.maps.Marker({
                   position: { lat: ${safeDriverLocation ? safeDriverLocation.latitude : centerLat}, lng: ${safeDriverLocation ? safeDriverLocation.longitude : centerLng} },
                   map: map,
-                  title: 'Driver',
-                  icon: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png'
+                  title: 'Livreur',
+                  icon: {
+                    url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
+                    scaledSize: new google.maps.Size(35, 35)
+                  },
+                  animation: google.maps.Animation.BOUNCE
+                });
+
+                // InfoWindow pour le driver
+                const driverInfoWindow = new google.maps.InfoWindow({
+                  content: '<div style="padding: 8px;"><strong>🚗 Livreur</strong><br/>En route vers vous</div>'
+                });
+                driverMarker.addListener('click', () => {
+                  driverInfoWindow.open(map, driverMarker);
                 });
               }
 
-              // Ligne droite entre restaurant et destination (version simple qui fonctionne)
-              const line = new google.maps.Polyline({
-                path: [
-                  { lat: ${safePickupLocation.latitude}, lng: ${safePickupLocation.longitude} },
-                  { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} }
-                ],
-                geodesic: true,
-                strokeColor: '#FF5722',
-                strokeOpacity: 0.8,
-                strokeWeight: 3
+              // Service de directions pour un vrai trajet
+              const directionsService = new google.maps.DirectionsService();
+              const directionsRenderer = new google.maps.DirectionsRenderer({
+                suppressMarkers: false,
+                polylineOptions: {
+                  strokeColor: '#FF9800',
+                  strokeOpacity: 0.8,
+                  strokeWeight: 4
+                }
               });
-              line.setMap(map);
+              directionsRenderer.setMap(map);
 
-              // Fonction pour mettre à jour la position du driver
+              // Calculer le trajet optimal - LOGIQUE CORRECTE COMME WAZE
+              // Si on a la position du driver, le trajet va du driver vers le client
+              // Sinon, le trajet va du restaurant vers le client
+              let origin, destination;
+              
+              if (${safeDriverLocation ? 'true' : 'false'}) {
+                // Driver vers client (comme Waze)
+                origin = { lat: ${safeDriverLocation ? safeDriverLocation.latitude : centerLat}, lng: ${safeDriverLocation ? safeDriverLocation.longitude : centerLng} };
+                destination = { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} };
+                console.log('🗺️ Trajet: Driver vers Client (comme Waze)');
+              } else {
+                // Restaurant vers client (fallback)
+                origin = { lat: ${safePickupLocation.latitude}, lng: ${safePickupLocation.longitude} };
+                destination = { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} };
+                console.log('🗺️ Trajet: Restaurant vers Client (fallback)');
+              }
+
+              const request = {
+                origin: origin,
+                destination: destination,
+                travelMode: google.maps.TravelMode.DRIVING,
+                avoidHighways: false,
+                avoidTolls: false
+              };
+
+              directionsService.route(request, function(result, status) {
+                if (status === 'OK') {
+                  console.log('🗺️ Trajet calculé avec succès');
+                  directionsRenderer.setDirections(result);
+                  
+                  // Ajuster la vue pour voir tout le trajet
+                  const bounds = new google.maps.LatLngBounds();
+                  result.routes[0].overview_path.forEach(point => {
+                    bounds.extend(point);
+                  });
+                  map.fitBounds(bounds);
+                } else {
+                  console.log('⚠️ Erreur calcul trajet:', status);
+                  // Fallback: ligne droite du driver vers client (ou restaurant vers client)
+                  const fallbackOrigin = ${safeDriverLocation ? 'true' : 'false'} ? 
+                    { lat: ${safeDriverLocation ? safeDriverLocation.latitude : centerLat}, lng: ${safeDriverLocation ? safeDriverLocation.longitude : centerLng} } :
+                    { lat: ${safePickupLocation.latitude}, lng: ${safePickupLocation.longitude} };
+                    
+                  const fallbackLine = new google.maps.Polyline({
+                    path: [
+                      fallbackOrigin,
+                      { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} }
+                    ],
+                    geodesic: true,
+                    strokeColor: '#FF9800',
+                    strokeOpacity: 0.8,
+                    strokeWeight: 4
+                  });
+                  fallbackLine.setMap(map);
+                }
+              });
+
+              // Fonction pour mettre à jour la position du driver et recalculer le trajet
               window.updateDriverPosition = function(lat, lng) {
                 if (driverMarker) {
                   const newPosition = new google.maps.LatLng(lat, lng);
                   driverMarker.setPosition(newPosition);
+                  
+                  // Recalculer le trajet du driver vers le client (comme Waze)
+                  const newRequest = {
+                    origin: { lat: lat, lng: lng },
+                    destination: { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} },
+                    travelMode: google.maps.TravelMode.DRIVING,
+                    avoidHighways: false,
+                    avoidTolls: false
+                  };
+                  
+                  directionsService.route(newRequest, function(result, status) {
+                    if (status === 'OK') {
+                      console.log('🗺️ Trajet recalculé: Driver vers Client');
+                      directionsRenderer.setDirections(result);
+                    } else {
+                      console.log('⚠️ Erreur recalcul trajet:', status);
+                    }
+                  });
                 }
               };
 
-              document.getElementById('loading').style.display = 'none';
               
               // Notifier React Native que la carte est prête
               if (window.ReactNativeWebView) {
@@ -191,7 +309,6 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
               
             } catch (error) {
               console.error('❌ Erreur Simple Map:', error);
-              document.getElementById('loading').innerHTML = 'Erreur: ' + error.message;
             }
           }
 
@@ -202,7 +319,6 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
             script.defer = true;
             script.onerror = function() {
               console.error('❌ Erreur chargement API');
-              document.getElementById('loading').innerHTML = 'Erreur chargement Google Maps';
             };
             document.head.appendChild(script);
           }
@@ -228,16 +344,10 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
     `;
 
     setMapHtml(html);
-    setLoading(true);
   }, [driverLocation, destinationLocation, pickupLocation]);
-
-  const handleLoadEnd = () => {
-    setLoading(false);
-  };
 
   const handleError = (error) => {
     console.error('❌ Erreur Simple WebView:', error);
-    setLoading(false);
   };
 
   const handleMessage = (event) => {
@@ -274,24 +384,17 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
         ref={webViewRef}
         source={{ html: mapHtml }}
         style={styles.webview}
-        onLoadEnd={handleLoadEnd}
         onError={handleError}
         onMessage={handleMessage}
         javaScriptEnabled={true}
         domStorageEnabled={true}
-        startInLoadingState={true}
+        startInLoadingState={false}
         scalesPageToFit={false}
         bounces={false}
         scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
       />
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#4CAF50" />
-          <Text style={styles.loadingText}>Chargement carte simple...</Text>
-        </View>
-      )}
     </View>
   );
 });
@@ -303,21 +406,6 @@ const styles = StyleSheet.create({
   },
   webview: {
     flex: 1,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#FFF',
-    fontSize: 16,
-    marginTop: 10,
   },
 });
 

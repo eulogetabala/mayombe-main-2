@@ -3,6 +3,13 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const DeliveryStepsComponent = ({ currentStatus, orderStatus }) => {
+  // Logs pour debugging
+  console.log('🔍 DeliveryStepsComponent - Statuts reçus:', {
+    currentStatus,
+    orderStatus,
+    finalStatus: orderStatus || currentStatus || 'pending'
+  });
+
   // Définir les étapes de livraison
   const deliverySteps = [
     {
@@ -51,20 +58,32 @@ const DeliveryStepsComponent = ({ currentStatus, orderStatus }) => {
 
   // Déterminer l'étape actuelle basée sur le statut
   const getCurrentStepIndex = () => {
+    const finalStatus = orderStatus || currentStatus || 'pending';
+    
     const statusMapping = {
       'pending': 0,
       'preparing': 0,
+      'preparation': 0,
       'assigned': 1,
+      'assigné': 1,
       'picked_up': 2,
+      'récupéré': 2,
       'in_transit': 3,
       'en_cours': 3,
+      'en_route': 3,
+      'en route': 3,
       'arrived': 4,
+      'arrivé': 4,
       'delivered': 5,
       'completed': 5,
-      'livré': 5
+      'livré': 5,
+      'terminé': 5
     };
 
-    return statusMapping[orderStatus] || statusMapping[currentStatus] || 0;
+    const stepIndex = statusMapping[finalStatus] || 0;
+    console.log('🔍 DeliveryStepsComponent - Statut final:', finalStatus, '→ Étape:', stepIndex);
+    
+    return stepIndex;
   };
 
   const currentStepIndex = getCurrentStepIndex();

@@ -46,6 +46,7 @@ import ProcessPayment from './src/screens/ProcessPayment';
 import DeliveryCompleteScreen from './src/screens/DeliveryCompleteScreen';
 import LivreurSimulatorScreen from './src/screens/LivreurSimulatorScreen';
 import OrderTrackingScreen from './src/screens/OrderTrackingScreen';
+import DriverRatingScreen from './src/screens/DriverRatingScreen';
 import StripeTest from './src/components/StripeTest';
 import StripePaymentScreen from './src/screens/StripePaymentScreen';
 
@@ -134,6 +135,11 @@ const  AppNavigator = ({ initialRoute }) => {
       <Stack.Screen 
         name="OrderTracking" 
         component={OrderTrackingScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="DriverRating" 
+        component={DriverRatingScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen 

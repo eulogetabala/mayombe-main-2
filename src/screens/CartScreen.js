@@ -32,6 +32,7 @@ const CartScreen = ({ navigation, route }) => {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [currentSharedCartId, setCurrentSharedCartId] = useState(null);
+  const [isPreparingShare, setIsPreparingShare] = useState(false);
   
   // Utiliser le hook de partage de panier
   const { isSharing, shareCart, loadSharedCart } = useCartSharing(cartItems, setCartItems, formatPrice);
@@ -421,21 +422,16 @@ const CartScreen = ({ navigation, route }) => {
           }
         }
 
-        // Récupérer les vraies données client
+        // Récupérer les vraies données client (seulement ce qu'on collecte réellement)
         let customerData = {
-          name: 'Client',
-          phone: userPhone || '+243 000 000 000', // Utiliser le téléphone saisi par l'utilisateur
-          email: 'client@example.com'
+          phone: userPhone || '+243 000 000 000' // Seulement le téléphone saisi par l'utilisateur
         };
         
         try {
           const currentUser = await getCurrentUser();
-          if (currentUser) {
-            customerData = {
-              name: currentUser.name || 'Client',
-              phone: userPhone || currentUser.phone || '+243 000 000 000', // Priorité au téléphone saisi
-              email: currentUser.email || 'client@example.com'
-            };
+          if (currentUser && currentUser.phone) {
+            // Seulement si l'utilisateur a un téléphone enregistré
+            customerData.phone = userPhone || currentUser.phone;
           }
         } catch (userError) {
           console.log('⚠️ Impossible de récupérer les données utilisateur:', userError);
@@ -525,10 +521,20 @@ const CartScreen = ({ navigation, route }) => {
       return;
     }
 
+    if (isPreparingShare) {
+      console.log('⚠️ Partage déjà en cours...');
+      return;
+    }
+
     try {
+      setIsPreparingShare(true);
+      console.log('🔄 Début du partage de panier...');
+      
       // Générer un ID unique pour le panier partagé
       const sharedCartId = 'cart_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
       setCurrentSharedCartId(sharedCartId);
+      
+      console.log('🆔 ID généré:', sharedCartId);
       
       // Préparer les données du panier pour le stockage
       const cartData = cartItems.map(item => {
@@ -549,22 +555,26 @@ const CartScreen = ({ navigation, route }) => {
         };
       });
 
+      console.log('💾 Sauvegarde des données du panier...');
+
       // Sauvegarder le panier partagé dans le stockage local
       await AsyncStorage.setItem(`shared_cart_${sharedCartId}`, JSON.stringify(cartData));
       
-      // Sauvegarder le panier partagé sur Firebase
-      await sharedCartService.saveSharedCart(sharedCartId, cartData, 24); // Expire dans 24h
+      // Sauvegarder le panier partagé sur Firebase (en arrière-plan)
+      sharedCartService.saveSharedCart(sharedCartId, cartData, 24).catch(error => {
+        console.log('⚠️ Erreur Firebase (non bloquante):', error);
+      });
       
-      // Essayer de partager via le système normal
-      try {
-        await shareCart();
-      } catch (error) {
-        console.log('Erreur lors du partage normal, affichage du modal de fallback');
-        setShowShareModal(true);
-      }
+      console.log('✅ Données sauvegardées, affichage du modal...');
+      
+      // Afficher directement le modal de partage
+      setShowShareModal(true);
+      
     } catch (error) {
-      console.error("Erreur lors de la préparation du partage:", error);
+      console.error("❌ Erreur lors de la préparation du partage:", error);
       Alert.alert("Erreur", "Impossible de préparer le partage du panier.");
+    } finally {
+      setIsPreparingShare(false);
     }
   };
 
@@ -766,12 +776,12 @@ const CartScreen = ({ navigation, route }) => {
                       <TouchableOpacity 
                         style={[
                           styles.shareButton,
-                          isSharing && styles.disabledButton
+                          (isSharing || isPreparingShare) && styles.disabledButton
                         ]}
                         onPress={handleShareCart}
-                        disabled={isSharing}
+                        disabled={isSharing || isPreparingShare}
                       >
-                        {isSharing ? (
+                        {(isSharing || isPreparingShare) ? (
                           <ActivityIndicator color="#fff" size="small" />
                         ) : (
                           <>

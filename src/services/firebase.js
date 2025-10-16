@@ -226,6 +226,7 @@ class FirebaseTrackingService {
   // Envoyer la position GPS du driver (ULTRA-OPTIMISÉ pour temps réel)
   async updateDriverLocation(orderId, locationData) {
     try {
+      console.log('🔗 COMPATIBILITÉ - Envoi position driver avec OrderId direct:', orderId);
       const locationRef = ref(database, `orders/${orderId}/driver/location`);
       
       // Validation et optimisation des données
@@ -264,6 +265,7 @@ class FirebaseTrackingService {
   // Mettre à jour le statut de la livraison (pour le simulateur)
   async updateDeliveryStatus(orderId, statusData) {
     try {
+      console.log('🔗 COMPATIBILITÉ - Mise à jour statut avec OrderId direct:', orderId);
       const statusRef = ref(database, `orders/${orderId}/status`);
       const data = {
         ...statusData,
@@ -284,12 +286,10 @@ class FirebaseTrackingService {
   async createOrder(orderId, orderData) {
     try {
       console.log('📝 Création commande Firebase:', orderId);
+      console.log('🔍 DIAGNOSTIC - Données complètes envoyées à Firebase:', JSON.stringify(orderData, null, 2));
+      console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
       
-      // Mapper l'OrderId client vers l'OrderId Firebase
-      const firebaseOrderId = mapClientToFirebaseOrderId(orderId);
-      console.log('🔗 MAPPING - Création avec OrderId Firebase:', firebaseOrderId, 'pour client:', orderId);
-      
-      const orderRef = ref(database, `orders/${firebaseOrderId}`);
+      const orderRef = ref(database, `orders/${orderId}`);
       const data = {
         ...orderData,
         createdAt: new Date().toISOString(),
@@ -297,8 +297,12 @@ class FirebaseTrackingService {
         clientOrderId: orderId // Garder une référence à l'OrderId client
       };
       
+      console.log('🔍 DIAGNOSTIC - Données finales Firebase:', JSON.stringify(data, null, 2));
+      
       await set(orderRef, data);
-      console.log('📦 Commande créée dans Firebase:', firebaseOrderId);
+      console.log('📦 Commande créée dans Firebase:', orderId);
+      console.log('✅ DIAGNOSTIC - Firebase confirmé: Adresse =', data.delivery_address?.address || 'N/A');
+      console.log('✅ DIAGNOSTIC - Firebase confirmé: Téléphone =', data.customer?.phone || 'N/A');
       return true;
     } catch (error) {
       console.error('❌ Erreur création commande Firebase:', error);
@@ -306,10 +310,56 @@ class FirebaseTrackingService {
     }
   }
 
+  // S'abonner aux mises à jour de position du driver
+  subscribeToDriverLocation(orderId, callback) {
+    console.log('🔍 DIAGNOSTIC - Abonnement position driver pour:', orderId);
+    console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
+    
+    const locationRef = ref(database, `orders/${orderId}/driver/location`);
+    const statusRef = ref(database, `orders/${orderId}/status`);
+    
+    // Écouter les changements de position
+    const locationUnsubscribe = onValue(locationRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        console.log('📍 DIAGNOSTIC - Position driver reçue:', data);
+        callback({
+          type: 'location',
+          data: data
+        });
+      }
+    }, (error) => {
+      console.error('❌ Erreur écoute position:', error);
+    });
+    
+    // Écouter les changements de statut
+    const statusUnsubscribe = onValue(statusRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        console.log('📊 DIAGNOSTIC - Statut reçu:', data);
+        callback({
+          type: 'status',
+          data: data
+        });
+      }
+    }, (error) => {
+      console.error('❌ Erreur écoute statut:', error);
+    });
+    
+    // Retourner la fonction de nettoyage
+    return () => {
+      console.log('🧹 Nettoyage abonnement position/statut pour:', orderId);
+      locationUnsubscribe();
+      statusUnsubscribe();
+    };
+  }
+
   // Démarrer le tracking complet pour une commande
   startTracking(orderId, callbacks) {
     console.log('🔍 DIAGNOSTIC - Client: Démarrage tracking Firebase pour:', orderId);
     console.log('🔍 DIAGNOSTIC - Client: Callbacks reçus:', Object.keys(callbacks || {}));
+    console.log('🔍 DIAGNOSTIC - Client: Firebase configuré:', !!database);
+    console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
     
     // 🔍 DIAGNOSTIC: Vérifier les données existantes
     this.diagnoseOrderData(orderId);
@@ -404,6 +454,7 @@ class FirebaseTrackingService {
     const cleanupFunctions = this.subscribers.get(orderId);
     if (cleanupFunctions) {
       console.log('🛑 Arrêt tracking Firebase pour:', orderId);
+      console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
       cleanupFunctions.forEach(cleanup => cleanup());
       this.subscribers.delete(orderId);
     }
@@ -463,16 +514,14 @@ class FirebaseTrackingService {
   // 🔍 Diagnostic des données de commande
   async diagnoseOrderData(orderId) {
     console.log('🔍 DIAGNOSTIC - Client: Diagnostic des données pour la commande:', orderId);
+    console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
     
     try {
-      // Mapper l'OrderId client vers l'OrderId Firebase
-      const firebaseOrderId = mapClientToFirebaseOrderId(orderId);
-      console.log('🔗 MAPPING - Diagnostic avec OrderId Firebase:', firebaseOrderId, 'pour client:', orderId);
-      
-      // Vérifier la structure des données
-      const orderRef = ref(database, `orders/${firebaseOrderId}`);
-      const locationRef = ref(database, `orders/${firebaseOrderId}/driver/location`);
-      const statusRef = ref(database, `orders/${firebaseOrderId}/status`);
+      // Vérifier la structure des données avec l'OrderId direct
+      const orderRef = ref(database, `orders/${orderId}`);
+      const locationRef = ref(database, `orders/${orderId}/driver/location`);
+      const statusRef = ref(database, `orders/${orderId}/status`);
+      const driverRef = ref(database, `orders/${orderId}/driver`);
       
       // Vérifier si la commande existe
       const orderSnapshot = await this.getSnapshot(orderRef);
@@ -486,10 +535,23 @@ class FirebaseTrackingService {
       const statusSnapshot = await this.getSnapshot(statusRef);
       console.log('🔍 DIAGNOSTIC - Client: Statut commande:', statusSnapshot.val());
       
-      // Afficher le diagnostic
+      // Vérifier les données driver complètes
+      const driverSnapshot = await this.getSnapshot(driverRef);
+      console.log('🔍 DIAGNOSTIC - Client: Données driver complètes:', driverSnapshot.val());
+      
+      // Afficher le diagnostic détaillé
       if (!locationSnapshot.val()) {
-        console.log('🔍 DIAGNOSTIC - Client: Aucune position driver trouvée');
+        console.log('🔍 DIAGNOSTIC - Client: ❌ Aucune position driver trouvée');
         console.log('🔍 DIAGNOSTIC - Client: Le driver doit envoyer sa position sur: orders/${firebaseOrderId}/driver/location');
+      } else {
+        console.log('🔍 DIAGNOSTIC - Client: ✅ Position driver trouvée');
+      }
+      
+      if (!statusSnapshot.val()) {
+        console.log('🔍 DIAGNOSTIC - Client: ❌ Aucun statut trouvé');
+        console.log('🔍 DIAGNOSTIC - Client: Le driver doit envoyer son statut sur: orders/${firebaseOrderId}/status');
+      } else {
+        console.log('🔍 DIAGNOSTIC - Client: ✅ Statut trouvé:', statusSnapshot.val());
       }
       
       if (!statusSnapshot.val()) {
@@ -503,13 +565,68 @@ class FirebaseTrackingService {
   }
 
   // Récupérer les données d'une commande
-  async getOrderData(firebaseOrderId) {
+  async getOrderData(orderId) {
     try {
-      const orderRef = ref(database, `orders/${firebaseOrderId}`);
+      console.log('🔗 COMPATIBILITÉ - Récupération données avec OrderId direct:', orderId);
+      const orderRef = ref(database, `orders/${orderId}`);
       const orderSnapshot = await this.getSnapshot(orderRef);
       return orderSnapshot.val();
     } catch (error) {
       console.error('❌ Erreur récupération données commande:', error);
+      return null;
+    }
+  }
+
+  // Récupérer la position du driver
+  async getDriverLocation(orderId) {
+    try {
+      console.log('🔍 Récupération position driver pour:', orderId);
+      const locationRef = ref(database, `orders/${orderId}/driver/location`);
+      const locationSnapshot = await this.getSnapshot(locationRef);
+      const locationData = locationSnapshot.val();
+      
+      if (locationData) {
+        console.log('✅ Position driver trouvée:', locationData);
+        return {
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          accuracy: locationData.accuracy || 5,
+          speed: locationData.speed || 0,
+          heading: locationData.heading || 0,
+          timestamp: locationData.timestamp || Date.now()
+        };
+      } else {
+        console.log('⚠️ Aucune position driver trouvée pour:', orderId);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Erreur récupération position driver:', error);
+      return null;
+    }
+  }
+
+  // Récupérer le statut de livraison
+  async getDeliveryStatus(orderId) {
+    try {
+      console.log('🔍 Récupération statut livraison pour:', orderId);
+      const statusRef = ref(database, `orders/${orderId}/status`);
+      const statusSnapshot = await this.getSnapshot(statusRef);
+      const statusData = statusSnapshot.val();
+      
+      if (statusData) {
+        console.log('✅ Statut livraison trouvé:', statusData);
+        return {
+          status: statusData.status || statusData,
+          timestamp: statusData.timestamp || Date.now(),
+          distance: statusData.distance || 0,
+          estimatedTime: statusData.estimatedTime || 0
+        };
+      } else {
+        console.log('⚠️ Aucun statut livraison trouvé pour:', orderId);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Erreur récupération statut livraison:', error);
       return null;
     }
   }

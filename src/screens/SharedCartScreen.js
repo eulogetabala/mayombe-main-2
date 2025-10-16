@@ -18,6 +18,11 @@ import * as Animatable from 'react-native-animatable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../context/CartContext';
 import sharedCartService from '../services/sharedCartService';
+import { ref, set, get } from 'firebase/database';
+import { getDatabase } from 'firebase/database';
+
+// Initialiser Firebase
+const database = getDatabase();
 
 const SharedCartScreen = () => {
   const navigation = useNavigation();
@@ -50,8 +55,12 @@ const SharedCartScreen = () => {
 
     setIsLoading(true);
     try {
+      console.log(`🔍 TENTATIVE CHARGEMENT PANIER: ${cartId.trim()}`);
+      
       // Récupérer le panier partagé (Firebase en priorité, puis local)
       const cartData = await sharedCartService.loadSharedCart(cartId.trim());
+      
+      console.log(`📊 RÉSULTAT CHARGEMENT:`, cartData ? `${cartData.length} articles` : 'null');
         
         if (cartData && cartData.length > 0) {
           // Transformer les données du panier partagé
@@ -102,8 +111,9 @@ const SharedCartScreen = () => {
             ]
           );
         } else {
-        Alert.alert('Panier non trouvé', 'Aucun panier trouvé avec cet ID.');
-      }
+          console.log(`❌ PANIER NON TROUVÉ`);
+          Alert.alert('Panier non trouvé', 'Aucun panier trouvé avec cet ID.');
+        }
     } catch (error) {
       console.error('Erreur lors du chargement du panier partagé:', error);
       Alert.alert('Erreur', 'Impossible de charger le panier partagé');
@@ -277,6 +287,38 @@ const SharedCartScreen = () => {
                 <Text style={styles.loadButtonText}>Charger le panier</Text>
               </>
             )}
+          </TouchableOpacity>
+          
+          {/* Bouton de diagnostic temporaire */}
+          <TouchableOpacity
+            style={[styles.loadButton, { backgroundColor: '#FF6B6B', marginTop: 10 }]}
+            onPress={async () => {
+              console.log('🔍 DIAGNOSTIC FIREBASE...');
+              try {
+                // Tester la connexion Firebase
+                const testRef = ref(database, 'test_connection');
+                await set(testRef, { timestamp: Date.now() });
+                console.log('✅ FIREBASE CONNECTÉ');
+                
+                // Lister tous les paniers
+                const allCartsRef = ref(database, 'shared_carts');
+                const snapshot = await get(allCartsRef);
+                if (snapshot.exists()) {
+                  const carts = snapshot.val();
+                  console.log('📋 PANIERS DISPONIBLES:', Object.keys(carts));
+                  Alert.alert('Diagnostic', `Firebase connecté. ${Object.keys(carts).length} panier(s) trouvé(s).`);
+                } else {
+                  console.log('❌ AUCUN PANIER');
+                  Alert.alert('Diagnostic', 'Firebase connecté mais aucun panier trouvé.');
+                }
+              } catch (error) {
+                console.error('❌ ERREUR FIREBASE:', error);
+                Alert.alert('Erreur Firebase', error.message);
+              }
+            }}
+          >
+            <Ionicons name="bug" size={20} color="#FFF" />
+            <Text style={styles.loadButtonText}>🔍 Diagnostic Firebase</Text>
           </TouchableOpacity>
         </Animatable.View>
 

@@ -70,8 +70,17 @@ const OrderSuccess = ({ navigation, route }) => {
   };
 
   const handleTrackOrder = () => {
-    // Navigation vers l'écran de suivi de commande
-    navigation.navigate('OrderTracking', { orderDetails });
+    // 🔍 DIAGNOSTIC: Logs des données passées au tracking
+    console.log('🔍 DIAGNOSTIC - OrderSuccess - Données passées au tracking:', JSON.stringify(orderDetails, null, 2));
+    console.log('🔍 DIAGNOSTIC - OrderSuccess - Adresse:', orderDetails.address || orderDetails.delivery_address);
+    console.log('🔍 DIAGNOSTIC - OrderSuccess - Téléphone:', orderDetails.phone || orderDetails.delivery_phone);
+    console.log('🔍 DIAGNOSTIC - OrderSuccess - OrderId:', orderDetails.orderId);
+    
+    // Navigation vers l'écran de suivi de commande avec l'OrderId correct
+    navigation.navigate('OrderTracking', { 
+      orderDetails,
+      orderId: orderDetails.orderId || orderDetails.id
+    });
   };
 
   return (
