@@ -163,7 +163,7 @@ const transformTransactionData = async (apiData) => {
       id: transaction.id?.toString() || transaction.order_id?.toString() || Date.now().toString(),
       orderId: transaction.order_id || transaction.id,
       date: transaction.created_at || transaction.date || new Date().toISOString(),
-      status: mapTransactionStatus(transaction.payment_status), // Utiliser payment_status au lieu de status
+      status: mapTransactionStatus(transaction.delivery_status || transaction.status || transaction.payment_status), // Priorité: delivery_status > status > payment_status
       items: transformedItems,
       itemsCount: totalItems,
       subtotal: parseFloat(transaction.amount || 0),
@@ -194,19 +194,24 @@ const transformTransactionData = async (apiData) => {
 // Mapper les statuts de l'API vers les statuts de l'app
 const mapTransactionStatus = (apiStatus) => {
   const statusMap = {
+    // Statuts de paiement
     'pending': 'en_cours',
     'processing': 'en_cours',
+    'paid': 'en_cours', // Payé ne signifie pas livré !
+    'failed': 'annulé',
+    'refunded': 'annulé',
+    
+    // Statuts de livraison
     'preparing': 'en_cours',
     'ready': 'en_cours',
     'out_for_delivery': 'en_cours',
-    'paid': 'livré', // Si payé, considérer comme livré
     'delivered': 'livré',
     'completed': 'livré',
+    
+    // Statuts d'annulation
     'cancelled': 'annulé',
     'cancelled_by_customer': 'annulé',
     'cancelled_by_restaurant': 'annulé',
-    'failed': 'annulé',
-    'refunded': 'annulé',
   };
 
   return statusMap[apiStatus?.toLowerCase()] || 'en_cours';

@@ -124,51 +124,60 @@ const OrdersHistory = ({ navigation }) => {
   };
 
   const filterOrders = () => {
-    let filtered = orders;
+    try {
+      let filtered = orders;
 
-    if (activeFilter !== 'all') {
-      filtered = filtered.filter(order => order.status === activeFilter);
+      // Filtre par statut
+      if (activeFilter !== 'all') {
+        filtered = filtered.filter(order => order.status === activeFilter);
+      }
+
+      // Recherche simplifiée
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase().trim();
+        console.log('🔍 Recherche avec terme:', term);
+        console.log('🔍 Nombre de commandes à filtrer:', filtered.length);
+        
+        filtered = filtered.filter(order => {
+          try {
+            // Recherche dans l'ID de commande (le plus important)
+            const orderId = (order.orderId || order.id || '').toString().toLowerCase();
+            if (orderId.includes(term)) return true;
+            
+            // Recherche dans le nom du restaurant
+            const restaurantName = (order.restaurant?.name || order.restaurant?.title || '').toLowerCase();
+            if (restaurantName.includes(term)) return true;
+            
+            // Recherche dans les noms des produits
+            if (order.items && Array.isArray(order.items)) {
+              const productNames = order.items
+                .map(item => (item.name || '').toLowerCase())
+                .join(' ');
+              if (productNames.includes(term)) return true;
+            }
+            
+            // Recherche dans le montant total
+            const totalAmount = (order.total || 0).toString();
+            if (totalAmount.includes(term)) return true;
+            
+            // Recherche dans la méthode de paiement
+            const paymentMethod = (order.payment_method || '').toLowerCase();
+            if (paymentMethod.includes(term)) return true;
+            
+            return false;
+          } catch (error) {
+            console.log('Erreur recherche pour commande:', order.id, error);
+            return false;
+          }
+        });
+      }
+
+      console.log('🔍 Résultats de recherche:', filtered.length);
+      setFilteredOrders(filtered);
+    } catch (error) {
+      console.error('Erreur dans filterOrders:', error);
+      setFilteredOrders(orders);
     }
-
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(order => {
-        // Recherche dans le nom du restaurant
-        const restaurantName = order.restaurant?.name?.toLowerCase() || '';
-        const restaurantTitle = order.restaurant?.title?.toLowerCase() || '';
-        
-        // Recherche dans l'ID de commande
-        const orderId = order.id?.toString().toLowerCase() || '';
-        const orderIdAlt = order.orderId?.toString().toLowerCase() || '';
-        
-        // Recherche dans les références générées
-        const fullReference = generateFullOrderReference(order.orderId || order.id, order.date).toLowerCase();
-        const shortReference = generateShortOrderReference(order.orderId || order.id, order.date).toLowerCase();
-        
-        // Recherche dans les noms des produits
-        const productNames = order.items?.map(item => item.name?.toLowerCase() || '').join(' ') || '';
-        
-        // Recherche dans le montant total
-        const totalAmount = order.total?.toString() || '';
-        
-        // Recherche dans la méthode de paiement
-        const paymentMethod = order.payment_method?.toLowerCase() || '';
-        
-        return (
-          restaurantName.includes(term) ||
-          restaurantTitle.includes(term) ||
-          orderId.includes(term) ||
-          orderIdAlt.includes(term) ||
-          fullReference.includes(term) ||
-          shortReference.includes(term) ||
-          productNames.includes(term) ||
-          totalAmount.includes(term) ||
-          paymentMethod.includes(term)
-        );
-      });
-    }
-
-    setFilteredOrders(filtered);
   };
 
 

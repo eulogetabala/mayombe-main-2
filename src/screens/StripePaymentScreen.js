@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   SafeAreaView,
   StatusBar,
-  Dimensions
+  Dimensions,
+  ScrollView
 } from 'react-native';
 import { CardField, useStripe, useConfirmPayment } from '@stripe/stripe-react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -87,6 +88,7 @@ const StripePaymentScreen = ({ route, navigation }) => {
 
       const data = await response.json();
       console.log('📱 Réponse backend:', data);
+      console.log('🔍 Client Secret reçu:', data.client_secret ? 'OUI' : 'NON');
 
       if (response.ok && data.success) {
         // Étape 2: Confirmer le paiement avec le client_secret
@@ -98,6 +100,7 @@ const StripePaymentScreen = ({ route, navigation }) => {
             data.client_secret,
             {
               paymentMethodType: 'Card',
+              paymentMethodId: paymentMethod.id
             }
           );
 
@@ -112,6 +115,24 @@ const StripePaymentScreen = ({ route, navigation }) => {
                 'Le backend doit être configuré avec confirmation_method: automatic. Contactez le développeur backend.',
                 [{ text: 'OK' }]
               );
+            } else if (confirmError.code === 'payment_intent_payment_attempt_failed') {
+              // Erreur de paiement - vérifier le type d'erreur
+              let errorMessage = confirmError.message;
+              
+              if (confirmError.paymentIntent?.last_payment_error) {
+                const error = confirmError.paymentIntent.last_payment_error;
+                if (error.decline_code === 'insufficient_funds') {
+                  errorMessage = 'Fonds insuffisants. Veuillez vérifier le solde de votre compte ou utiliser une autre carte.';
+                } else if (error.decline_code === 'generic_decline') {
+                  errorMessage = 'Transaction refusée par votre banque. Veuillez contacter votre banque ou utiliser une autre carte.';
+                } else if (error.decline_code === 'expired_card') {
+                  errorMessage = 'Votre carte a expiré. Veuillez utiliser une autre carte.';
+                } else if (error.decline_code === 'incorrect_cvc') {
+                  errorMessage = 'Code de sécurité incorrect. Veuillez vérifier le CVC de votre carte.';
+                }
+              }
+              
+              Alert.alert('Paiement échoué', errorMessage);
             } else {
               Alert.alert('Erreur de paiement', confirmError.message);
             }
@@ -120,17 +141,94 @@ const StripePaymentScreen = ({ route, navigation }) => {
           }
 
           console.log('✅ Paiement confirmé:', paymentIntent);
+          console.log('🔍 Statut du paiement:', paymentIntent.status);
+          console.log('🔍 NextAction (3D Secure):', paymentIntent.nextAction);
+          console.log('🔍 ConfirmationMethod:', paymentIntent.confirmationMethod);
+          console.log('🔍 PaymentMethod:', paymentIntent.paymentMethod);
+          console.log('🔍 Amount:', paymentIntent.amount);
+          console.log('🔍 Currency:', paymentIntent.currency);
 
-          // Vider le panier après confirmation du paiement
-          try {
-            await clearCart();
-            await AsyncStorage.removeItem('cart');
-            console.log('✅ Panier vidé après paiement confirmé');
-          } catch (error) {
-            console.error('❌ Erreur lors du vidage du panier:', error);
+          // Vérifier si 3D Secure est requis
+          if (paymentIntent.status === 'requires_action' || paymentIntent.status === 'requires_source_action') {
+            console.log('🔐 3D Secure requis - authentification en cours...');
+            // Stripe devrait automatiquement ouvrir 3D Secure
+            // Pas besoin de code supplémentaire, Stripe gère automatiquement
+            return;
           }
 
-          if (paymentIntent.status === 'succeeded') {
+          if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'Succeeded') {
+            // Vider le panier seulement si le paiement a réussi
+            try {
+              await clearCart();
+              await AsyncStorage.removeItem('cart');
+              console.log('✅ Panier vidé après paiement réussi');
+            } catch (error) {
+              console.error('❌ Erreur lors du vidage du panier:', error);
+            }
+
+            Alert.alert(
+              'Paiement réussi !', 
+              'Votre paiement par carte bancaire a été traité avec succès. Vous recevrez un SMS de confirmation.',
+              [
+                {
+                  text: 'OK',
+                  onPress: () => {
+                    if (onPaymentSuccess) {
+                      onPaymentSuccess(data);
+                    }
+                    navigation.navigate('OrderSuccess', { orderDetails: data });
+                  }
+                }
+              ]
+            );
+          } else if (paymentIntent.status === 'requires_payment_method' || 
+                     paymentIntent.status === 'requires_action' ||
+                     paymentIntent.status === 'canceled') {
+            // Paiement échoué - ne pas enregistrer la commande
+            let errorMessage = 'Votre paiement n\'a pas pu être traité. Veuillez vérifier vos informations de carte ou essayer une autre méthode de paiement.';
+            
+            // Vérifier si c'est une erreur de fonds insuffisants
+            if (paymentIntent.last_payment_error) {
+              const error = paymentIntent.last_payment_error;
+              if (error.decline_code === 'insufficient_funds' || 
+                  error.code === 'card_declined' && error.decline_code === 'insufficient_funds') {
+                errorMessage = 'Fonds insuffisants. Veuillez vérifier le solde de votre compte ou utiliser une autre carte.';
+              } else if (error.decline_code === 'generic_decline') {
+                errorMessage = 'Transaction refusée par votre banque. Veuillez contacter votre banque ou utiliser une autre carte.';
+              } else if (error.decline_code === 'expired_card') {
+                errorMessage = 'Votre carte a expiré. Veuillez utiliser une autre carte.';
+              } else if (error.decline_code === 'incorrect_cvc') {
+                errorMessage = 'Code de sécurité incorrect. Veuillez vérifier le CVC de votre carte.';
+              }
+            }
+            
+            Alert.alert(
+              'Paiement échoué', 
+              errorMessage,
+              [{ text: 'OK' }]
+            );
+          } else {
+            // Autres statuts (processing, etc.) - ne pas enregistrer encore
+            Alert.alert(
+              'Paiement en cours', 
+              'Votre paiement est en cours de traitement. Vous recevrez un SMS de confirmation de votre banque.',
+              [{ text: 'OK' }]
+            );
+          }
+        } else {
+          // Pas de client_secret - vérifier le statut du backend
+          console.log('📱 Paiement direct - vérification du statut backend:', data);
+          
+          if (data.payment_status === 'success' || data.payment_status === 'completed') {
+            // Paiement réussi côté backend
+            try {
+              await clearCart();
+              await AsyncStorage.removeItem('cart');
+              console.log('✅ Panier vidé après paiement direct réussi');
+            } catch (error) {
+              console.error('❌ Erreur lors du vidage du panier:', error);
+            }
+
             Alert.alert(
               'Paiement réussi !', 
               'Votre paiement par carte bancaire a été traité avec succès. Vous recevrez un SMS de confirmation.',
@@ -147,50 +245,26 @@ const StripePaymentScreen = ({ route, navigation }) => {
               ]
             );
           } else {
+            // Paiement échoué côté backend
+            let errorMessage = data.message || 'Votre paiement n\'a pas pu être traité. Veuillez réessayer.';
+            
+            // Vérifier si c'est une erreur de fonds insuffisants côté backend
+            if (data.error_code === 'insufficient_funds' || 
+                data.message?.toLowerCase().includes('insufficient') ||
+                data.message?.toLowerCase().includes('fonds insuffisants')) {
+              errorMessage = 'Fonds insuffisants. Veuillez vérifier le solde de votre compte ou utiliser une autre carte.';
+            } else if (data.error_code === 'card_declined') {
+              errorMessage = 'Transaction refusée par votre banque. Veuillez contacter votre banque ou utiliser une autre carte.';
+            } else if (data.error_code === 'expired_card') {
+              errorMessage = 'Votre carte a expiré. Veuillez utiliser une autre carte.';
+            }
+            
             Alert.alert(
-              'Paiement en cours', 
-              'Votre paiement est en cours de traitement. Vous recevrez un SMS de confirmation de votre banque.',
-              [
-                {
-                  text: 'OK',
-                  onPress: () => {
-                    if (onPaymentSuccess) {
-                      onPaymentSuccess(data);
-                    }
-                    navigation.navigate('OrderSuccess', { orderDetails: data });
-                  }
-                }
-              ]
+              'Paiement échoué', 
+              errorMessage,
+              [{ text: 'OK' }]
             );
           }
-        } else {
-          // Pas de client_secret - paiement direct
-          console.log('✅ Paiement direct sans confirmation');
-          
-          // Vider le panier
-          try {
-            await clearCart();
-            await AsyncStorage.removeItem('cart');
-            console.log('✅ Panier vidé après paiement direct');
-          } catch (error) {
-            console.error('❌ Erreur lors du vidage du panier:', error);
-          }
-
-          Alert.alert(
-            'Paiement réussi !', 
-            'Votre paiement par carte bancaire a été traité avec succès. Vous recevrez un SMS de confirmation.',
-            [
-              {
-                text: 'OK',
-                onPress: () => {
-                  if (onPaymentSuccess) {
-                    onPaymentSuccess(data);
-                  }
-                  navigation.navigate('OrderSuccess', { orderDetails: data });
-                }
-              }
-            ]
-          );
         }
       } else {
         Alert.alert('Erreur de paiement', data.message || 'Une erreur est survenue lors du paiement.');
@@ -215,7 +289,16 @@ const StripePaymentScreen = ({ route, navigation }) => {
         <View style={styles.headerContent}>
           <TouchableOpacity 
             style={styles.backButton}
-            onPress={() => navigation.goBack()}
+            onPress={() => {
+              try {
+                // Toujours aller au panier, pas de goBack()
+                navigation.navigate('Cart');
+              } catch (error) {
+                console.log('Erreur navigation:', error);
+                // Fallback vers l'écran principal
+                navigation.navigate('Home');
+              }
+            }}
           >
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
@@ -229,7 +312,7 @@ const StripePaymentScreen = ({ route, navigation }) => {
         </View>
       </LinearGradient>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.cardContainer}>
           <View style={styles.cardHeader}>
             <Ionicons name="card" size={24} color="#51A905" />
@@ -279,7 +362,7 @@ const StripePaymentScreen = ({ route, navigation }) => {
             <Text style={styles.totalValue}>{orderDetails.total} FCFA</Text>
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity
@@ -356,6 +439,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+    paddingBottom: 10,
   },
   cardContainer: {
     backgroundColor: '#fff',
@@ -452,8 +536,10 @@ const styles = StyleSheet.create({
   footer: {
     backgroundColor: '#fff',
     padding: 20,
+    paddingBottom: 30,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+    marginBottom: 20,
   },
   payButton: {
     backgroundColor: '#51A905',

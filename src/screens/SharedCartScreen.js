@@ -289,37 +289,6 @@ const SharedCartScreen = () => {
             )}
           </TouchableOpacity>
           
-          {/* Bouton de diagnostic temporaire */}
-          <TouchableOpacity
-            style={[styles.loadButton, { backgroundColor: '#FF6B6B', marginTop: 10 }]}
-            onPress={async () => {
-              console.log('🔍 DIAGNOSTIC FIREBASE...');
-              try {
-                // Tester la connexion Firebase
-                const testRef = ref(database, 'test_connection');
-                await set(testRef, { timestamp: Date.now() });
-                console.log('✅ FIREBASE CONNECTÉ');
-                
-                // Lister tous les paniers
-                const allCartsRef = ref(database, 'shared_carts');
-                const snapshot = await get(allCartsRef);
-                if (snapshot.exists()) {
-                  const carts = snapshot.val();
-                  console.log('📋 PANIERS DISPONIBLES:', Object.keys(carts));
-                  Alert.alert('Diagnostic', `Firebase connecté. ${Object.keys(carts).length} panier(s) trouvé(s).`);
-                } else {
-                  console.log('❌ AUCUN PANIER');
-                  Alert.alert('Diagnostic', 'Firebase connecté mais aucun panier trouvé.');
-                }
-              } catch (error) {
-                console.error('❌ ERREUR FIREBASE:', error);
-                Alert.alert('Erreur Firebase', error.message);
-              }
-            }}
-          >
-            <Ionicons name="bug" size={20} color="#FFF" />
-            <Text style={styles.loadButtonText}>🔍 Diagnostic Firebase</Text>
-          </TouchableOpacity>
         </Animatable.View>
 
         {sharedCart && (

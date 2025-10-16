@@ -1,20 +1,6 @@
 {
   "rules": {
-    "shared_carts": {
-      ".read": true,
-      ".write": true
-    },
-    "orders": {
-      ".read": true,
-      ".write": true
-    },
-    "test_connection": {
-      ".read": true,
-      ".write": true
-    },
-    "config_test": {
-      ".read": true,
-      ".write": true
-    }
+    ".read": true,
+    ".write": true
   }
 }

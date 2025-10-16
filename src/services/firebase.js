@@ -77,14 +77,15 @@ class FirebaseTrackingService {
 
   // Écouter la position GPS du driver en temps réel (ULTRA-OPTIMISÉ)
   subscribeToDriverLocation(orderId, callback) {
-    console.log('🔍 Abonnement position driver pour:', orderId.slice(-6));
+    console.log('🔍 CLIENT: Écoute position driver pour OrderId:', orderId);
+    console.log('🔍 CLIENT: Chemin Firebase:', `orders/${orderId}/driver/location`);
     
-    // Mapper l'OrderId client vers l'OrderId Firebase
-    const firebaseOrderId = mapClientToFirebaseOrderId(orderId);
-    console.log('🔗 MAPPING - OrderId Firebase:', firebaseOrderId.slice(-6));
+    // Vérifier si cette commande existe dans Firebase
+    this.checkOrderExists(orderId);
     
-    const locationRef = ref(database, `orders/${firebaseOrderId}/driver/location`);
-    const statusRef = ref(database, `orders/${firebaseOrderId}/status`);
+    // Utiliser directement l'OrderId (compatible avec le driver)
+    const locationRef = ref(database, `orders/${orderId}/driver/location`);
+    const statusRef = ref(database, `orders/${orderId}/status`);
     
     // Variables pour optimiser les performances
     let lastLocationData = null;
@@ -99,7 +100,6 @@ class FirebaseTrackingService {
         lastStatusData = statusData;
         statusUpdateCount++;
         
-        console.log('📊 Statut reçu #' + statusUpdateCount + ':', statusData.status || statusData);
         callback({
           type: 'status',
           data: {
@@ -115,6 +115,7 @@ class FirebaseTrackingService {
     // Écouter les changements de position - ULTRA-OPTIMISÉ
     this.locationSubscription = onValue(locationRef, (snapshot) => {
       const data = snapshot.val();
+      console.log('🔍 CLIENT: Données position reçues:', data);
       
       if (data) {
         // Vérifier si c'est une nouvelle position (éviter les doublons)
@@ -133,11 +134,11 @@ class FirebaseTrackingService {
           if (hasLocationChanged) {
             lastLocationData = data;
             
-            console.log('📍 Position #' + locationUpdateCount + ':', {
-              lat: data.latitude.toFixed(6),
-              lng: data.longitude.toFixed(6),
-              speed: data.speed,
-              accuracy: data.accuracy
+            console.log('🔍 CLIENT: Envoi position au callback:', {
+              latitude: parseFloat(data.latitude),
+              longitude: parseFloat(data.longitude),
+              accuracy: data.accuracy || 5,
+              speed: data.speed || 0
             });
             
             callback({
@@ -154,7 +155,6 @@ class FirebaseTrackingService {
           }
         }
       } else {
-        console.log('🔍 Aucune donnée de position disponible pour:', orderId.slice(-6));
       }
     }, (error) => {
       console.error('❌ Erreur abonnement position:', error);
@@ -193,7 +193,6 @@ class FirebaseTrackingService {
         additionalInfo
       );
       
-      console.log('🔔 Notification de statut envoyée:', { orderId, status });
     } catch (error) {
       console.error('❌ Erreur envoi notification de statut:', error);
     }
@@ -201,7 +200,6 @@ class FirebaseTrackingService {
 
   // Écouter les messages FCM (notifications push) - désactivé pour React Native
   subscribeToMessages(callback) {
-    console.log('🔔 FCM désactivé pour React Native');
     
     this.messageSubscription = null;
 
@@ -215,7 +213,6 @@ class FirebaseTrackingService {
   // Obtenir le token FCM pour les notifications - désactivé pour React Native
   async getFCMToken() {
     try {
-      console.log('🔔 FCM désactivé pour React Native');
       return null;
     } catch (error) {
       console.error('❌ Erreur obtention token FCM:', error);
@@ -226,7 +223,6 @@ class FirebaseTrackingService {
   // Envoyer la position GPS du driver (ULTRA-OPTIMISÉ pour temps réel)
   async updateDriverLocation(orderId, locationData) {
     try {
-      console.log('🔗 COMPATIBILITÉ - Envoi position driver avec OrderId direct:', orderId);
       const locationRef = ref(database, `orders/${orderId}/driver/location`);
       
       // Validation et optimisation des données
@@ -246,14 +242,6 @@ class FirebaseTrackingService {
       // Utiliser set() pour une écriture atomique et rapide
       await set(locationRef, data);
       
-      // Log optimisé - seulement les données essentielles
-      console.log('📍 Position driver envoyée:', {
-        orderId: orderId.slice(-6), // Seulement les 6 derniers caractères
-        lat: data.latitude.toFixed(6),
-        lng: data.longitude.toFixed(6),
-        speed: data.speed,
-        accuracy: data.accuracy
-      });
       
       return data;
     } catch (error) {
@@ -265,7 +253,6 @@ class FirebaseTrackingService {
   // Mettre à jour le statut de la livraison (pour le simulateur)
   async updateDeliveryStatus(orderId, statusData) {
     try {
-      console.log('🔗 COMPATIBILITÉ - Mise à jour statut avec OrderId direct:', orderId);
       const statusRef = ref(database, `orders/${orderId}/status`);
       const data = {
         ...statusData,
@@ -274,7 +261,6 @@ class FirebaseTrackingService {
       };
       
       await set(statusRef, data);
-      console.log('📊 Statut livraison mis à jour:', data);
       return true;
     } catch (error) {
       console.error('❌ Erreur mise à jour statut:', error);
@@ -285,9 +271,6 @@ class FirebaseTrackingService {
   // Créer une nouvelle commande dans Firebase
   async createOrder(orderId, orderData) {
     try {
-      console.log('📝 Création commande Firebase:', orderId);
-      console.log('🔍 DIAGNOSTIC - Données complètes envoyées à Firebase:', JSON.stringify(orderData, null, 2));
-      console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
       
       const orderRef = ref(database, `orders/${orderId}`);
       const data = {
@@ -297,12 +280,8 @@ class FirebaseTrackingService {
         clientOrderId: orderId // Garder une référence à l'OrderId client
       };
       
-      console.log('🔍 DIAGNOSTIC - Données finales Firebase:', JSON.stringify(data, null, 2));
       
       await set(orderRef, data);
-      console.log('📦 Commande créée dans Firebase:', orderId);
-      console.log('✅ DIAGNOSTIC - Firebase confirmé: Adresse =', data.delivery_address?.address || 'N/A');
-      console.log('✅ DIAGNOSTIC - Firebase confirmé: Téléphone =', data.customer?.phone || 'N/A');
       return true;
     } catch (error) {
       console.error('❌ Erreur création commande Firebase:', error);
@@ -312,8 +291,6 @@ class FirebaseTrackingService {
 
   // S'abonner aux mises à jour de position du driver
   subscribeToDriverLocation(orderId, callback) {
-    console.log('🔍 DIAGNOSTIC - Abonnement position driver pour:', orderId);
-    console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
     
     const locationRef = ref(database, `orders/${orderId}/driver/location`);
     const statusRef = ref(database, `orders/${orderId}/status`);
@@ -322,7 +299,6 @@ class FirebaseTrackingService {
     const locationUnsubscribe = onValue(locationRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        console.log('📍 DIAGNOSTIC - Position driver reçue:', data);
         callback({
           type: 'location',
           data: data
@@ -336,7 +312,6 @@ class FirebaseTrackingService {
     const statusUnsubscribe = onValue(statusRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        console.log('📊 DIAGNOSTIC - Statut reçu:', data);
         callback({
           type: 'status',
           data: data
@@ -348,7 +323,6 @@ class FirebaseTrackingService {
     
     // Retourner la fonction de nettoyage
     return () => {
-      console.log('🧹 Nettoyage abonnement position/statut pour:', orderId);
       locationUnsubscribe();
       statusUnsubscribe();
     };
@@ -356,13 +330,7 @@ class FirebaseTrackingService {
 
   // Démarrer le tracking complet pour une commande
   startTracking(orderId, callbacks) {
-    console.log('🔍 DIAGNOSTIC - Client: Démarrage tracking Firebase pour:', orderId);
-    console.log('🔍 DIAGNOSTIC - Client: Callbacks reçus:', Object.keys(callbacks || {}));
-    console.log('🔍 DIAGNOSTIC - Client: Firebase configuré:', !!database);
-    console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
     
-    // 🔍 DIAGNOSTIC: Vérifier les données existantes
-    this.diagnoseOrderData(orderId);
     
     const cleanupFunctions = [];
 
@@ -406,7 +374,6 @@ class FirebaseTrackingService {
     this.subscribers.set(orderId, cleanupFunctions);
 
     return () => {
-      console.log('🛑 Arrêt tracking Firebase pour:', orderId);
       
       try {
         cleanupFunctions.forEach(cleanup => {
@@ -431,7 +398,6 @@ class FirebaseTrackingService {
   // 🔔 Initialiser les notifications et le geofencing
   async initializeNotificationsAndGeofencing(orderId, callbacks) {
     try {
-      console.log('🔔 Initialisation notifications et geofencing pour:', orderId);
 
       // Initialiser les services
       await pushNotificationService.initialize();
@@ -440,10 +406,8 @@ class FirebaseTrackingService {
       // Si on a une destination, ajouter un geofence
       if (callbacks.destinationLocation) {
         geofencingService.addGeofence(orderId, callbacks.destinationLocation);
-        console.log('🎯 Geofence ajouté pour:', orderId);
       }
 
-      console.log('✅ Notifications et geofencing initialisés');
     } catch (error) {
       console.error('❌ Erreur initialisation notifications/geofencing:', error);
     }
@@ -453,8 +417,6 @@ class FirebaseTrackingService {
   stopTracking(orderId) {
     const cleanupFunctions = this.subscribers.get(orderId);
     if (cleanupFunctions) {
-      console.log('🛑 Arrêt tracking Firebase pour:', orderId);
-      console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
       cleanupFunctions.forEach(cleanup => cleanup());
       this.subscribers.delete(orderId);
     }
@@ -468,12 +430,10 @@ class FirebaseTrackingService {
     }
 
     this.connectionRetries++;
-    console.log(`🔄 Tentative de reconnexion ${this.connectionRetries}/${this.maxRetries}`);
     
     try {
       const isConnected = await this.checkConnection();
       if (isConnected) {
-        console.log('✅ Reconnexion Firebase réussie');
         this.connectionRetries = 0;
         return true;
       } else {
@@ -490,11 +450,9 @@ class FirebaseTrackingService {
 
   // Nettoyer tous les listeners
   cleanup() {
-    console.log('🧹 Nettoyage complet Firebase');
     
     // Nettoyer tous les abonnements
     this.subscribers.forEach((cleanupFunctions, orderId) => {
-      console.log('🛑 Arrêt tracking pour:', orderId);
       cleanupFunctions.forEach(cleanup => cleanup());
     });
     this.subscribers.clear();
@@ -511,63 +469,10 @@ class FirebaseTrackingService {
     }
   }
 
-  // 🔍 Diagnostic des données de commande
-  async diagnoseOrderData(orderId) {
-    console.log('🔍 DIAGNOSTIC - Client: Diagnostic des données pour la commande:', orderId);
-    console.log('🔗 COMPATIBILITÉ - Utilisation directe OrderId (compatible driver)');
-    
-    try {
-      // Vérifier la structure des données avec l'OrderId direct
-      const orderRef = ref(database, `orders/${orderId}`);
-      const locationRef = ref(database, `orders/${orderId}/driver/location`);
-      const statusRef = ref(database, `orders/${orderId}/status`);
-      const driverRef = ref(database, `orders/${orderId}/driver`);
-      
-      // Vérifier si la commande existe
-      const orderSnapshot = await this.getSnapshot(orderRef);
-      console.log('🔍 DIAGNOSTIC - Client: Données commande:', orderSnapshot.val());
-      
-      // Vérifier la position du driver
-      const locationSnapshot = await this.getSnapshot(locationRef);
-      console.log('🔍 DIAGNOSTIC - Client: Position driver:', locationSnapshot.val());
-      
-      // Vérifier le statut
-      const statusSnapshot = await this.getSnapshot(statusRef);
-      console.log('🔍 DIAGNOSTIC - Client: Statut commande:', statusSnapshot.val());
-      
-      // Vérifier les données driver complètes
-      const driverSnapshot = await this.getSnapshot(driverRef);
-      console.log('🔍 DIAGNOSTIC - Client: Données driver complètes:', driverSnapshot.val());
-      
-      // Afficher le diagnostic détaillé
-      if (!locationSnapshot.val()) {
-        console.log('🔍 DIAGNOSTIC - Client: ❌ Aucune position driver trouvée');
-        console.log('🔍 DIAGNOSTIC - Client: Le driver doit envoyer sa position sur: orders/${firebaseOrderId}/driver/location');
-      } else {
-        console.log('🔍 DIAGNOSTIC - Client: ✅ Position driver trouvée');
-      }
-      
-      if (!statusSnapshot.val()) {
-        console.log('🔍 DIAGNOSTIC - Client: ❌ Aucun statut trouvé');
-        console.log('🔍 DIAGNOSTIC - Client: Le driver doit envoyer son statut sur: orders/${firebaseOrderId}/status');
-      } else {
-        console.log('🔍 DIAGNOSTIC - Client: ✅ Statut trouvé:', statusSnapshot.val());
-      }
-      
-      if (!statusSnapshot.val()) {
-        console.log('🔍 DIAGNOSTIC - Client: Aucun statut trouvé');
-        console.log('🔍 DIAGNOSTIC - Client: Le driver doit envoyer le statut sur: orders/${firebaseOrderId}/status');
-      }
-      
-    } catch (error) {
-      console.error('❌ Erreur diagnostic:', error);
-    }
-  }
 
   // Récupérer les données d'une commande
   async getOrderData(orderId) {
     try {
-      console.log('🔗 COMPATIBILITÉ - Récupération données avec OrderId direct:', orderId);
       const orderRef = ref(database, `orders/${orderId}`);
       const orderSnapshot = await this.getSnapshot(orderRef);
       return orderSnapshot.val();
@@ -580,7 +485,6 @@ class FirebaseTrackingService {
   // Récupérer la position du driver
   async getDriverLocation(orderId) {
     try {
-      console.log('🔍 Récupération position driver pour:', orderId);
       const locationRef = ref(database, `orders/${orderId}/driver/location`);
       const locationSnapshot = await this.getSnapshot(locationRef);
       const locationData = locationSnapshot.val();
@@ -652,6 +556,29 @@ class FirebaseTrackingService {
         reject(error);
       }
     });
+  }
+
+  // Vérifier si une commande existe dans Firebase
+  async checkOrderExists(orderId) {
+    try {
+      const orderRef = ref(database, `orders/${orderId}`);
+      const snapshot = await this.getSnapshot(orderRef);
+      const orderData = snapshot.val();
+      
+      if (orderData) {
+        console.log('✅ CLIENT: Commande trouvée dans Firebase:', orderId);
+        console.log('✅ CLIENT: Données commande:', {
+          status: orderData.status,
+          hasDriver: !!orderData.driver,
+          hasDriverLocation: !!orderData.driver?.location
+        });
+      } else {
+        console.log('❌ CLIENT: Commande NON trouvée dans Firebase:', orderId);
+        console.log('❌ CLIENT: Le driver doit créer cette commande dans Firebase');
+      }
+    } catch (error) {
+      console.error('❌ CLIENT: Erreur vérification commande:', error);
+    }
   }
 }
 

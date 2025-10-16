@@ -23,42 +23,19 @@ const OrderScreen = ({ route, navigation }) => {
   const [phone, setPhone] = useState('');
   const [rating, setRating] = useState(0);
   const [deliveryDistance, setDeliveryDistance] = useState(5); // Distance par défaut
-  const [deliveryFee, setDeliveryFee] = useState(1000); // Frais par défaut
+  const [deliveryFee, setDeliveryFee] = useState(0); // Frais désactivés pour test
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const finalTotal = totalAmount + deliveryFee;
 
   // Fonction pour calculer les frais de livraison selon la distance
   const calculateDeliveryFee = (distance) => {
-    if (!distance || isNaN(distance)) {
-      return 1000; // Frais par défaut si pas de distance
-    }
-    
-    const distanceNum = parseFloat(distance);
-    
-    if (distanceNum <= 10) {
-      return 1000; // 0-10km : 1000 FCFA
-    } else if (distanceNum <= 20) {
-      return 1500; // 11-20km : 1500 FCFA
-    } else {
-      return 2000; // 21km+ : 2000 FCFA
-    }
+    // Frais désactivés pour test des modes de paiement
+    return 0;
   };
 
   // Fonction pour obtenir la description des frais
   const getDeliveryFeeDescription = (distance) => {
-    if (!distance || isNaN(distance)) {
-      return "Frais de livraison (distance non disponible)";
-    }
-    
-    const distanceNum = parseFloat(distance);
-    
-    if (distanceNum <= 10) {
-      return `Frais de livraison (0-10km)`;
-    } else if (distanceNum <= 20) {
-      return `Frais de livraison (11-20km)`;
-    } else {
-      return `Frais de livraison (21km+)`;
-    }
+    return "Livraison gratuite (test)";
   };
 
   // Calculer les frais quand la distance change

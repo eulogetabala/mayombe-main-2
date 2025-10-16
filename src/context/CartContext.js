@@ -33,7 +33,10 @@ export const CartProvider = ({ children }) => {
 
   // Sauvegarder le panier dans le stockage local
   useEffect(() => {
-    saveCartToStorage();
+    // Ne pas sauvegarder si le panier est vide (peut venir d'un paiement réussi)
+    if (cartItems.length > 0) {
+      saveCartToStorage();
+    }
   }, [cartItems]);
 
   const loadCartFromStorage = async () => {
@@ -42,7 +45,13 @@ export const CartProvider = ({ children }) => {
       if (storedCart) {
         const parsedCart = JSON.parse(storedCart);
         console.log('📦 Chargement du panier depuis le stockage:', parsedCart.length, 'articles');
-        setCartItems(parsedCart);
+        
+        // Ne pas recharger un panier vide (peut venir d'un paiement réussi)
+        if (parsedCart.length > 0) {
+          setCartItems(parsedCart);
+        } else {
+          console.log('📦 Panier vide trouvé - ne pas recharger');
+        }
       } else {
         console.log('📦 Aucun panier trouvé dans le stockage');
       }
@@ -220,6 +229,13 @@ export const CartProvider = ({ children }) => {
 
   const reloadCartFromStorage = async () => {
     console.log('🔄 Rechargement forcé du panier depuis le stockage');
+    
+    // Vérifier si on a déjà un panier vide (peut venir d'un paiement réussi)
+    if (cartItems.length === 0) {
+      console.log('📦 Panier déjà vide - ne pas recharger depuis le stockage');
+      return;
+    }
+    
     await loadCartFromStorage();
   };
 

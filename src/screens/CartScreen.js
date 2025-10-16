@@ -28,7 +28,7 @@ const CartScreen = ({ navigation, route }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [deliveryDistance, setDeliveryDistance] = useState(5); // Distance par défaut en km
-  const [deliveryFee, setDeliveryFee] = useState(1000); // Frais par défaut
+  const [deliveryFee, setDeliveryFee] = useState(0); // Frais désactivés pour test
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [currentSharedCartId, setCurrentSharedCartId] = useState(null);
@@ -38,20 +38,24 @@ const CartScreen = ({ navigation, route }) => {
   const { isSharing, shareCart, loadSharedCart } = useCartSharing(cartItems, setCartItems, formatPrice);
 
   useEffect(() => {
-    loadCartItems();
+    // Le panier est déjà chargé par le contexte CartContext
+    // Pas besoin de le recharger ici
     const unsubscribe = navigation.addListener('focus', () => {
-      loadCartItems();
+      // Ne pas recharger le panier si on vient d'une autre page
+      // Le panier est déjà à jour dans le contexte
+      console.log('🔙 Retour sur CartScreen - panier synchronisé via contexte');
+      return;
     });
     return unsubscribe;
   }, []);
 
-  // Recharger le panier depuis le stockage quand on revient sur l'écran
+  // Ne plus recharger le panier automatiquement
+  // Le panier est géré par le contexte et reste synchronisé
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 Focus sur CartScreen - rechargement du panier');
-      if (reloadCartFromStorage) {
-        reloadCartFromStorage();
-      }
+      console.log('🔄 Focus sur CartScreen - panier déjà synchronisé via contexte');
+      // Ne plus recharger le panier depuis le stockage
+      // Le contexte gère déjà la synchronisation
     }, [])
   );
 
@@ -123,37 +127,24 @@ const CartScreen = ({ navigation, route }) => {
     }
   }, [route.params?.sharedCartId]);
 
-  const loadCartItems = async () => {
-    try {
-      const storedCart = await AsyncStorage.getItem('cart');
-      if (storedCart) {
-        const parsedCart = JSON.parse(storedCart);
-        const transformedCart = parsedCart.map(item => ({
-          ...item,
-          imageUrl: item.imageUrl || (item.cover 
-            ? `https://www.api-mayombe.mayombe-app.com/public/storage/${item.cover}`
-            : null),
-          image: item.image || require('../../assets/images/2.jpg')
-        }));
-        setCartItems(transformedCart);
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement du panier:', error);
-    }
-  };
+  // La fonction loadCartItems n'est plus nécessaire
+  // Le panier est géré par le contexte CartContext
 
   // Fonction de rafraîchissement
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await loadCartItems();
-      console.log('🔄 Panier rafraîchi');
+      // Utiliser le contexte pour recharger le panier
+      if (reloadCartFromStorage) {
+        await reloadCartFromStorage();
+      }
+      console.log('🔄 Panier rafraîchi via contexte');
     } catch (error) {
       console.error('Erreur lors du rafraîchissement du panier:', error);
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [reloadCartFromStorage]);
 
   const updateItemQuantity = async (itemId, change) => {
     const item = cartItems.find(i => i.productKey === itemId);
@@ -178,36 +169,13 @@ const CartScreen = ({ navigation, route }) => {
 
   // Fonction pour calculer les frais de livraison selon la distance
   const calculateDeliveryFee = (distance) => {
-    if (!distance || isNaN(distance)) {
-      return 1000; // Frais par défaut si pas de distance
-    }
-    
-    const distanceNum = parseFloat(distance);
-    
-    if (distanceNum <= 10) {
-      return 1000; // 0-10km : 1000 FCFA
-    } else if (distanceNum <= 20) {
-      return 1500; // 11-20km : 1500 FCFA
-    } else {
-      return 2000; // 21km+ : 2000 FCFA
-    }
+    // Frais désactivés pour test des modes de paiement
+    return 0;
   };
 
   // Fonction pour obtenir la description des frais
   const getDeliveryFeeDescription = (distance) => {
-    if (!distance || isNaN(distance)) {
-      return "Frais de livraison (distance non disponible)";
-    }
-    
-    const distanceNum = parseFloat(distance);
-    
-    if (distanceNum <= 10) {
-      return `Frais de livraison (0-10km)`;
-    } else if (distanceNum <= 20) {
-      return `Frais de livraison (11-20km)`;
-    } else {
-      return `Frais de livraison (21km+)`;
-    }
+    return "Livraison gratuite (test)";
   };
 
   const createOrder = async () => {
@@ -686,6 +654,10 @@ const CartScreen = ({ navigation, route }) => {
     <View style={styles.safeArea}>
       <CustomHeader 
         title={t.cart.title}
+        onBackPress={() => {
+          // Toujours aller à l'accueil depuis le panier
+          navigation.navigate('Home');
+        }}
         rightComponent={
           <View style={styles.headerTextContainer}>
             <Text style={styles.subtitle}>

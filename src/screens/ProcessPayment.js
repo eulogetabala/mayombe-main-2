@@ -828,18 +828,26 @@ const ProcessPayment = () => {
         </View>
       );
     } else if (paymentMethod === 'cb') {
+      // Rediriger vers StripePaymentScreen au lieu d'afficher "bientôt disponible"
       return (
         <View style={styles.formContainer}>
+          <ActivityIndicator size="large" color="#51A905" />
           <Text style={styles.formTitle}>
-            Paiement par carte bancaire
+            Redirection vers le paiement sécurisé...
           </Text>
-          <View style={styles.comingSoonContainer}>
-            <Ionicons name="time-outline" size={48} color="#FFA500" />
-            <Text style={styles.comingSoonTitle}>Disponible bientôt</Text>
-            <Text style={styles.comingSoonDescription}>
-              Le paiement par carte bancaire sera bientôt disponible. Veuillez choisir un autre mode de paiement pour le moment.
+          <TouchableOpacity
+            style={styles.redirectButton}
+            onPress={() => {
+              navigation.navigate('StripePayment', {
+                orderDetails: orderDetails,
+                onPaymentSuccess: onPaymentSuccess
+              });
+            }}
+          >
+            <Text style={styles.redirectButtonText}>
+              Continuer vers le paiement
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       );
     } else if (paymentMethod === 'cash') {
@@ -1229,6 +1237,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#999',
     fontFamily: 'Montserrat',
+  },
+  redirectButton: {
+    backgroundColor: '#51A905',
+    padding: 15,
+    borderRadius: 12,
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  redirectButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    fontFamily: 'Montserrat-Bold',
   },
 });
 

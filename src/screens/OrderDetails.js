@@ -44,7 +44,8 @@ const OrderDetails = ({ navigation, route }) => {
   // Calcul du statut
   const orderStatus = useMemo(() => {
     try {
-      const status = order?.status?.toLowerCase() || '';
+      // Vérifier delivery_status en priorité, puis status, puis payment_status
+      const status = (order?.delivery_status || order?.status || order?.payment_status || '').toLowerCase();
       return {
         isInProgress: status.includes('en_cours') || status.includes('preparing'),
         isCompleted: status.includes('delivered') || status.includes('completed') || status.includes('livré'),
@@ -54,12 +55,13 @@ const OrderDetails = ({ navigation, route }) => {
       console.error('Erreur calcul statut:', error);
       return { isInProgress: false, isCompleted: false, isPending: false };
     }
-  }, [order?.status]);
+  }, [order?.status, order?.delivery_status, order?.payment_status]);
 
   // Couleur du statut
   const statusColor = useMemo(() => {
     try {
-      const status = order?.status?.toLowerCase() || '';
+      // Vérifier delivery_status en priorité, puis status, puis payment_status
+      const status = (order?.delivery_status || order?.status || order?.payment_status || '').toLowerCase();
       if (status.includes('delivered') || status.includes('completed') || status.includes('livré')) {
         return '#4CAF50';
       } else if (status.includes('en_cours') || status.includes('preparing')) {
@@ -72,12 +74,13 @@ const OrderDetails = ({ navigation, route }) => {
       console.error('Erreur calcul couleur:', error);
       return '#9E9E9E';
     }
-  }, [order?.status]);
+  }, [order?.status, order?.delivery_status, order?.payment_status]);
 
   // Texte du statut
   const statusText = useMemo(() => {
     try {
-      const status = order?.status?.toLowerCase() || '';
+      // Vérifier delivery_status en priorité, puis status, puis payment_status
+      const status = (order?.delivery_status || order?.status || order?.payment_status || '').toLowerCase();
       if (status.includes('delivered') || status.includes('completed') || status.includes('livré')) {
         return 'Livré';
       } else if (status.includes('en_cours') || status.includes('preparing')) {
@@ -90,7 +93,7 @@ const OrderDetails = ({ navigation, route }) => {
       console.error('Erreur calcul texte statut:', error);
       return 'Statut inconnu';
     }
-  }, [order?.status]);
+  }, [order?.status, order?.delivery_status, order?.payment_status]);
 
   // Informations du produit/restaurant
   const productInfo = useMemo(() => {
@@ -306,6 +309,7 @@ const OrderDetails = ({ navigation, route }) => {
                 Votre commande a été livrée avec succès
               </Text>
             )}
+            
             
             {/* Bouton de suivi pour les commandes en cours */}
             {(orderStatus?.isInProgress || orderStatus?.isPending) && (

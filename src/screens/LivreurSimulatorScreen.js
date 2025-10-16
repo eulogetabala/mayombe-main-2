@@ -195,7 +195,7 @@ const LivreurSimulatorScreen = ({ navigation }) => {
               }
             ],
             total_amount: 6000,
-            delivery_fee: 1000,
+            delivery_fee: 0, // Frais désactivés pour test
             subtotal: 5000,
             distance: 2.5
           },

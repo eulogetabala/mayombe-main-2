@@ -21,29 +21,18 @@ const ListeLivreursScreen = () => {
   const [reservingLivreur, setReservingLivreur] = useState(null);
   const [imageLoadingMap, setImageLoadingMap] = useState({});
   const [deliveryDistance, setDeliveryDistance] = useState(5); // Distance par défaut en km
-  const [deliveryFee, setDeliveryFee] = useState(1000); // Prix initial
+  const [deliveryFee, setDeliveryFee] = useState(0); // Frais désactivés pour test
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
   // Calculer les frais de livraison selon la distance
   const calculateDeliveryFee = (distance) => {
-    if (distance <= 3) {
-      return 1000; // Prix de base
-    } else if (distance <= 7) {
-      return 1500; // Prix intermédiaire
-    } else {
-      return 2000; // Prix élevé
-    }
+    // Frais désactivés pour test des modes de paiement
+    return 0;
   };
 
   // Obtenir la description des frais
   const getDeliveryFeeDescription = (distance) => {
-    if (distance <= 3) {
-      return '📍 Livraison proche';
-    } else if (distance <= 7) {
-      return '📍 Livraison moyenne';
-    } else {
-      return '📍 Livraison éloignée';
-    }
+    return "Livraison gratuite (test)";
   };
 
   // Obtenir la géolocalisation au chargement
