@@ -20,7 +20,7 @@ const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const { width, height } = Dimensions.get('window');
 
 const CartScreen = ({ navigation, route }) => {
-  const { cartItems, setCartItems, removeFromCart, updateQuantity, calculateCartTotal, reloadCartFromStorage } = useCart();
+  const { cartItems, setCartItems, removeFromCart, updateQuantity, calculateCartTotal } = useCart();
   const { currentLanguage } = useLanguage();
   const { getCurrentUser } = useAuth();
   const t = translations[currentLanguage];
@@ -28,7 +28,7 @@ const CartScreen = ({ navigation, route }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [deliveryDistance, setDeliveryDistance] = useState(5); // Distance par défaut en km
-  const [deliveryFee, setDeliveryFee] = useState(0); // Frais désactivés pour test
+  const [deliveryFee, setDeliveryFee] = useState(1000); // Prix initial
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [currentSharedCartId, setCurrentSharedCartId] = useState(null);
@@ -37,27 +37,29 @@ const CartScreen = ({ navigation, route }) => {
   // Utiliser le hook de partage de panier
   const { isSharing, shareCart, loadSharedCart } = useCartSharing(cartItems, setCartItems, formatPrice);
 
-  useEffect(() => {
-    // Le panier est déjà chargé par le contexte CartContext
-    // Pas besoin de le recharger ici
-    const unsubscribe = navigation.addListener('focus', () => {
-      // Ne pas recharger le panier si on vient d'une autre page
-      // Le panier est déjà à jour dans le contexte
-      console.log('🔙 Retour sur CartScreen - panier synchronisé via contexte');
-      return;
-    });
-    return unsubscribe;
-  }, []);
-
-  // Ne plus recharger le panier automatiquement
-  // Le panier est géré par le contexte et reste synchronisé
+  // Recharger le panier depuis le stockage quand on revient sur l'écran
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 Focus sur CartScreen - panier déjà synchronisé via contexte');
-      // Ne plus recharger le panier depuis le stockage
-      // Le contexte gère déjà la synchronisation
-    }, [])
+      const reloadCart = async () => {
+        try {
+          console.log('🔙 CartScreen - Retour sur l\'écran, rechargement du panier...');
+          const storedCart = await AsyncStorage.getItem('cart');
+          if (storedCart) {
+            const parsedCart = JSON.parse(storedCart);
+            console.log('📦 CartScreen - Panier rechargé depuis le stockage:', parsedCart.length, 'articles');
+            setCartItems(parsedCart);
+          } else {
+            console.log('📦 CartScreen - Aucun panier dans le stockage');
+          }
+        } catch (error) {
+          console.error('❌ CartScreen - Erreur lors du rechargement du panier:', error);
+        }
+      };
+      
+      reloadCart();
+    }, [setCartItems])
   );
+
 
   useEffect(() => {
     const total = calculateCartTotal();
@@ -70,8 +72,10 @@ const CartScreen = ({ navigation, route }) => {
     setDeliveryFee(calculatedFee);
   }, [deliveryDistance]);
 
-  // Obtenir la géolocalisation au chargement de l'écran
+  // Obtenir la géolocalisation au chargement de l'écran et en temps réel
   useEffect(() => {
+    let locationSubscription = null;
+    
     const getLocationAndCalculateFee = async () => {
       if (cartItems.length === 0) return; // Pas besoin si panier vide
       
@@ -117,7 +121,24 @@ const CartScreen = ({ navigation, route }) => {
       }
     };
 
+    // Calcul initial
     getLocationAndCalculateFee();
+
+    // Mise à jour en temps réel toutes les 30 secondes
+    const intervalId = setInterval(() => {
+      if (cartItems.length > 0) {
+        console.log(' Mise à jour de la distance en temps réel...');
+        getLocationAndCalculateFee();
+      }
+    }, 30000); // 30 secondes
+
+    // Nettoyage
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+      clearInterval(intervalId);
+    };
   }, [cartItems.length]); // Se déclenche quand le panier change
 
   // Vérifier si nous avons reçu un panier partagé
@@ -134,17 +155,19 @@ const CartScreen = ({ navigation, route }) => {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      // Utiliser le contexte pour recharger le panier
-      if (reloadCartFromStorage) {
-        await reloadCartFromStorage();
+      // Recharger le panier depuis le stockage
+      const storedCart = await AsyncStorage.getItem('cart');
+      if (storedCart) {
+        const parsedCart = JSON.parse(storedCart);
+        setCartItems(parsedCart);
+        console.log('✅ Panier rafraîchi depuis le stockage');
       }
-      console.log('🔄 Panier rafraîchi via contexte');
     } catch (error) {
       console.error('Erreur lors du rafraîchissement du panier:', error);
     } finally {
       setRefreshing(false);
     }
-  }, [reloadCartFromStorage]);
+  }, [setCartItems]);
 
   const updateItemQuantity = async (itemId, change) => {
     const item = cartItems.find(i => i.productKey === itemId);
@@ -169,13 +192,36 @@ const CartScreen = ({ navigation, route }) => {
 
   // Fonction pour calculer les frais de livraison selon la distance
   const calculateDeliveryFee = (distance) => {
-    // Frais désactivés pour test des modes de paiement
-    return 0;
+    if (!distance || isNaN(distance)) {
+      return 1000; // Frais par défaut si pas de distance
+    }
+    
+    const distanceNum = parseFloat(distance);
+    
+    if (distanceNum <= 10) {
+      return 1000; // 0-10km : 1000 FCFA
+    } else if (distanceNum <= 20) {
+      return 1500; // 11-20km : 1500 FCFA
+    } else {
+      return 2000; // 21km+ : 2000 FCFA
+    }
   };
 
   // Fonction pour obtenir la description des frais
   const getDeliveryFeeDescription = (distance) => {
-    return "Livraison gratuite (test)";
+    if (!distance || isNaN(distance)) {
+      return "Frais de livraison (distance non disponible)";
+    }
+    
+    const distanceNum = parseFloat(distance);
+    
+    if (distanceNum <= 10) {
+      return `Frais de livraison (0-10km)`;
+    } else if (distanceNum <= 20) {
+      return `Frais de livraison (11-20km)`;
+    } else {
+      return `Frais de livraison (21km+)`;
+    }
   };
 
   const createOrder = async () => {
@@ -434,7 +480,7 @@ const CartScreen = ({ navigation, route }) => {
 
 
 
-      // Sauvegarder les détails avant de vider le panier
+      // Sauvegarder les détails de la commande (sans vider le panier encore)
       const orderDetails = {
         items: [...cartItems],
         subtotal: totalAmount,
@@ -444,14 +490,12 @@ const CartScreen = ({ navigation, route }) => {
         distance: deliveryDistance
       };
 
-      // Vider complètement le panier
-      await AsyncStorage.removeItem('cart');
-      setCartItems([]);
-
+      // NE PAS vider le panier ici - il sera vidé seulement après paiement réussi
       navigation.navigate('PaymentScreen', { 
         orderDetails,
         onPaymentSuccess: async (updatedOrderDetails) => {
           try {
+            // Vider le panier seulement après paiement réussi
             await AsyncStorage.removeItem('cart');
             setCartItems([]);
             
@@ -463,6 +507,11 @@ const CartScreen = ({ navigation, route }) => {
           } catch (error) {
             console.error("Erreur lors du nettoyage du panier:", error);
           }
+        },
+        onPaymentCancel: () => {
+          // Si l'utilisateur annule le paiement, ne rien faire
+          // Le panier reste intact
+          console.log('💳 Paiement annulé - panier conservé');
         }
       });
 
@@ -659,10 +708,8 @@ const CartScreen = ({ navigation, route }) => {
           navigation.navigate('Home');
         }}
         rightComponent={
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.subtitle}>
-              {cartItems.length} {cartItems.length > 1 ? 'articles' : 'article'}
-            </Text>
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{cartItems.length}</Text>
           </View>
         }
       />
@@ -702,7 +749,7 @@ const CartScreen = ({ navigation, route }) => {
                       <Text style={styles.priceLabel}>
                         {isLoadingLocation 
                           ? '📍 Calcul de la distance...'
-                          : getDeliveryFeeDescription(deliveryDistance)
+                          : `${getDeliveryFeeDescription(deliveryDistance)} `
                         }
                       </Text>
                       <Text style={styles.priceValue}>
@@ -791,13 +838,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     paddingHorizontal: width * 0.05,
   },
-  headerTextContainer: {
-    flex: 1,
+  badge: {
+    backgroundColor: '#51A905',
+    borderRadius: 15,
+    minWidth: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    shadowColor: '#51A905',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  subtitle: {
+  badgeText: {
+    color: '#fff',
     fontSize: 14,
-    color: '#666',
-    fontFamily: "Montserrat",
+    fontWeight: 'bold',
+    fontFamily: 'Montserrat-Bold',
   },
   listContainer: {
     paddingHorizontal: 15,

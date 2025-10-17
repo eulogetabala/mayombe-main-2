@@ -91,7 +91,7 @@ android {
         applicationId 'com.mayombe.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
+        versionCode 13
         versionName "1.0.8"
         
         // Support for 16KB page sizes (Android 15 requirement)

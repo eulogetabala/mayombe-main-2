@@ -2,7 +2,7 @@
   "expo": {
     "name": "mayombeclient",
     "slug": "mayombeclient",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.thprojet.mayombeclient",
-      "buildNumber": "13",
+      "buildNumber": "15",
       "userInterfaceStyle": "light",
       "config": {
         "googleMapsApiKey": "AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI"
@@ -45,7 +45,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.mayombe.app",
-      "versionCode": 10,
+      "versionCode": 13,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",

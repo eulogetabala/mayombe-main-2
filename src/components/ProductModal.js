@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
   View,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { FontAwesome5 } from "@expo/vector-icons";
 import { useCart } from '../context/CartContext';
+import { useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 
 const { width } = Dimensions.get('window');
@@ -21,17 +22,32 @@ const ProductModal = ({
   onClose = () => {} 
 }) => {
   const cart = useCart();
+  const navigation = useNavigation();
+  const [internalVisible, setInternalVisible] = useState(false);
 
   useEffect(() => {
+    console.log("🔍 ProductModal - useEffect déclenché, visible:", visible, "product:", product);
     return () => {
-      // Cleanup function
-      if (Platform.OS === 'android') {
-        onClose();
-      }
+      console.log("🔍 ProductModal - Cleanup function appelée");
     };
-  }, []);
+  }, [visible, product]);
+  
+  // Gérer la visibilité interne
+  useEffect(() => {
+    if (visible && product) {
+      console.log("🔍 ProductModal - Ouverture du modal avec produit:", product.name);
+      setInternalVisible(true);
+    } else {
+      console.log("🔍 ProductModal - Fermeture du modal");
+      setInternalVisible(false);
+    }
+  }, [visible, product]);
+  
+  // Log pour tracer les re-renders
+  console.log("🔍 ProductModal - RENDER, visible:", visible, "product:", product?.name);
 
   const handleAddToCart = useCallback(() => {
+    console.log("🛒 Ajout au panier déclenché");
     try {
       if (cart?.addToCart && product) {
         cart.addToCart(product);
@@ -42,9 +58,12 @@ const ProductModal = ({
           position: 'bottom',
           visibilityTime: 2000,
         });
+        console.log("🛒 Produit ajouté au panier, fermeture du modal");
+        setInternalVisible(false);
         onClose();
       }
     } catch (error) {
+      console.error("❌ Erreur lors de l'ajout au panier:", error);
       Toast.show({
         type: 'error',
         text1: 'Erreur',
@@ -58,25 +77,49 @@ const ProductModal = ({
     // Handle image error
   };
 
-  if (!visible || !product) return null;
+  console.log("🔍 ProductModal - visible:", visible, "product:", product);
+  
+  if (!visible || !product) {
+    console.log("🔍 ProductModal - Pas de produit ou modal fermé");
+    return null;
+  }
 
   return (
     <Modal
       animationType="fade"
       transparent={true}
-      visible={visible}
-      onRequestClose={onClose}
+      visible={internalVisible}
+      onRequestClose={() => {
+        console.log("🔍 Modal onRequestClose appelé - IGNORÉ pour éviter la fermeture automatique");
+        // Ne pas fermer automatiquement
+      }}
       statusBarTranslucent
+      presentationStyle="overFullScreen"
     >
       <TouchableOpacity 
         style={styles.modalOverlay}
         activeOpacity={1}
-        onPress={onClose}
+        onPress={() => {
+          console.log("🔍 Fermeture du modal via overlay");
+          setInternalVisible(false);
+          onClose();
+        }}
       >
-        <View style={styles.modalContent}>
+        <TouchableOpacity 
+          style={styles.modalContent}
+          activeOpacity={1}
+          onPress={(e) => {
+            console.log("🔍 Clic sur le contenu du modal - empêcher la propagation");
+            e.stopPropagation();
+          }}
+        >
           <TouchableOpacity 
             style={styles.closeButton} 
-            onPress={onClose}
+            onPress={() => {
+              console.log("🔍 Fermeture du modal via bouton X");
+              setInternalVisible(false);
+              onClose();
+            }}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <FontAwesome5 name="times" size={20} color="#333" />
@@ -91,7 +134,7 @@ const ProductModal = ({
             
             <View style={styles.productInfo}>
               <Text style={styles.productName}>{product.name}</Text>
-              <Text style={styles.productPrice}>{product.price} FCFA</Text>
+              <Text style={styles.productPrice}>{product.price}</Text>
               <Text style={styles.productDescription}>{product.description}</Text>
             </View>
 
@@ -104,7 +147,7 @@ const ProductModal = ({
               <Text style={styles.addToCartText}>Ajouter au panier</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
   );

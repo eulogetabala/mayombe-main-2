@@ -1066,7 +1066,7 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-  },
+ },
   bottomInfoContainer: {
     position: 'absolute',
     bottom: 20,

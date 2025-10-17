@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   Image,
 } from "react-native";
 import * as Location from "expo-location";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from '@react-navigation/native';
@@ -27,21 +27,33 @@ import { translations } from '../../translations';
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
 const HeaderSection = ({ navigation }) => {
-  const { cartItems } = useCart();
+  const { cartItems, addToCart } = useCart();
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  
   const [showModal, setShowModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
+  
+  // Gérer la visibilité interne du modal produit
+  useEffect(() => {
+    if (productModalVisible && selectedProduct) {
+      setInternalProductModalVisible(true);
+    } else {
+      setInternalProductModalVisible(false);
+    }
+  }, [productModalVisible, selectedProduct]);
   const [searching, setSearching] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productModalVisible, setProductModalVisible] = useState(false);
+  const [internalProductModalVisible, setInternalProductModalVisible] = useState(false);
   const [searchHistory, setSearchHistory] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const searchInputRef = useRef(null);
 
 
   // Charger l'historique de recherche au montage
@@ -157,11 +169,16 @@ const HeaderSection = ({ navigation }) => {
   }, 0) || 0;
 
   const handleSearch = async (text) => {
-    console.log("🔍 Recherche déclenchée avec:", text);
+    // Fermer le modal produit si il est ouvert
+    if (productModalVisible) {
+      setProductModalVisible(false);
+      setSelectedProduct(null);
+      setInternalProductModalVisible(false);
+    }
+    
     setSearch(text);
     
     if (text.length === 0) {
-      console.log("❌ Texte vide, masquage des modals");
       setSearchResults([]);
       setShowSearchModal(false);
       setShowSuggestions(false);
@@ -169,13 +186,11 @@ const HeaderSection = ({ navigation }) => {
     }
     
     // Recherche immédiate dès qu'on tape quelque chose
-    console.log("🔎 Recherche API pour:", text);
     setShowSuggestions(false);
     setSearching(true);
     
     try {
       const url = `${API_BASE_URL}/products-list?search=${encodeURIComponent(text)}`;
-      console.log("🌐 URL de recherche:", url);
       
       const response = await fetch(url, {
         method: 'GET',
@@ -185,15 +200,11 @@ const HeaderSection = ({ navigation }) => {
         },
       });
 
-      console.log("📡 Réponse HTTP:", response.status, response.ok);
-
       if (!response.ok) {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log("📦 Données reçues:", data);
-      console.log("📊 Type de données:", typeof data, "Est un tableau:", Array.isArray(data));
 
       if (!Array.isArray(data)) {
         throw new Error("Format de données incorrect, un tableau est attendu.");
@@ -203,9 +214,7 @@ const HeaderSection = ({ navigation }) => {
       const filteredResults = data
         .filter(item => {
           const itemName = item.name || item.libelle || "";
-          const matches = typeof itemName === 'string' && itemName.toLowerCase().includes(text.toLowerCase());
-          console.log("🔍 Item:", itemName, "Match:", matches);
-          return matches;
+          return typeof itemName === 'string' && itemName.toLowerCase().includes(text.toLowerCase());
         })
         .map(item => {
           // S'assurer que toutes les valeurs sont correctement formatées
@@ -229,9 +238,6 @@ const HeaderSection = ({ navigation }) => {
           return cleanItem;
         });
 
-      console.log("✅ Résultats filtrés:", filteredResults.length, "produits");
-      console.log("📋 Détails des résultats:", filteredResults);
-
       setSearchResults(filteredResults);
       setShowSearchModal(true);
     } catch (error) {
@@ -250,10 +256,17 @@ const HeaderSection = ({ navigation }) => {
   
 
   const handleSearchItemPress = (item) => {
+    // Fermer le modal de recherche immédiatement
     setShowSearchModal(false);
     setSearch('');
-    setSelectedProduct(item);
-    setProductModalVisible(true);
+    setSearchResults([]);
+    
+    // Attendre un court délai avant d'ouvrir le modal produit
+    setTimeout(() => {
+      setSelectedProduct(item);
+      setProductModalVisible(true);
+    }, 100);
+    
     // Sauvegarder dans l'historique
     saveSearchHistory(item.name);
   };
@@ -291,7 +304,14 @@ const HeaderSection = ({ navigation }) => {
     return (
       <TouchableOpacity
         style={styles.searchResultItem}
-        onPress={() => handleSearchItemPress(item)}
+        onPress={() => {
+          console.log("🔍 Clic sur le produit dans les résultats:", item.name);
+          console.log("🔍 Données du produit:", JSON.stringify(item, null, 2));
+          handleSearchItemPress(item);
+        }}
+        onPressIn={() => {
+          console.log("🔍 onPressIn - Clic détecté sur:", item.name);
+        }}
       >
         <View style={styles.searchResultImageContainer}>
           <Image 
@@ -308,17 +328,56 @@ const HeaderSection = ({ navigation }) => {
             <Text style={styles.searchResultTitle} numberOfLines={1}>
               {cleanName}
             </Text>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{cleanCategory}</Text>
-            </View>
           </View>
           <Text style={styles.searchResultPrice}>{cleanPrice}</Text>
           <Text style={styles.searchResultDescription} numberOfLines={2}>
             {cleanDescription}
           </Text>
+          <View style={styles.categoryBadgeContainer}>
+            <View style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{cleanCategory}</Text>
+            </View>
+          </View>
         </View>
         <View style={styles.searchResultActions}>
-          <Ionicons name="chevron-forward" size={20} color="#999" />
+          <TouchableOpacity 
+            style={styles.searchResultAddButton}
+            onPress={async (e) => {
+              e.stopPropagation();
+              
+              try {
+                // Ajouter le produit au panier
+                const success = await addToCart(item);
+                if (success) {
+                  // Fermer le modal de recherche
+                  setShowSearchModal(false);
+                  setSearch('');
+                  setSearchResults([]);
+                  
+                  // Naviguer vers le panier
+                  navigation.navigate('Cart');
+                  
+                  // Afficher un message de succès
+                  Toast.show({
+                    type: "success",
+                    text1: "Produit ajouté",
+                    text2: `${item.name} a été ajouté au panier !`,
+                    position: "bottom",
+                  });
+                }
+              } catch (error) {
+                console.error("❌ Erreur lors de l'ajout au panier:", error);
+                Toast.show({
+                  type: "error",
+                  text1: "Erreur",
+                  text2: "Impossible d'ajouter le produit au panier",
+                  position: "bottom",
+                });
+              }
+            }}
+          >
+            <FontAwesome5 name="plus" size={16} color="#FFF" />
+          </TouchableOpacity>
         </View>
       </TouchableOpacity>
     );
@@ -411,13 +470,34 @@ const HeaderSection = ({ navigation }) => {
         <View style={styles.searchBarContainer}>
           <View style={styles.searchBar}>
             <Ionicons name="search-outline" size={20} color="#999" />
-            <TextInput
-              placeholder={t.home.search}
-              placeholderTextColor="#999"
-              style={styles.searchInput}
-              value={search}
-              onChangeText={handleSearch}
-            />
+            <TouchableOpacity 
+              style={styles.searchInputContainer}
+              activeOpacity={1}
+              onPress={() => {
+                console.log("🔍 Clic sur le conteneur de recherche");
+                // Forcer le focus sur l'input
+                if (searchInputRef.current) {
+                  searchInputRef.current.focus();
+                }
+              }}
+            >
+              <TextInput
+                ref={searchInputRef}
+                placeholder={t.home.search}
+                placeholderTextColor="#999"
+                style={styles.searchInput}
+                value={search}
+                onChangeText={handleSearch}
+                editable={true}
+                selectTextOnFocus={true}
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+                onSubmitEditing={() => handleSearch(search)}
+                onFocus={() => console.log("🔍 Input de recherche focusé")}
+                onBlur={() => console.log("🔍 Input de recherche perdu le focus")}
+              />
+            </TouchableOpacity>
             {search.length > 0 && (
               <TouchableOpacity 
                 onPress={() => {
@@ -438,12 +518,14 @@ const HeaderSection = ({ navigation }) => {
 
       {/* Modal de recherche et suggestions */}
       <Modal
-        visible={showSearchModal}
+        visible={showSearchModal && !productModalVisible}
         transparent
         animationType="slide"
-        onRequestClose={closeSearchModal}
+        onRequestClose={() => {
+          console.log("🔍 Modal onRequestClose - IGNORÉ pour éviter la fermeture automatique");
+          // Ne pas fermer automatiquement
+        }}
       >
-        {console.log("🎭 Modal visible:", showSearchModal, "searching:", searching, "results:", searchResults.length)}
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             {/* Poignée pour indiquer qu'on peut glisser */}
@@ -464,8 +546,6 @@ const HeaderSection = ({ navigation }) => {
             ) : (
               // Affichage des résultats de recherche
               (() => {
-                console.log("🔍 Affichage résultats - Nombre de résultats:", searchResults.length);
-                console.log("🔍 Résultats à afficher:", searchResults);
                 return (
                   <FlatList
                     data={searchResults}
@@ -499,9 +579,13 @@ const HeaderSection = ({ navigation }) => {
 
       {/* Modal du produit */}
       <ProductModal
-        visible={productModalVisible}
+        visible={internalProductModalVisible}
         product={selectedProduct}
-        onClose={() => setProductModalVisible(false)}
+        onClose={() => {
+          setProductModalVisible(false);
+          setSelectedProduct(null);
+          setInternalProductModalVisible(false);
+        }}
       />
     </SafeAreaView>
   );
@@ -512,6 +596,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   header: {
+    
     padding: 15,
     paddingTop: Platform.OS === "android" ? 40 : 60,
     borderBottomLeftRadius: 30,
@@ -608,12 +693,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 2.22,
   },
-  searchInput: {
+  searchInputContainer: {
     flex: 1,
     marginLeft: 8,
+  },
+  searchInput: {
+    flex: 1,
     fontSize: 14,
     color: "#333",
     fontFamily: "Montserrat",
+    minHeight: 20,
+    paddingVertical: 0,
   },
   clearButton: {
     padding: 4,
@@ -714,6 +804,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Montserrat-Bold',
     color: '#333',
+    flex: 1,
+  },
+  searchModalAddButton: {
+    backgroundColor: '#FF6B35',
+    padding: 8,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
 
   loadingContainer: {
@@ -790,7 +891,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
-    marginLeft: 8,
+    alignSelf: 'flex-start',
   },
   categoryText: {
     fontSize: 10,
@@ -801,6 +902,16 @@ const styles = StyleSheet.create({
   searchResultActions: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  searchResultAddButton: {
+    backgroundColor: '#FF6B35',
+    padding: 8,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   searchResultTitle: {
     fontSize: 16,
@@ -818,6 +929,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     fontFamily: 'Montserrat',
+    marginBottom: 8,
+  },
+  categoryBadgeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    marginTop: 4,
   },
   emptyResultContainer: {
     alignItems: 'center',

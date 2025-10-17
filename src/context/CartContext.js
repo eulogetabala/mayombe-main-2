@@ -10,62 +10,50 @@ export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
   const [orderInProgress, setOrderInProgress] = useState(false);
   const [pendingOrder, setPendingOrder] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Charger le panier depuis le stockage local
+  // Charger le panier depuis le stockage local au démarrage
   useEffect(() => {
-    loadCartFromStorage();
+    const initializeCart = async () => {
+      try {
+        console.log('🔄 CartContext - Initialisation du panier...');
+        const storedCart = await AsyncStorage.getItem('cart');
+        console.log('📦 CartContext - Panier stocké:', storedCart);
+        
+        if (storedCart) {
+          const parsedCart = JSON.parse(storedCart);
+          console.log('📦 CartContext - Panier parsé:', parsedCart);
+          if (parsedCart.length > 0) {
+            setCartItems(parsedCart);
+            console.log('✅ CartContext - Panier chargé avec', parsedCart.length, 'articles');
+          } else {
+            console.log('📦 CartContext - Panier vide dans le stockage');
+          }
+        } else {
+          console.log('📦 CartContext - Aucun panier dans le stockage');
+        }
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('❌ Erreur lors de l\'initialisation du panier:', error);
+        setIsInitialized(true);
+      }
+    };
+    
+    initializeCart();
   }, []);
 
-  // Protection contre le vidage accidentel du panier
+  // Sauvegarder automatiquement le panier quand il change
   useEffect(() => {
-    const handleBeforeRemove = () => {
-      console.log('🛡️ Protection du panier - sauvegarde avant navigation');
-      if (cartItems.length > 0) {
-        saveCartToStorage();
-      }
-    };
-
-    // Écouter les changements de navigation pour protéger le panier
-    return () => {
-      handleBeforeRemove();
-    };
-  }, [cartItems]);
-
-  // Sauvegarder le panier dans le stockage local
-  useEffect(() => {
-    // Ne pas sauvegarder si le panier est vide (peut venir d'un paiement réussi)
-    if (cartItems.length > 0) {
+    if (isInitialized) {
       saveCartToStorage();
     }
-  }, [cartItems]);
-
-  const loadCartFromStorage = async () => {
-    try {
-      const storedCart = await AsyncStorage.getItem('cart');
-      if (storedCart) {
-        const parsedCart = JSON.parse(storedCart);
-        console.log('📦 Chargement du panier depuis le stockage:', parsedCart.length, 'articles');
-        
-        // Ne pas recharger un panier vide (peut venir d'un paiement réussi)
-        if (parsedCart.length > 0) {
-          setCartItems(parsedCart);
-        } else {
-          console.log('📦 Panier vide trouvé - ne pas recharger');
-        }
-      } else {
-        console.log('📦 Aucun panier trouvé dans le stockage');
-      }
-    } catch (error) {
-      console.error('❌ Erreur lors du chargement du panier:', error);
-    }
-  };
+  }, [cartItems, isInitialized]);
 
   const saveCartToStorage = async () => {
     try {
-      if (cartItems.length > 0) {
-        console.log('💾 Sauvegarde du panier:', cartItems.length, 'articles');
-        await AsyncStorage.setItem('cart', JSON.stringify(cartItems));
-      }
+      console.log('💾 CartContext - Sauvegarde du panier:', cartItems.length, 'articles');
+      await AsyncStorage.setItem('cart', JSON.stringify(cartItems));
+      console.log('✅ CartContext - Panier sauvegardé avec succès');
     } catch (error) {
       console.error('❌ Erreur lors de la sauvegarde du panier:', error);
     }
@@ -73,8 +61,8 @@ export const CartProvider = ({ children }) => {
 
   const addToCart = async (product, quantity = 1) => {
     try {
-      const existingCart = await AsyncStorage.getItem('cart');
-      let cart = existingCart ? JSON.parse(existingCart) : [];
+      // Utiliser l'état actuel du panier au lieu de recharger depuis AsyncStorage
+      let cart = [...cartItems];
       
       // Créer un identifiant unique pour le produit avec ses compléments
       const productKey = product.complements?.length > 0 
@@ -195,11 +183,10 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = async () => {
     try {
-      console.log('🧹 clearCart appelé - suppression du panier');
-      console.log('📦 Panier avant suppression:', cartItems.length, 'articles');
-      await AsyncStorage.removeItem('cart');
+      console.log('🗑️ CartContext - Vidage du panier...');
       setCartItems([]);
-      console.log('✅ Panier vidé avec succès');
+      await AsyncStorage.removeItem('cart');
+      console.log('✅ CartContext - Panier vidé avec succès');
     } catch (error) {
       console.error('❌ Erreur lors de la suppression du panier:', error);
     }
@@ -214,29 +201,19 @@ export const CartProvider = ({ children }) => {
     setPendingOrder(orderDetails);
   };
 
-  const completeOrder = () => {
-    console.log('✅ completeOrder appelé - finalisation de la commande');
+  const completeOrder = (shouldClearCart = true) => {
     setOrderInProgress(false);
     setPendingOrder(null);
-    clearCart();
+    if (shouldClearCart) {
+      clearCart();
+    }
   };
 
   const cancelOrder = () => {
-    console.log('❌ cancelOrder appelé - annulation de la commande');
+    console.log('🚫 CartContext - Annulation de la commande, conservation du panier');
     setOrderInProgress(false);
     setPendingOrder(null);
-  };
-
-  const reloadCartFromStorage = async () => {
-    console.log('🔄 Rechargement forcé du panier depuis le stockage');
-    
-    // Vérifier si on a déjà un panier vide (peut venir d'un paiement réussi)
-    if (cartItems.length === 0) {
-      console.log('📦 Panier déjà vide - ne pas recharger depuis le stockage');
-      return;
-    }
-    
-    await loadCartFromStorage();
+    // Ne pas vider le panier lors de l'annulation - c'est le comportement souhaité
   };
 
   const value = {
@@ -251,8 +228,7 @@ export const CartProvider = ({ children }) => {
     pendingOrder,
     startOrder,
     completeOrder,
-    cancelOrder,
-    reloadCartFromStorage
+    cancelOrder
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

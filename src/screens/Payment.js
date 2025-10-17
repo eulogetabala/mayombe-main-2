@@ -5,7 +5,7 @@ import { useLanguage } from '../context/LanguageContext';
 import translations from '../translations';
 
 const Payment = ({ navigation, route }) => {
-  const { orderDetails } = route.params;
+  const { orderDetails, onPaymentSuccess, onPaymentCancel } = route.params;
   const { completeOrder, clearCart } = useCart();
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
@@ -14,40 +14,39 @@ const Payment = ({ navigation, route }) => {
   const handlePayment = async () => {
     setIsProcessing(true);
     try {
+      console.log('💳 Payment - Début du processus de paiement...');
+      
       // Simuler un délai de paiement
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Marquer la commande comme terminée dans le contexte
-      await completeOrder();
+      console.log('💳 Payment - Paiement réussi, appel du callback...');
       
-      // Vider le panier et attendre que ce soit fait
-      await clearCart();
+      // Appeler le callback de succès qui va gérer le vidage du panier
+      if (onPaymentSuccess) {
+        await onPaymentSuccess(orderDetails);
+      } else {
+        // Fallback si pas de callback
+        await completeOrder(true);
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'OrderTracking', params: { orderId: orderDetails.orderId } }],
+        });
+      }
       
-      // Attendre un court instant pour s'assurer que le panier est bien vidé
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      Alert.alert(
-        t.payment.paymentSuccess,
-        t.payment.paymentSuccessMessage,
-        [
-          {
-            text: "OK",
-            onPress: () => {
-              // Forcer la navigation vers l'écran de suivi
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'OrderTracking', params: { orderId: orderDetails.orderId } }],
-              });
-            }
-          }
-        ]
-      );
     } catch (error) {
       console.error('Erreur lors du paiement:', error);
       Alert.alert(t.payment.error, t.payment.paymentError);
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleCancel = () => {
+    console.log('💳 Payment - Annulation du paiement...');
+    if (onPaymentCancel) {
+      onPaymentCancel();
+    }
+    navigation.goBack();
   };
 
   return (
@@ -68,6 +67,16 @@ const Payment = ({ navigation, route }) => {
       >
         <Text style={styles.payButtonText}>
           {isProcessing ? t.payment.processing : t.payment.payNow}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[styles.cancelButton, isProcessing && styles.disabledButton]}
+        onPress={handleCancel}
+        disabled={isProcessing}
+      >
+        <Text style={styles.cancelButtonText}>
+          Annuler
         </Text>
       </TouchableOpacity>
     </View>
@@ -110,6 +119,13 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
+    marginBottom: 10,
+  },
+  cancelButton: {
+    backgroundColor: '#f44336',
+    padding: 15,
+    borderRadius: 10,
+    alignItems: 'center',
   },
   disabledButton: {
     backgroundColor: '#cccccc',
@@ -118,7 +134,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-   
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });
 

@@ -5,7 +5,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { useFocusEffect } from '@react-navigation/native';
-import { ProfileSkeleton } from '../components/Skeletons';
 import { useAuth } from '../../contexts/AuthContext';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -14,42 +13,51 @@ const ProfileScreen = ({ navigation }) => {
   const [userData, setUserData] = useState({
     name: 'Utilisateur',
     phone: 'Non renseigné',
-    email: 'email@example.com',
   });
-  const [isLoading, setIsLoading] = useState(true);
+  const [lastLoadTime, setLastLoadTime] = useState(0);
 
   const { currentLanguage, changeLanguage } = useLanguage();
   const { logout } = useAuth();
   const t = translations[currentLanguage];
 
-  // Recharger les données à chaque fois qu'on revient sur cet écran
+  // Charger les données au montage du composant
+  useEffect(() => {
+    const loadInitialData = async () => {
+      try {
+        const userToken = await AsyncStorage.getItem('userToken');
+        if (userToken) {
+          console.log('🚀 Chargement initial des données utilisateur...');
+          loadUserData();
+        }
+      } catch (error) {
+        console.error('❌ Erreur chargement initial:', error);
+      }
+    };
+    
+    loadInitialData();
+  }, []);
+
+  // Charger automatiquement les données utilisateur
   useFocusEffect(
     React.useCallback(() => {
-      console.log('🔄 Focus sur ProfileScreen - Rechargement des données...');
+      console.log('🔄 Focus sur ProfileScreen - Chargement automatique...');
       
-      // Vérifier d'abord le contexte d'authentification
       const checkAuthAndLoad = async () => {
         try {
           const userToken = await AsyncStorage.getItem('userToken');
-          console.log('🔍 Vérification auth au focus:', { 
-            hasToken: !!userToken,
-            isAuthenticated: !!userToken
-          });
           
           if (userToken) {
+            console.log('✅ Token trouvé, chargement des données...');
             loadUserData();
           } else {
-            console.log('❌ Aucun token trouvé au focus, affichage non connecté');
+            console.log('❌ Aucun token trouvé, affichage non connecté');
             setUserData({
               name: 'Non connecté',
               phone: 'Non disponible',
-              email: 'Non disponible',
             });
-            setIsLoading(false); // Arrêter le chargement
           }
         } catch (error) {
           console.error('❌ Erreur vérification auth:', error);
-          setIsLoading(false); // Arrêter le chargement en cas d'erreur
         }
       };
       
@@ -57,26 +65,13 @@ const ProfileScreen = ({ navigation }) => {
     }, [])
   );
 
-  const loadUserData = async (retryCount = 0) => {
+  const loadUserData = async () => {
     try {
-      setIsLoading(true);
-      
-      // Vérifier le token avec plus de détails
+      // Vérifier le token
       const userToken = await AsyncStorage.getItem('userToken');
-      console.log('🔍 Vérification du token:', { 
-        hasToken: !!userToken, 
-        tokenLength: userToken?.length,
-        tokenPreview: userToken ? userToken.substring(0, 20) + '...' : 'null'
-      });
       
       if (userToken) {
-        console.log(`🔄 Rechargement des données utilisateur... (tentative ${retryCount + 1})`);
-        
-        // Attendre un peu plus longtemps pour les nouvelles activations
-        if (retryCount === 0) {
-          console.log('⏳ Attente initiale de 3 secondes pour la synchronisation...');
-          await new Promise(resolve => setTimeout(resolve, 3000));
-        }
+        console.log('🔄 Chargement des données utilisateur...');
         
         const response = await fetch(`${API_BASE_URL}/user`, {
           headers: {
@@ -94,56 +89,34 @@ const ProfileScreen = ({ navigation }) => {
         const data = await response.json();
         console.log('✅ Données utilisateur reçues:', data);
         
-        // Vérifier si les données sont complètes
-        if (data && data.name && data.phone && data.name !== 'Utilisateur') {
-          console.log('✅ Données complètes trouvées:', data);
-          setUserData(data);
-        } else if (retryCount < 5) {
-          // Augmenter le nombre de tentatives et les délais
-          const delay = (retryCount + 1) * 2000; // 2s, 4s, 6s, 8s, 10s
-          console.log(`⚠️ Données incomplètes (${data?.name || 'vide'}), nouvelle tentative dans ${delay/1000} secondes...`);
-          setTimeout(() => {
-            loadUserData(retryCount + 1);
-          }, delay);
-          return;
-        } else {
-          // Après 5 tentatives, utiliser les données partielles ou par défaut
-          console.log('⚠️ Après 5 tentatives, utilisation des données par défaut');
-          setUserData({
-            name: data?.name || 'Utilisateur non enregistré',
-            phone: data?.phone || 'Non renseigné',
-            email: data?.email || 'email@example.com',
-          });
-        }
+        // Utiliser les données reçues du serveur
+        setUserData({
+          name: data?.name || data?.user?.name || 'Utilisateur',
+          phone: data?.phone || data?.user?.phone || 'Non renseigné',
+        });
+        
+        console.log('📱 Données utilisateur mises à jour:', {
+          name: data?.name || data?.user?.name,
+          phone: data?.phone || data?.user?.phone
+        });
+        
+        // Mettre à jour le timestamp du cache
+        setLastLoadTime(Date.now());
       } else {
         console.log('❌ Aucun token utilisateur trouvé');
         setUserData({
           name: 'Non connecté',
           phone: 'Non disponible',
-          email: 'Non disponible',
         });
       }
     } catch (error) {
       console.error('❌ Erreur lors du chargement des données utilisateur:', error);
       
-      // Si c'est une erreur de réseau ou serveur, réessayer
-      if (retryCount < 3) {
-        const delay = (retryCount + 1) * 3000; // 3s, 6s, 9s
-        console.log(`⚠️ Erreur réseau, nouvelle tentative dans ${delay/1000} secondes...`);
-        setTimeout(() => {
-          loadUserData(retryCount + 1);
-        }, delay);
-        return;
-      }
-      
       // Gérer l'erreur de manière appropriée
       setUserData({
         name: 'Erreur de chargement',
         phone: 'Non disponible',
-        email: 'Non disponible',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -264,11 +237,6 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  // Afficher le skeleton pendant le chargement
-  if (isLoading) {
-    return <ProfileSkeleton />;
-  }
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -277,15 +245,6 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={styles.headerTitle}>{t.profile.title}</Text>
             <Text style={styles.headerSubtitle}>Gérez votre profil et vos commandes</Text>
           </View>
-          <TouchableOpacity 
-            style={styles.refreshButton}
-            onPress={() => {
-              console.log('🔄 Rechargement manuel des données utilisateur...');
-              loadUserData();
-            }}
-          >
-            <Ionicons name="refresh" size={24} color="#FF9800" />
-          </TouchableOpacity>
         </View>
         <ScrollView style={styles.scrollView}>
 
@@ -298,7 +257,6 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.userInfoContainer}>
               <Text style={styles.userName}>{userData.name}</Text>
               <Text style={styles.userPhone}>{userData.phone}</Text>
-              <Text style={styles.userEmail}>{userData.email}</Text>
             </View>
           </View>
 
@@ -373,11 +331,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
   },
-  refreshButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
   headerTitle: {
     fontSize: 24,
     color: '#fff',
@@ -432,12 +385,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   userPhone: {
-    fontSize: 14,
-    color: '#666',
-    fontFamily: 'Montserrat',
-    marginBottom: 2,
-  },
-  userEmail: {
     fontSize: 14,
     color: '#666',
     fontFamily: 'Montserrat',
