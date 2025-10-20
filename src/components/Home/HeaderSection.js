@@ -596,8 +596,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   header: {
-    
-    padding: 15,
+    paddingHorizontal: 0, // Supprimer le padding horizontal pour couvrir toute la largeur
+    paddingVertical: 15,
     paddingTop: Platform.OS === "android" ? 40 : 60,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
@@ -612,6 +612,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 15,
+    paddingHorizontal: 15, // Ajouter le padding horizontal pour maintenir l'espacement
   },
   locationWrapper: {
     flexDirection: "row",
@@ -678,6 +679,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    paddingHorizontal: 15, // Ajouter le padding horizontal pour maintenir l'espacement
   },
   searchBar: {
     flex: 1,

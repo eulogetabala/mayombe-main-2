@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight + 10 : 50,
     paddingBottom: 15,
-    paddingHorizontal: 20,
+    paddingHorizontal: 0, // Supprimer le padding horizontal pour couvrir toute la largeur
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -71,6 +71,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 20, // Ajouter le padding au contenu pour maintenir l'espacement
   },
   backButton: {
     width: 40,

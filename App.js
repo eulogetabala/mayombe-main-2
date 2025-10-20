@@ -2,7 +2,12 @@ import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, LogBox } from "react-native";
+
+// Désactiver l'inspecteur de développement
+if (!__DEV__) {
+  LogBox.ignoreAllLogs(true);
+}
 import * as Font from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import * as Animatable from "react-native-animatable";
