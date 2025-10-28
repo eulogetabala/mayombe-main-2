@@ -19,6 +19,7 @@ import { LanguageProvider } from './src/context/LanguageContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import getStripePublishableKey from './src/config/stripe';
+import { initializeImageCache } from './src/config/ImageCacheConfig';
 
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/Auth/LoginScreen";
@@ -198,6 +199,9 @@ export default function App() {
           }),
           new Promise((resolve) => setTimeout(resolve, 2000)),
         ]);
+
+        // Initialiser le cache d'images
+        await initializeImageCache();
       } catch (error) {
         console.error("Erreur de chargement des polices:", error);
       } finally {

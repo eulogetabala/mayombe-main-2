@@ -13,6 +13,7 @@ import {
   Platform,
   StatusBar,
 } from 'react-native';
+import CachedImage from '../components/CachedImage';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ProductModal from '../components/ProductModal';
@@ -251,14 +252,14 @@ const CategorieList = ({ route, navigation }) => {
               onPress={() => handleProductPress(item)}
             >
               {item.imageUrl && !hasImageError ? (
-                <Image
+                <CachedImage
                   source={{ uri: item.imageUrl }}
                   style={styles.productImage}
                   resizeMode="cover"
                   onError={() => handleImageError(item.id)}
                 />
               ) : (
-                <Image
+                <CachedImage
                   source={staticImages.image1}
                   style={styles.productImage}
                   resizeMode="cover"
@@ -289,14 +290,14 @@ const CategorieList = ({ route, navigation }) => {
                 onPress={() => handleProductPress(nextItem)}
               >
                 {nextItem.imageUrl && !hasNextImageError ? (
-                  <Image
+                  <CachedImage
                     source={{ uri: nextItem.imageUrl }}
                     style={styles.productImage}
                     resizeMode="cover"
                     onError={() => handleImageError(nextItem.id)}
                   />
                 ) : (
-                  <Image
+                  <CachedImage
                     source={staticImages.image2}
                     style={styles.productImage}
                     resizeMode="cover"

@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
 } from 'react-native';
+import CachedImage from '../components/CachedImage';
 import { Ionicons } from "@expo/vector-icons";
 import ProductModal from '../components/ProductModal';
 import CustomHeader from '../components/common/CustomHeader';
@@ -138,7 +139,7 @@ const AllProducts = ({ navigation }) => {
       style={styles.card}
       onPress={() => handleProductPress(item)}
     >
-      <Image 
+      <CachedImage 
         source={item.hasValidImage ? { uri: item.imageUrl } : require('../../assets/images/place.png')}
         style={styles.productImage}
         defaultSource={require('../../assets/images/place.png')}

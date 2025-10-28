@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, SafeAreaView, ScrollView, Platform, StatusBar, Alert, ActivityIndicator, Dimensions, RefreshControl, Clipboard, Share } from 'react-native';
+import CachedImage from '../components/CachedImage';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -632,7 +633,7 @@ const CartScreen = ({ navigation, route }) => {
 
   const renderItem = ({ item }) => (
     <View style={styles.cartItem}>
-      <Image 
+      <CachedImage 
         source={
           item.imageUrl 
             ? { uri: item.imageUrl }
