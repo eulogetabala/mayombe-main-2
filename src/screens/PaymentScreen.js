@@ -51,13 +51,13 @@ const PaymentScreen = ({ route, navigation }) => {
       name: 'MamboPay',
       logo: require('../../assets/images/mambo.jpeg'),
       disabled: false,
-      description: 'Paiement mobile sécurisé'
+      description: 'Paiement par Bon d\'achat digital sécurisé'
     },
     {
       id: 'mtn',
       name: 'MTN Mobile Money',
       logo: require('../../assets/images/mtn.jpeg'),
-      disabled: false,
+      disabled: true,
       description: 'Paiement mobile sécurisé'
     },
     {
@@ -234,11 +234,20 @@ const PaymentScreen = ({ route, navigation }) => {
     const method = paymentMethods.find(m => m.id === methodId);
     
     if (method && method.disabled) {
+      let message = '';
+      if (method.id === 'mambopay') {
+        message = 'Le paiement par MamboPay n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.';
+      } else if (method.id === 'mtn') {
+        message = 'Le paiement par mobile money n\'est pas encore disponible pour le moment.';
+      } else if (method.id === 'cb') {
+        message = 'Le paiement par carte bancaire n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.';
+      } else {
+        message = 'Ce mode de paiement n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.';
+      }
+      
       Alert.alert(
         'Mode de paiement non disponible',
-        method.id === 'mambopay' 
-          ? 'Le paiement par MamboPay n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.'
-          : 'Le paiement par carte bancaire n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.',
+        message,
         [{ text: 'OK' }]
       );
       return;
@@ -289,6 +298,7 @@ const PaymentScreen = ({ route, navigation }) => {
                   source={method.logo} 
                   style={[
                     styles.methodLogo,
+                    method.id === 'mambopay' && styles.mambopayLogo,
                     method.disabled && styles.disabledLogo
                   ]} 
                 />
@@ -519,6 +529,10 @@ const styles = StyleSheet.create({
     height: scaleFont(50),
     resizeMode: 'contain',
     marginBottom: 8,
+  },
+  mambopayLogo: {
+    width: scaleFont(100),
+    height: scaleFont(100),
   },
   methodInfo: {
     alignItems: 'center',

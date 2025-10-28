@@ -48,19 +48,6 @@ const ResetPasswordScreen = ({ navigation, route }) => {
       return false;
     }
     
-    // Vérifier si le mot de passe contient seulement des chiffres
-    const isNumericOnly = /^\d+$/.test(newPassword);
-    if (!isNumericOnly) {
-      Alert.alert(
-        "Format de mot de passe", 
-        "Pour la réinitialisation, le mot de passe doit contenir uniquement des chiffres (0-9).\n\nExemple: 123456\n\nNote: Après la réinitialisation, vous pourrez utiliser des mots de passe avec lettres et chiffres lors des prochaines connexions.",
-        [
-          { text: "Compris", style: "default" }
-        ]
-      );
-      return false;
-    }
-    
     if (newPassword !== confirmPassword) {
       Alert.alert("Erreur", "Les mots de passe ne correspondent pas.");
       return false;
@@ -133,11 +120,11 @@ const ResetPasswordScreen = ({ navigation, route }) => {
             </Animatable.Text>
 
             <Animatable.Text animation="fadeInUp" style={styles.hint}>
-              ⚠️ Pour la réinitialisation, utilisez uniquement des chiffres (0-9)
+              🔒 Choisissez un mot de passe sécurisé (minimum 6 caractères)
             </Animatable.Text>
 
             <Animatable.Text animation="fadeInUp" style={styles.info}>
-              💡 Note: Cette limitation ne s'applique qu'à la réinitialisation. Après la réinitialisation, vous pourrez utiliser des mots de passe avec lettres et chiffres.
+              💡 Vous pouvez utiliser des lettres, chiffres et caractères spéciaux pour plus de sécurité.
             </Animatable.Text>
 
             {/* Nouveau mot de passe */}
@@ -150,12 +137,13 @@ const ResetPasswordScreen = ({ navigation, route }) => {
               />
               <TextInput
                 style={styles.input}
-                placeholder="123456 (chiffres uniquement)"
+                placeholder="Nouveau mot de passe"
                 placeholderTextColor="#aaa"
                 secureTextEntry={!showPassword}
                 value={newPassword}
                 onChangeText={setNewPassword}
-                keyboardType="numeric"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons
@@ -176,12 +164,13 @@ const ResetPasswordScreen = ({ navigation, route }) => {
               />
               <TextInput
                 style={styles.input}
-                placeholder="123456 (confirmer)"
+                placeholder="Confirmer le mot de passe"
                 placeholderTextColor="#aaa"
                 secureTextEntry={!showConfirmPassword}
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
-                keyboardType="numeric"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
                 <Ionicons

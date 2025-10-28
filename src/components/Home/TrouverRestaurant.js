@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   ImageBackground,
 } from "react-native";
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import * as Animatable from 'react-native-animatable';
 import { useLanguage } from '../../context/LanguageContext';
@@ -42,6 +42,16 @@ const TrouverRestaurant = ({ navigation }) => {
     }
   }, [selectedCity]);
 
+  // Recharger les restaurants quand on revient sur l'écran d'accueil
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('🏠 TrouverRestaurant - Écran d\'accueil actif, rechargement des restaurants');
+      if (selectedCity) {
+        fetchRestaurantsByCity(selectedCity);
+      }
+    }, [selectedCity])
+  );
+
   const fetchCities = async () => {
     try {
      
@@ -72,6 +82,8 @@ const TrouverRestaurant = ({ navigation }) => {
 
   const fetchRestaurantsByCity = async (selectedCity) => {
     try {
+      console.log('🔄 TrouverRestaurant - Début du chargement des restaurants pour:', selectedCity);
+      setError(null); // Réinitialiser l'erreur au début
       const cityData = cities.find(c => c.libelle === selectedCity || c.name === selectedCity);
       if (!cityData) return;
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -37,19 +38,30 @@ const RestaurantDetails = ({ route, navigation }) => {
   const [userLocation, setUserLocation] = useState(null);
   const [distance, setDistance] = useState(null);
   const [validDates, setValidDates] = useState({ debut: null, fin: null });
+  const [isScreenFocused, setIsScreenFocused] = useState(true);
 
-  useEffect(() => {
-    if (restaurant?.id) {
-      fetchSubMenus();
-    }
-  }, [restaurant]);
+  // Utiliser useFocusEffect pour éviter les appels API quand l'écran n'est pas actif
+  useFocusEffect(
+    React.useCallback(() => {
+      setIsScreenFocused(true);
+      if (restaurant?.id) {
+        fetchSubMenus();
+      }
+      
+      return () => {
+        setIsScreenFocused(false);
+      };
+    }, [restaurant])
+  );
 
-  useEffect(() => {
-    if (selectedSubMenu && restaurant?.id) {
-      console.log('🔄 Sous-menu sélectionné, récupération des menus...');
-      fetchMenusByResto();
-    }
-  }, [selectedSubMenu, restaurant]);
+  useFocusEffect(
+    React.useCallback(() => {
+      if (selectedSubMenu && restaurant?.id && isScreenFocused) {
+        console.log('🔄 Sous-menu sélectionné, récupération des menus...');
+        fetchMenusByResto();
+      }
+    }, [selectedSubMenu, restaurant, isScreenFocused])
+  );
 
   useEffect(() => {
     (async () => {
@@ -161,6 +173,11 @@ const RestaurantDetails = ({ route, navigation }) => {
     
     if (!restaurant?.id) {
       console.log('⚠️ Aucun restaurant sélectionné');
+      return;
+    }
+    
+    if (!isScreenFocused) {
+      console.log('⚠️ Écran non actif, annulation de la requête');
       return;
     }
     

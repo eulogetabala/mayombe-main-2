@@ -68,6 +68,7 @@ const RestaurantsSection = () => {
     }
   }, [userLocation, cities]);
 
+
   // Calcul de la distance (Haversine)
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Rayon de la Terre en km

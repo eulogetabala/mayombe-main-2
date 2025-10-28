@@ -15,7 +15,7 @@ import {
   Alert,
 } from "react-native";
 import * as Animatable from "react-native-animatable";
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { BaseScreen } from '../components/common/BaseScreen';
 import { RestaurantSkeletonLoader } from '../components/common/SkeletonLoader';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,7 +52,6 @@ const HomeScreen = ({ navigation }) => {
   const scrollViewRef = useRef(null);
   const flatListRef = useRef(null);
   const { isAuthenticated, login, logout } = useAuth();
-
 
 
   // Sauvegarder la position du scroll

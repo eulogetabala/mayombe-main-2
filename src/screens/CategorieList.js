@@ -41,8 +41,8 @@ const CategorieList = ({ route, navigation }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const staticImages = {
-    image1: require("../../assets/images/2.jpg"),
-    image2: require("../../assets/images/3.jpg"),
+    image1: require("../../assets/images/place.png"),
+    image2: require("../../assets/images/place.png"),
   };
 
   useLayoutEffect(() => {
@@ -107,6 +107,14 @@ const CategorieList = ({ route, navigation }) => {
             hasValidImage = true;
           }
 
+          console.log(`🔍 Produit ${product.name}:`, {
+            image_url: product.image_url,
+            image: product.image,
+            cover: product.cover,
+            imageUrl: imageUrl,
+            hasValidImage: hasValidImage
+          });
+
           return {
             ...product,
             id: product.id || index,
@@ -149,6 +157,10 @@ const CategorieList = ({ route, navigation }) => {
   }, [categoryId]);
 
   const handleProductPress = (product) => {
+    console.log('🔍 Produit sélectionné:', product);
+    console.log('🔍 Image du produit (imageUrl):', product.imageUrl);
+    console.log('🔍 Image du produit (image):', product.image);
+    console.log('🔍 HasValidImage:', product.hasValidImage);
     setSelectedProduct(product);
     setModalVisible(true);
   };

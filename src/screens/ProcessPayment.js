@@ -19,8 +19,10 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CountryPicker, { DEFAULT_THEME, DARK_THEME } from 'react-native-country-picker-modal';
 import { useLanguage } from '../context/LanguageContext';
+import Toast from 'react-native-toast-message';
 import { useCart } from '../context/CartContext';
 import { translations } from '../translations';
+import StripePaymentCorrect from '../components/StripePaymentCorrect';
 
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -48,6 +50,27 @@ const ProcessPayment = () => {
   const [isCheckingPayment, setIsCheckingPayment] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState('');
   const [isVoucherFocused, setIsVoucherFocused] = useState(false);
+  const [hasShownInsufficientToast, setHasShownInsufficientToast] = useState(false);
+
+  // Marquer la commande comme annulée (ou échec paiement) côté backend
+  const markOrderAsCancelled = async (orderId) => {
+    try {
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (!userToken || !orderId) return;
+      await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${userToken}`
+        },
+        body: JSON.stringify({
+          status: 'cancelled',
+          payment_status: 'failed'
+        })
+      }).catch(() => {});
+    } catch (_) {}
+  };
 
   const paymentMethod = orderDetails?.paymentMethod || 'cash';
   console.log('🔍 ProcessPayment - orderDetails:', orderDetails);
@@ -214,6 +237,42 @@ const ProcessPayment = () => {
         
         console.log("Réponse de l'API:", responseData);
 
+        // Détection générique d'échec (fonds insuffisants / refus) pour tous les opérateurs sauf cash
+        if (paymentMethod !== 'cash') {
+          const statusStr = (responseData?.status || responseData?.payment_status || '').toString().toLowerCase();
+          const successBool = responseData?.success === true;
+          const errorCode = (responseData?.code || responseData?.error_code || '').toString().toUpperCase();
+          const errorReason = (responseData?.reason || '').toUpperCase();
+          const messageStr = (responseData?.message || '').toLowerCase();
+
+          const isInsufficient =
+            errorCode === 'LOW_BALANCE' ||
+            errorCode === 'INSUFFICIENT_FUNDS' ||
+            errorReason === 'LOW_BALANCE' ||
+            messageStr.includes('solde insuffisant') ||
+            messageStr.includes('fonds insuffisants') ||
+            statusStr === 'failed' || statusStr === 'échoué';
+
+          if (!successBool && isInsufficient) {
+            await markOrderAsCancelled(orderDetails.orderId);
+            if (!hasShownInsufficientToast) {
+              Toast.show({
+                type: 'error',
+                text1: 'Fonds insuffisants',
+                text2: "Votre paiement a été refusé pour fonds insuffisants.",
+                position: 'bottom',
+              });
+              setHasShownInsufficientToast(true);
+            }
+            Alert.alert(
+              'Fonds insuffisants',
+              "Votre paiement a été refusé pour fonds insuffisants. Aucune commande n'a été validée. Veuillez recharger et réessayer.",
+              [{ text: 'OK' }]
+            );
+            return; // Ne pas naviguer vers la page de succès
+          }
+        }
+
         // Vérifier d'abord les erreurs MTN même si response.ok (uniquement pour MTN)
         if (paymentMethod === 'mtn' && responseData.payment_api_response && !responseData.payment_api_response.success) {
           const mtnError = responseData.payment_api_response;
@@ -244,24 +303,7 @@ const ProcessPayment = () => {
           
           // Réactiver le polling automatique
           startPaymentStatusCheck(orderDetails.orderId, userToken);
-          
-          // Redirection directe vers OrderSuccess pour le moment
-          setTimeout(() => {
-            navigation.reset({
-              index: 0,
-              routes: [
-                { 
-                  name: 'OrderSuccess',
-                  params: { 
-                    orderDetails: {
-                      ...orderDetails,
-                      paymentStatus: 'pending_verification',
-                    }
-                  }
-                }
-              ],
-            });
-          }, 2000);
+          // Ne pas rediriger vers la page de succès tant que non confirmé
         } else if (paymentMethod === 'cash') {
           // Gestion spécifique pour le mode cash
           const orderId = responseData.order_id || responseData.id;
@@ -345,7 +387,7 @@ const ProcessPayment = () => {
             ]
           );
         } else {
-          // Vider le panier après un paiement réussi
+          // CB: Vider le panier uniquement si succès réel
           try {
             await clearCart();
             await AsyncStorage.removeItem('cart');
@@ -441,12 +483,24 @@ const ProcessPayment = () => {
           if (apiError.message.includes("Solde insuffisant")) {
             errorTitle = "Solde insuffisant";
             errorMessage = apiError.message;
+            await markOrderAsCancelled(orderDetails.orderId);
+            if (!hasShownInsufficientToast) {
+              Toast.show({
+                type: 'error',
+                text1: 'Fonds insuffisants',
+                text2: "Solde MTN insuffisant pour cette transaction.",
+                position: 'bottom',
+              });
+              setHasShownInsufficientToast(true);
+            }
           } else if (apiError.message.includes("Numéro de téléphone non trouvé")) {
             errorTitle = "Numéro non trouvé";
             errorMessage = apiError.message;
+            await markOrderAsCancelled(orderDetails.orderId);
           } else if (apiError.message.includes("Erreur MTN")) {
             errorTitle = "Erreur MTN Mobile Money";
             errorMessage = apiError.message;
+            await markOrderAsCancelled(orderDetails.orderId);
           }
           
           Alert.alert(errorTitle, errorMessage, [
@@ -464,33 +518,51 @@ const ProcessPayment = () => {
           ]);
         } else if (paymentMethod === 'cb') {
           // Messages d'erreur spécifiques pour carte bancaire
-          if (apiError.message.includes("Solde insuffisant") || apiError.message.includes("vérifier le solde")) {
+          if (apiError.message.includes("Solde insuffisant") || apiError.message.includes("vérifier le solde") || apiError.message.toLowerCase().includes('fonds insuffisants')) {
             errorTitle = "Paiement refusé";
             errorMessage = "Votre requête ne peut être traitée. Veuillez vérifier les informations de votre carte ou contacter votre banque.";
+            await markOrderAsCancelled(orderDetails.orderId);
+            if (!hasShownInsufficientToast) {
+              Toast.show({
+                type: 'error',
+                text1: 'Fonds insuffisants',
+                text2: "Votre carte n'a pas suffisamment de fonds.",
+                position: 'bottom',
+              });
+              setHasShownInsufficientToast(true);
+            }
           } else if (apiError.message.includes("Carte refusée")) {
             errorTitle = "Carte refusée";
             errorMessage = "Votre carte a été refusée. Veuillez vérifier les informations ou utiliser une autre carte.";
+            await markOrderAsCancelled(orderDetails.orderId);
           } else if (apiError.message.includes("Carte expirée")) {
             errorTitle = "Carte expirée";
             errorMessage = "Votre carte est expirée. Veuillez utiliser une autre carte.";
+            await markOrderAsCancelled(orderDetails.orderId);
           } else if (apiError.message.includes("Code de sécurité incorrect")) {
             errorTitle = "Code CVC incorrect";
             errorMessage = "Le code de sécurité de votre carte est incorrect. Veuillez vérifier et réessayer.";
+            await markOrderAsCancelled(orderDetails.orderId);
           } else if (apiError.message.includes("Fonds insuffisants")) {
             errorTitle = "Fonds insuffisants";
             errorMessage = "Votre carte n'a pas suffisamment de fonds pour effectuer cette transaction.";
+            await markOrderAsCancelled(orderDetails.orderId);
           } else if (apiError.message.includes("Date d'expiration invalide")) {
             errorTitle = "Date d'expiration invalide";
             errorMessage = "La date d'expiration de votre carte est invalide. Veuillez vérifier et réessayer.";
+            await markOrderAsCancelled(orderDetails.orderId);
           } else if (apiError.message.includes("Numéro de carte invalide")) {
             errorTitle = "Numéro de carte invalide";
             errorMessage = "Le numéro de votre carte est invalide. Veuillez vérifier et réessayer.";
+            await markOrderAsCancelled(orderDetails.orderId);
           } else if (apiError.message.includes("Erreur de traitement")) {
             errorTitle = "Erreur de traitement";
             errorMessage = "Une erreur est survenue lors du traitement. Veuillez réessayer ou contacter le support.";
+            await markOrderAsCancelled(orderDetails.orderId);
           } else {
             errorTitle = "Erreur de paiement";
             errorMessage = "Votre requête ne peut être traitée. Veuillez vérifier les informations de votre carte ou contacter votre banque.";
+            await markOrderAsCancelled(orderDetails.orderId);
           }
           
           Alert.alert(errorTitle, errorMessage, [
@@ -660,14 +732,9 @@ const ProcessPayment = () => {
   };
 
   const handlePayment = async () => {
-    // Empêcher le paiement si carte bancaire est sélectionné
+    // Pour les cartes bancaires, le paiement est géré par le composant StripePaymentCorrect
     if (paymentMethod === 'cb') {
-      Alert.alert(
-        'Mode de paiement non disponible',
-        'Le paiement par carte bancaire n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.',
-        [{ text: 'OK' }]
-      );
-      return;
+      return; // Le composant StripePaymentCorrect gère le paiement
     }
 
     // Validation selon le mode de paiement
@@ -714,7 +781,7 @@ const ProcessPayment = () => {
         <View style={styles.formContainer}>
           <Image 
             source={require('../../assets/images/mambo.jpeg')} 
-            style={styles.paymentLogo} 
+            style={styles.mambopayPaymentLogo} 
           />
           <Text style={styles.formTitle}>
             {t.payment.mambopayPayment}
@@ -732,7 +799,7 @@ const ProcessPayment = () => {
                     styles.voucherInput,
                     isVoucherFocused && styles.voucherInputFocused
                   ]}
-                  placeholder="13456"
+                  placeholder="123456"
                   placeholderTextColor="#999"
                   value={phoneNumber}
                   onChangeText={setPhoneNumber}
@@ -828,27 +895,18 @@ const ProcessPayment = () => {
         </View>
       );
     } else if (paymentMethod === 'cb') {
-      // Rediriger vers StripePaymentScreen au lieu d'afficher "bientôt disponible"
+      // Utiliser le composant StripePaymentCorrect pour le paiement par carte
       return (
-        <View style={styles.formContainer}>
-          <ActivityIndicator size="large" color="#51A905" />
-          <Text style={styles.formTitle}>
-            Redirection vers le paiement sécurisé...
-          </Text>
-          <TouchableOpacity
-            style={styles.redirectButton}
-            onPress={() => {
-              navigation.navigate('StripePayment', {
-                orderDetails: orderDetails,
-                onPaymentSuccess: onPaymentSuccess
-              });
-            }}
-          >
-            <Text style={styles.redirectButtonText}>
-              Continuer vers le paiement
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <StripePaymentCorrect
+          orderDetails={orderDetails}
+          onPaymentSuccess={onPaymentSuccess}
+          onPaymentError={(error) => {
+            console.error('Erreur de paiement Stripe:', error);
+            Alert.alert('Erreur de paiement', error.message);
+          }}
+          isLoading={isLoading}
+          setIsLoading={setIsLoading}
+        />
       );
     } else if (paymentMethod === 'cash') {
       return (
@@ -889,15 +947,15 @@ const ProcessPayment = () => {
           <Text style={styles.totalAmount}>{orderDetails?.total || 0} FCFA</Text>
         </View>
 
-        {/* Bouton de paiement - affiché pour tous */}
-        {(
+        {/* Bouton de paiement - affiché pour tous sauf CB (géré par StripePaymentCorrect) */}
+        {paymentMethod !== 'cb' && (
           <TouchableOpacity
             style={[
               styles.payButton, 
-              (isLoading || paymentMethod === 'cb' || isCheckingPayment) && styles.payButtonDisabled
+              (isLoading || isCheckingPayment) && styles.payButtonDisabled
             ]}
             onPress={handlePayment}
-            disabled={isLoading || paymentMethod === 'cb' || isCheckingPayment}
+            disabled={isLoading || isCheckingPayment}
           >
             {isLoading ? (
               <ActivityIndicator color="#fff" size="small" />
@@ -908,10 +966,6 @@ const ProcessPayment = () => {
                   Vérification...
                 </Text>
               </View>
-            ) : paymentMethod === 'cb' ? (
-              <Text style={styles.payButtonText}>
-                Non disponible
-              </Text>
             ) : paymentMethod === 'cash' ? (
               <Text style={styles.payButtonText}>
                 Valider la commande
@@ -988,6 +1042,13 @@ const styles = StyleSheet.create({
   paymentLogo: {
     width: scaleFont(80),
     height: scaleFont(80),
+    resizeMode: 'contain',
+    alignSelf: 'center',
+    marginBottom: 15,
+  },
+  mambopayPaymentLogo: {
+    width: scaleFont(100),
+    height: scaleFont(100),
     resizeMode: 'contain',
     alignSelf: 'center',
     marginBottom: 15,

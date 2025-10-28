@@ -10,7 +10,7 @@ import {
   TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useStripe, CardField } from '@stripe/stripe-react-native';
+import { useStripe, useConfirmPayment, CardField } from '@stripe/stripe-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
@@ -24,6 +24,7 @@ const StripePaymentCorrect = ({
   setIsLoading 
 }) => {
   const { createPaymentMethod, createToken } = useStripe();
+  const { confirmPayment } = useConfirmPayment();
   const [cardDetails, setCardDetails] = useState(null);
   const [cardholderName, setCardholderName] = useState('');
   
@@ -87,10 +88,10 @@ const StripePaymentCorrect = ({
         return;
       }
 
-      console.log('🔍 Envoi au backend avec payment_method_id:', paymentMethod.id);
+      console.log('🔍 Étape 1: Création du PaymentIntent côté backend...');
 
-      // Appel au backend avec le payment_method_id
-      const response = await fetch('https://www.api-mayombe.mayombe-app.com/public/api/paiement', {
+      // Étape 1: Créer le PaymentIntent côté backend
+      const paymentIntentResponse = await fetch('https://www.api-mayombe.mayombe-app.com/public/api/create-payment-intent', {
         method: 'POST',
         headers: {
           'Accept': 'application/json',
@@ -103,27 +104,90 @@ const StripePaymentCorrect = ({
           delivery_address: orderDetails.address,
           delivery_phone: orderDetails.phone,
           payment_method: 'cb',
-          operator: 'cb',
-          payment_method_id: paymentMethod.id, // ✅ Vrai PaymentMethod ID
-          card_data: {
-            number: '****', // Masqué pour la sécurité
-            exp_month: cardDetails?.expMonth || 12,
-            exp_year: cardDetails?.expYear || 2025,
-            cvc: '***', // Masqué pour la sécurité
-            name: cardholderName.trim() || 'Test User'
-          }
+          operator: 'cb'
         })
       });
 
-      const responseData = await response.json();
-      console.log('🔍 Réponse API:', responseData);
+      const paymentIntentData = await paymentIntentResponse.json();
+      console.log('🔍 Réponse PaymentIntent:', paymentIntentData);
 
-      if (response.ok && responseData.success) {
-        console.log('✅ Paiement réussi:', responseData);
-        onPaymentSuccess(responseData);
+      if (!paymentIntentResponse.ok || !paymentIntentData.client_secret) {
+        throw new Error(paymentIntentData.message || 'Erreur lors de la création du PaymentIntent');
+      }
+
+      console.log('🔍 Étape 2: Confirmation du paiement avec Stripe...');
+
+      // Étape 2: Confirmer le paiement avec Stripe
+      const { error: confirmError, paymentIntent } = await confirmPayment(
+        paymentIntentData.client_secret,
+        {
+          paymentMethodType: 'Card',
+          paymentMethodData: {
+            type: 'Card',
+            billingDetails: {
+              name: cardholderName.trim() || 'Test User',
+            },
+          },
+          card: cardDetails,
+        }
+      );
+
+      if (confirmError) {
+        console.error('❌ Erreur confirmation Stripe:', confirmError);
+        
+        // Gérer les erreurs spécifiques de fonds insuffisants
+        if (confirmError.code === 'card_declined' || confirmError.type === 'card_error') {
+          Alert.alert(
+            'Paiement refusé', 
+            'Votre carte a été refusée. Veuillez vérifier vos fonds et réessayer avec une autre carte.'
+          );
+        } else {
+          Alert.alert('Erreur de paiement', confirmError.message);
+        }
+        
+        onPaymentError(confirmError);
+        return;
+      }
+
+      console.log('✅ Paiement confirmé avec succès:', paymentIntent);
+
+      // Vérifier le statut du paiement
+      if (paymentIntent.status === 'succeeded') {
+        console.log('✅ Paiement réussi, envoi au backend...');
+        
+        // Étape 3: Envoyer la confirmation au backend
+        const response = await fetch('https://www.api-mayombe.mayombe-app.com/public/api/paiement', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${userToken}`
+          },
+          body: JSON.stringify({
+            order_id: orderDetails.orderId,
+            total: orderDetails.total,
+            delivery_address: orderDetails.address,
+            delivery_phone: orderDetails.phone,
+            payment_method: 'cb',
+            operator: 'cb',
+            payment_intent_id: paymentIntent.id,
+            payment_method_id: paymentMethod.id,
+            stripe_payment_status: 'succeeded'
+          })
+        });
+
+        const responseData = await response.json();
+        console.log('🔍 Réponse API finale:', responseData);
+
+        if (response.ok && responseData.success) {
+          console.log('✅ Commande confirmée avec succès:', responseData);
+          onPaymentSuccess(responseData);
+        } else {
+          console.error('❌ Erreur confirmation commande:', responseData);
+          throw new Error(responseData.message || 'Erreur lors de la confirmation de la commande');
+        }
       } else {
-        console.error('❌ Erreur API:', responseData);
-        throw new Error(responseData.message || 'Erreur lors du traitement du paiement');
+        throw new Error('Le paiement n\'a pas été confirmé par Stripe');
       }
 
     } catch (error) {

@@ -638,10 +638,10 @@ const CartScreen = ({ navigation, route }) => {
             ? { uri: item.imageUrl }
             : item.image 
               ? item.image 
-              : require('../../assets/images/2.jpg')
+              : require('../../assets/images/place.png')
         }
         style={styles.itemImage}
-        defaultSource={require('../../assets/images/2.jpg')}
+        defaultSource={require('../../assets/images/place.png')}
       />
       <View style={styles.itemDetails}>
         <Text style={styles.itemName}>{item.name}</Text>

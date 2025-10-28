@@ -157,25 +157,62 @@ const SharedCartScreen = () => {
     checkClipboardForCartId();
   }, []);
 
-  const handlePayNow = () => {
+  const handlePayNow = async () => {
     if (!sharedCart) {
       Alert.alert('Erreur', 'Aucun panier à payer');
       return;
     }
 
-    setCartItems(sharedCart);
-    Alert.alert(
-      'Paiement',
-      'Le panier partagé a été chargé. Vous allez être redirigé vers la page de paiement.',
-      [
-        {
-          text: 'OK',
-          onPress: () => {
-            navigation.navigate('CartTab', { screen: 'CartMain' });
+    try {
+      // Sauvegarder le panier partagé dans AsyncStorage
+      await AsyncStorage.setItem('cart', JSON.stringify(sharedCart));
+      setCartItems(sharedCart);
+      
+      // Calculer le total du panier avec gestion des différentes structures
+      const total = sharedCart.reduce((sum, item) => {
+        let itemTotal = 0;
+        
+        // Essayer différentes propriétés possibles pour le total
+        if (item.total && !isNaN(item.total)) {
+          itemTotal = parseFloat(item.total);
+        } else if (item.totalPrice && !isNaN(item.totalPrice)) {
+          itemTotal = parseFloat(item.totalPrice);
+        } else if (item.price && item.quantity) {
+          const price = parseFloat(item.price.toString().replace(/[^\d.]/g, ''));
+          const quantity = parseInt(item.quantity);
+          if (!isNaN(price) && !isNaN(quantity)) {
+            itemTotal = price * quantity;
           }
         }
-      ]
-    );
+        
+        console.log(`Item: ${item.name}, Total calculé: ${itemTotal}`);
+        return sum + itemTotal;
+      }, 0);
+      
+      const deliveryFee = 1000; // Frais de livraison par défaut
+      const grandTotal = total + deliveryFee;
+      
+      console.log('💰 Calcul du total - Sous-total:', total, 'Frais de livraison:', deliveryFee, 'Total:', grandTotal);
+
+      // Créer les détails de la commande
+      const orderDetails = {
+        items: sharedCart,
+        subtotal: total,
+        deliveryFee: deliveryFee,
+        total: grandTotal,
+        orderId: `order_${Date.now()}`,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log('💳 SharedCart - Redirection vers la page de paiement avec:', orderDetails);
+      
+      // Rediriger directement vers la page de paiement
+      navigation.navigate('PaymentScreen', { orderDetails });
+      
+    } catch (error) {
+      console.error('Erreur lors du paiement du panier partagé:', error);
+      Alert.alert('Erreur', 'Impossible de procéder au paiement');
+    }
   };
 
   const handleAddToMyCart = () => {
@@ -203,7 +240,7 @@ const SharedCartScreen = () => {
         [
           {
             text: 'Voir mon panier',
-            onPress: () => navigation.navigate('CartTab', { screen: 'CartMain' })
+            onPress: () => navigation.navigate('MainApp', { screen: 'CartTab', params: { screen: 'Cart' } })
           },
           {
             text: 'Continuer',
@@ -214,20 +251,53 @@ const SharedCartScreen = () => {
     });
   };
 
-  const renderCartItem = ({ item }) => (
-    <View style={styles.cartItem}>
-      <View style={styles.itemImage}>
-        <Ionicons name="restaurant" size={24} color="#FF9800" />
-      </View>
-      <View style={styles.itemInfo}>
-        <Text style={styles.itemName}>{item.name}</Text>
-        <Text style={styles.itemQuantity}>Quantité: {item.quantity}</Text>
-        <Text style={styles.itemPrice}>{item.total?.toLocaleString()} FCFA</Text>
-      </View>
-    </View>
-  );
+  const renderCartItem = ({ item }) => {
+    // Calculer le total de l'item avec la même logique
+    let itemTotal = 0;
+    if (item.total && !isNaN(item.total)) {
+      itemTotal = parseFloat(item.total);
+    } else if (item.totalPrice && !isNaN(item.totalPrice)) {
+      itemTotal = parseFloat(item.totalPrice);
+    } else if (item.price && item.quantity) {
+      const price = parseFloat(item.price.toString().replace(/[^\d.]/g, ''));
+      const quantity = parseInt(item.quantity);
+      if (!isNaN(price) && !isNaN(quantity)) {
+        itemTotal = price * quantity;
+      }
+    }
 
-  const totalAmount = sharedCart ? sharedCart.reduce((sum, item) => sum + (item.total || 0), 0) : 0;
+    return (
+      <View style={styles.cartItem}>
+        <View style={styles.itemImage}>
+          <Ionicons name="restaurant" size={24} color="#FF9800" />
+        </View>
+        <View style={styles.itemInfo}>
+          <Text style={styles.itemName}>{item.name}</Text>
+          <Text style={styles.itemQuantity}>Quantité: {item.quantity}</Text>
+          <Text style={styles.itemPrice}>{itemTotal.toLocaleString()} FCFA</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const totalAmount = sharedCart ? sharedCart.reduce((sum, item) => {
+    let itemTotal = 0;
+    
+    // Essayer différentes propriétés possibles pour le total
+    if (item.total && !isNaN(item.total)) {
+      itemTotal = parseFloat(item.total);
+    } else if (item.totalPrice && !isNaN(item.totalPrice)) {
+      itemTotal = parseFloat(item.totalPrice);
+    } else if (item.price && item.quantity) {
+      const price = parseFloat(item.price.toString().replace(/[^\d.]/g, ''));
+      const quantity = parseInt(item.quantity);
+      if (!isNaN(price) && !isNaN(quantity)) {
+        itemTotal = price * quantity;
+      }
+    }
+    
+    return sum + itemTotal;
+  }, 0) : 0;
 
   return (
     <SafeAreaView style={styles.container}>

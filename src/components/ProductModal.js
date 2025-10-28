@@ -45,6 +45,8 @@ const ProductModal = ({
   
   // Log pour tracer les re-renders
   console.log("🔍 ProductModal - RENDER, visible:", visible, "product:", product?.name);
+  console.log("🔍 ProductModal - product.image:", product?.image);
+  console.log("🔍 ProductModal - product.imageUrl:", product?.imageUrl);
 
   const handleAddToCart = useCallback(() => {
     console.log("🛒 Ajout au panier déclenché");
@@ -127,7 +129,11 @@ const ProductModal = ({
 
           <View style={styles.contentContainer}>
             <Image 
-              source={product.image || require('../../assets/images/2.jpg')}
+              source={
+                product.image || 
+                (product.imageUrl ? { uri: product.imageUrl } : null) || 
+                require('../../assets/images/place.png')
+              }
               style={styles.productImage}
               onError={handleImageError}
             />
