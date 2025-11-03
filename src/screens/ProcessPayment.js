@@ -130,10 +130,10 @@ const ProcessPayment = () => {
         console.log("📱 Numéro MTN envoyé (format international):", internationalPhoneNumber);
       } else if (paymentMethod === 'mambopay') {
         // Format selon la doc API : voucher_code requis pour MamboPay
-        paymentData.voucher_code = phoneNumber; // phoneNumber contient le code coupon
+        paymentData.voucher_code = (phoneNumber || '').trim(); // phoneNumber contient le code coupon
         paymentData.payment_method = 'mambopay';
         paymentData.operator = 'mambopay';
-        console.log("🎫 Code coupon MamboPay envoyé:", phoneNumber);
+        console.log("🎫 Code coupon MamboPay envoyé:", paymentData.voucher_code);
       } else if (paymentMethod === 'cash') {
         console.log("🔍 Entrée dans le bloc cash");
         // Données spécifiques pour paiement cash selon la doc API
@@ -746,7 +746,8 @@ const ProcessPayment = () => {
     }
     
     if (paymentMethod === 'mambopay') {
-      if (!phoneNumber || phoneNumber.length < 8) {
+      const voucher = (phoneNumber || '').trim();
+      if (!voucher || voucher.length < 6) {
         Alert.alert('Erreur', 'Veuillez entrer un code coupon valide');
         return;
       }
@@ -803,8 +804,8 @@ const ProcessPayment = () => {
                   placeholderTextColor="#999"
                   value={phoneNumber}
                   onChangeText={setPhoneNumber}
-                  keyboardType="default"
-                  autoCapitalize="characters"
+                  keyboardType="number-pad"
+                  autoCapitalize="none"
                   maxLength={20}
                   selectionColor="#FF9800"
                   onFocus={() => setIsVoucherFocused(true)}
@@ -821,15 +822,15 @@ const ProcessPayment = () => {
               
               <View style={styles.voucherHint}>
                 <Ionicons 
-                  name={phoneNumber.length >= 8 ? "checkmark-circle" : "information-circle"} 
+                  name={(phoneNumber || '').trim().length >= 6 ? "checkmark-circle" : "information-circle"} 
                   size={16} 
-                  color={phoneNumber.length >= 8 ? "#4CAF50" : "#666"} 
+                  color={(phoneNumber || '').trim().length >= 6 ? "#4CAF50" : "#666"} 
                 />
                 <Text style={[
                   styles.voucherHintText,
-                  phoneNumber.length >= 8 && styles.voucherHintValid
+                  (phoneNumber || '').trim().length >= 6 && styles.voucherHintValid
                 ]}>
-                  {phoneNumber.length >= 8 
+                  {(phoneNumber || '').trim().length >= 6 
                     ? "Code coupon valide" 
                     : "Entrez le code coupon fourni par MamboPay pour finaliser votre paiement"
                   }
