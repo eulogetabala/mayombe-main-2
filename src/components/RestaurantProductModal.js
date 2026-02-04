@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import { useCart } from '../context/CartContext';
+import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
 
 const RestaurantProductModal = ({ 
   visible, 
@@ -65,10 +66,14 @@ const RestaurantProductModal = ({
       ? parseFloat(product.price.replace(/[^\d.-]/g, ''))
       : product.price;
     
-    const complementsPrice = selectedComplements.reduce((sum, comp) => 
-      sum + (parseFloat(comp.price) || 0), 0);
+    // Appliquer la majoration de 7% au prix de base
+    const priceWithMarkup = applyMarkup(basePrice);
     
-    return (basePrice + complementsPrice) * quantity;
+    // Appliquer la majoration aux compléments
+    const complementsPrice = selectedComplements.reduce((sum, comp) => 
+      sum + applyMarkup(parseFloat(comp.price) || 0), 0);
+    
+    return (priceWithMarkup + complementsPrice) * quantity;
   };
 
   if (!product) return null;
@@ -101,7 +106,7 @@ const RestaurantProductModal = ({
 
             <View style={styles.productInfo}>
               <Text style={styles.productName}>{product.name}</Text>
-              <Text style={styles.productPrice}>{product.price} FCFA</Text>
+              <Text style={styles.productPrice}>{formatPriceWithMarkup(product.price)}</Text>
               <Text style={styles.description}>{product.description}</Text>
             </View>
 
@@ -153,7 +158,7 @@ const RestaurantProductModal = ({
                         />
                         <Text style={styles.complementName}>{complement.name}</Text>
                       </View>
-                      <Text style={styles.complementPrice}>+{complement.price} FCFA</Text>
+                      <Text style={styles.complementPrice}>+{formatPriceWithMarkup(complement.price)}</Text>
                     </TouchableOpacity>
                   );
                 })}

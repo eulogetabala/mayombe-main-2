@@ -45,7 +45,6 @@ const TrouverRestaurant = ({ navigation }) => {
   // Recharger les restaurants quand on revient sur l'écran d'accueil
   useFocusEffect(
     React.useCallback(() => {
-      console.log('🏠 TrouverRestaurant - Écran d\'accueil actif, rechargement des restaurants');
       if (selectedCity) {
         fetchRestaurantsByCity(selectedCity);
       }
@@ -63,7 +62,6 @@ const TrouverRestaurant = ({ navigation }) => {
       });
 
       const data = await response.json();
-      console.log('Données villes parsées:', data);
 
       if (response.ok && Array.isArray(data)) {
         setCities(data);
@@ -82,7 +80,6 @@ const TrouverRestaurant = ({ navigation }) => {
 
   const fetchRestaurantsByCity = async (selectedCity) => {
     try {
-      console.log('🔄 TrouverRestaurant - Début du chargement des restaurants pour:', selectedCity);
       setError(null); // Réinitialiser l'erreur au début
       const cityData = cities.find(c => c.libelle === selectedCity || c.name === selectedCity);
       if (!cityData) return;

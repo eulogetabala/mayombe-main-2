@@ -131,14 +131,11 @@ const RestaurantsSection = () => {
       });
 
       const data = await response.json();
-      console.log("Données des restaurants reçues:", data);
 
       if (response.ok && Array.isArray(data)) {
         const mappedRestaurants = data.map(restaurant => {
           // Calcul distance si possible
           let distance = null;
-          console.log('Restaurant:', restaurant.name, 'Altitude:', restaurant.altitude, 'Longitude:', restaurant.longitude);
-          console.log('UserLocation:', userLocation);
           
           if (
             userLocation &&
@@ -149,7 +146,6 @@ const RestaurantsSection = () => {
           ) {
             const lat = parseFloat(restaurant.altitude);
             const lon = parseFloat(restaurant.longitude);
-            console.log('Coordonnées parsées - Lat:', lat, 'Lon:', lon);
             
             if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
               distance = calculateDistance(
@@ -158,16 +154,10 @@ const RestaurantsSection = () => {
                 lat,
                 lon
               );
-              console.log('Distance calculée:', distance, 'km');
-            } else {
-              console.log('Coordonnées invalides');
             }
-          } else {
-            console.log('Données manquantes pour le calcul de distance');
           }
           
           const deliveryTime = calculateDeliveryTime(distance);
-          console.log('Temps de livraison calculé:', deliveryTime);
           
           return {
             id: restaurant.id,
@@ -186,8 +176,6 @@ const RestaurantsSection = () => {
             distance: distance,
           };
         });
-
-        console.log("Restaurants mappés:", mappedRestaurants);
 
         const topRatedRestaurants = mappedRestaurants
           .slice(0, 4);

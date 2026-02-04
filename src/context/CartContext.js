@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
+import { applyMarkup } from '../Utils/priceUtils';
 
 const CartContext = createContext();
 
@@ -16,25 +17,17 @@ export const CartProvider = ({ children }) => {
   useEffect(() => {
     const initializeCart = async () => {
       try {
-        console.log('🔄 CartContext - Initialisation du panier...');
         const storedCart = await AsyncStorage.getItem('cart');
-        console.log('📦 CartContext - Panier stocké:', storedCart);
         
         if (storedCart) {
           const parsedCart = JSON.parse(storedCart);
-          console.log('📦 CartContext - Panier parsé:', parsedCart);
           if (parsedCart.length > 0) {
             setCartItems(parsedCart);
-            console.log('✅ CartContext - Panier chargé avec', parsedCart.length, 'articles');
-          } else {
-            console.log('📦 CartContext - Panier vide dans le stockage');
           }
-        } else {
-          console.log('📦 CartContext - Aucun panier dans le stockage');
         }
         setIsInitialized(true);
       } catch (error) {
-        console.error('❌ Erreur lors de l\'initialisation du panier:', error);
+        console.error('Erreur lors de l\'initialisation du panier:', error);
         setIsInitialized(true);
       }
     };
@@ -51,11 +44,9 @@ export const CartProvider = ({ children }) => {
 
   const saveCartToStorage = async () => {
     try {
-      console.log('💾 CartContext - Sauvegarde du panier:', cartItems.length, 'articles');
       await AsyncStorage.setItem('cart', JSON.stringify(cartItems));
-      console.log('✅ CartContext - Panier sauvegardé avec succès');
     } catch (error) {
-      console.error('❌ Erreur lors de la sauvegarde du panier:', error);
+      console.error('Erreur lors de la sauvegarde du panier:', error);
     }
   };
 
@@ -69,14 +60,15 @@ export const CartProvider = ({ children }) => {
         ? `${product.id}-${product.complements.map(c => c.id).join('-')}`
         : `${product.id}`;
 
-      // Convertir le prix en nombre
-      const productPrice = Number(product.price.toString().replace(/[^\d.-]/g, ''));
+      // Convertir le prix en nombre et appliquer la majoration de 7%
+      const basePrice = Number(product.price.toString().replace(/[^\d.-]/g, ''));
+      const productPrice = applyMarkup(basePrice);
       
-      // Calculer le prix des compléments
+      // Calculer le prix des compléments avec majoration
       const complementsPrice = product.complements?.reduce((sum, comp) => 
-        sum + Number(comp.price || 0), 0) || 0;
+        sum + applyMarkup(Number(comp.price || 0)), 0) || 0;
 
-      // Prix total pour une unité
+      // Prix total pour une unité (déjà avec majoration)
       const unitPrice = productPrice + complementsPrice;
       
       const existingItem = cart.find(item => 
@@ -183,12 +175,10 @@ export const CartProvider = ({ children }) => {
 
   const clearCart = async () => {
     try {
-      console.log('🗑️ CartContext - Vidage du panier...');
       setCartItems([]);
       await AsyncStorage.removeItem('cart');
-      console.log('✅ CartContext - Panier vidé avec succès');
     } catch (error) {
-      console.error('❌ Erreur lors de la suppression du panier:', error);
+      console.error('Erreur lors de la suppression du panier:', error);
     }
   };
 

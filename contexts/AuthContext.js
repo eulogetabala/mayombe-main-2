@@ -12,19 +12,14 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
-        console.log("🔐 Vérification du statut d'authentification...");
         const token = await AsyncStorage.getItem('userToken');
         const guestStatus = await AsyncStorage.getItem('isGuest');
-        
-        console.log("🔑 Token trouvé:", !!token);
-        console.log("👤 Statut invité:", !!guestStatus);
         
         setIsAuthenticated(!!token);
         setIsGuest(!!guestStatus);
       } catch (error) {
-        console.error('❌ Erreur de vérification du token:', error);
+        console.error('Erreur de vérification du token:', error);
       } finally {
-        console.log("✅ AuthContext prêt");
         setIsLoading(false);
       }
     };

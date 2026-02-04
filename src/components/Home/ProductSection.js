@@ -19,6 +19,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { translations } from '../../translations';
 import { withRefreshAndLoading } from '../common/withRefreshAndLoading';
+import { applyMarkup, formatPriceWithMarkup } from '../../Utils/priceUtils';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const STORAGE_URL = "https://www.api-mayombe.mayombe-app.com/storage";
@@ -58,7 +59,6 @@ const ProductSectionContent = ({
               <Image
                 source={item.hasValidImage ? { uri: item.imageUrl } : require('../../../assets/images/2.jpg')}
                 style={styles.productImage}
-                onError={e => console.log('Erreur chargement image', item.imageUrl, e.nativeEvent)}
               />
               <TouchableOpacity
                 style={styles.favoriteButton}
@@ -131,7 +131,6 @@ const ProductSection = ({ listMode = "vertical" }) => {
   }, [favorites]);
 
   const handleImageLoad = (productId) => {
-    console.log(`Image chargée avec succès pour le produit ${productId}`);
     setProducts(currentProducts =>
       currentProducts.map(product =>
         product.id === productId
@@ -142,7 +141,6 @@ const ProductSection = ({ listMode = "vertical" }) => {
   };
 
   const handleImageError = (productId) => {
-    console.log(`Erreur de chargement d'image pour le produit ${productId}`);
     setProducts(currentProducts => 
       currentProducts.map(product => 
         product.id === productId
@@ -191,7 +189,6 @@ const ProductSection = ({ listMode = "vertical" }) => {
 
   const validateImageUrl = (url) => {
     if (!url) {
-      console.log("URL d'image manquante");
       return false;
     }
     
@@ -200,7 +197,6 @@ const ProductSection = ({ listMode = "vertical" }) => {
     const isValidUrl = url.startsWith('http://') || url.startsWith('https://');
     
     if (!isValidPath && !isValidUrl) {
-      console.log(`Format d'URL invalide: ${url}`);
       return false;
     }
     
@@ -221,21 +217,17 @@ const ProductSection = ({ listMode = "vertical" }) => {
         // Enlever 'products/' du début si présent
         const cleanPath = imageUrl.replace(/^products\//, '');
         const url = `${STORAGE_URL}/products/${cleanPath}`;
-        console.log(`URL d'image construite: ${url}`);
         return url;
       }
 
-      console.log(`Format d'URL non reconnu: ${imageUrl}`);
       return null;
     } catch (error) {
-      console.error(`Erreur lors de la construction de l'URL de l'image: ${error}`);
       return null;
     }
   };
 
   const fetchProducts = async () => {
     try {
-      console.log("Début du chargement des produits...");
       const response = await fetch(`${API_BASE_URL}/products-list`, {
         method: 'GET',
         headers: {
@@ -249,11 +241,6 @@ const ProductSection = ({ listMode = "vertical" }) => {
       }
 
       const data = await response.json();
-      console.log("=== STRUCTURE COMPLÈTE DU PREMIER PRODUIT ===");
-      if (data && data.length > 0) {
-        console.log(JSON.stringify(data[0], null, 2));
-      }
-      console.log("=== FIN DE LA STRUCTURE ===");
 
       if (!Array.isArray(data)) {
         console.error("Format de données invalide:", data);
@@ -266,19 +253,14 @@ const ProductSection = ({ listMode = "vertical" }) => {
           ? `https://www.mayombe-app.com/uploads_admin/${product.image_url}`
           : null;
         const defaultImage = require('../../../assets/images/2.jpg');
-        console.log('[DEBUG PRODUIT COMPLET]', {
-          name: product.name,
-          image_url: product.image_url,
-          isValidImage,
-          imageUrl,
-          defaultImage,
-          unite_vente: product.unite_vente,
-          all_fields: product
-        });
+        const basePrice = product.price || 0;
+        const priceWithMarkup = basePrice ? formatPriceWithMarkup(basePrice) : t.products.priceNotAvailable;
+        
         return {
           id: product.id,
           name: product.name || product.libelle || t.products.noName,
-          price: product.price ? `${product.price} ${t.products.currency}` : t.products.priceNotAvailable,
+          price: priceWithMarkup,
+          rawPrice: basePrice, // Conserver le prix original
           unite: product.unite || "",
           description: product.desc || t.products.noDescription,
           ingredients: product.ingredients?.map(ing => normalizeAndTranslateIngredient(ing)) || [],
@@ -296,7 +278,6 @@ const ProductSection = ({ listMode = "vertical" }) => {
         };
       });
 
-      console.log(`${mappedProducts.length} produits chargés avec leurs images`);
       setProducts(mappedProducts);
       setLoading(false);
     } catch (error) {

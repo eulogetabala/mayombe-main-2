@@ -11,6 +11,9 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
 install! 'cocoapods',
   :deterministic_uuids => false
 
+# Spécifier explicitement le projet Xcode
+project 'Mayombe.xcodeproj'
+
 prepare_react_native_project!
 
 target 'Mayombe' do
@@ -34,6 +37,13 @@ target 'Mayombe' do
 # @generated begin react-native-maps - expo prebuild (DO NOT MODIFY) sync-e9cc66c360abe50bc66d89fffb3c55b034d7d369
   pod 'react-native-maps', path: File.dirname(`node --print "require.resolve('react-native-maps/package.json')"`)
 # @generated end react-native-maps
+  
+  # Activer modular headers pour les pods Firebase qui en ont besoin
+  pod 'GoogleUtilities', :modular_headers => true
+  pod 'FirebaseCore', :modular_headers => true
+  pod 'FirebaseCoreInternal', :modular_headers => true
+  pod 'FirebaseMessaging', :modular_headers => true
+  
   config = use_native_modules!(config_command)
 
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
@@ -65,6 +75,7 @@ target 'Mayombe' do
           config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
         end
       end
+      
     end
     
     # Add script to copy Hermes dSYM to archive - Enhanced version

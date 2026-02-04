@@ -75,4 +75,16 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
-# @end expo-cli
+# Firebase & Apple Secrets
+*.json
+!package.json
+!package-lock.json
+!app.json
+!google-services.json
+!google-services-info.json
+*.p8
+*.p12
+*.cer
+*.plist
+!GoogleService-Info.plist
+mayombe-ba11b-firebase-adminsdk-*.json

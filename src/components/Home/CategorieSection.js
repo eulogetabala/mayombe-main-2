@@ -54,8 +54,6 @@ const CategorieSection = () => {
           image_url: category.image_url || category.image || category.cover,
         }));
 
-        console.log('Catégories chargées:', mappedCategories.length);
-        console.log('Exemple de catégorie:', mappedCategories[0]);
         setCategories(mappedCategories);
       } else {
         throw new Error('Format de données invalide');

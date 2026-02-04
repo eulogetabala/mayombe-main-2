@@ -26,6 +26,7 @@ import MapScreen from '../screens/MapScreen';
 import ProcessPayment from '../screens/ProcessPayment';
 import StripePaymentScreen from '../screens/StripePaymentScreen';
 import ListeLivreursScreen from '../screens/ListeLivreursScreen';
+import FCMTokenScreen from '../screens/FCMTokenScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -200,6 +201,13 @@ function ProfileStack() {
       <Stack.Screen 
         name="OrderTracking" 
         component={OrderTrackingScreen}
+        options={{
+          headerShown: false
+        }}
+      />
+      <Stack.Screen 
+        name="FCMToken" 
+        component={FCMTokenScreen}
         options={{
           headerShown: false
         }}

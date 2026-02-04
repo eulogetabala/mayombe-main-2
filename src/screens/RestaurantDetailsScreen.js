@@ -19,6 +19,7 @@ import * as Location from 'expo-location';
 import UniformHeader from '../components/UniformHeader';
 import AnimatedProductCount from '../components/AnimatedProductCount';
 import { RestaurantDetailsSkeleton } from '../components/Skeletons';
+import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -252,8 +253,9 @@ const RestaurantDetails = ({ route, navigation }) => {
                   created_at: menu.created_at,
                   updated_at: menu.updated_at,
                   quantity: 1,
-                  unitPrice: parseFloat(menu.prix || menu.price || 0),
-                  total: parseFloat(menu.prix || menu.price || 0),
+                  unitPrice: applyMarkup(parseFloat(menu.prix || menu.price || 0)),
+                  total: applyMarkup(parseFloat(menu.prix || menu.price || 0)),
+                  rawPrice: menu.prix || menu.price || "0", // Conserver le prix original
                   productKey: `${menu.id}-${Date.now()}`,
                   type: 'menu',
                   subMenuName: selectedSubMenu.name || selectedSubMenu.libelle
@@ -409,20 +411,23 @@ const RestaurantDetails = ({ route, navigation }) => {
         ? parseFloat(product.price.replace(/[^\d.-]/g, ''))
         : product.price || 0;
 
-      // Calculer le prix total des compléments
+      // Appliquer la majoration de 7%
+      const priceWithMarkup = applyMarkup(basePrice);
+
+      // Calculer le prix total des compléments avec majoration
       const complementsTotal = product.selectedComplements?.reduce((sum, complement) => 
-        sum + (parseFloat(complement.price) || 0), 0) || 0;
+        sum + applyMarkup(parseFloat(complement.price) || 0), 0) || 0;
         
       const productToAdd = {
         id: product.id,
         name: product.name,
         basePrice: basePrice,
-        price: basePrice,
+        price: priceWithMarkup,
         image: product.image,
         quantity: product.quantity || 1,
         complements: product.selectedComplements || [],
         restaurant: restaurant.name,
-        totalPrice: (basePrice + complementsTotal) * (product.quantity || 1),
+        totalPrice: (priceWithMarkup + complementsTotal) * (product.quantity || 1),
         productKey: `${product.id}-${product.selectedComplements?.map(c => c.id).join('-') || ''}`,
         isMenu: true,
         menu_id: product.id,
@@ -473,7 +478,7 @@ const RestaurantDetails = ({ route, navigation }) => {
         </View>
         <View style={styles.productFooter}>
           <Text style={styles.productPrice}>
-            {item.price} FCFA
+            {formatPriceWithMarkup(item.rawPrice || item.price || 0)}
           </Text>
           <TouchableOpacity 
             style={styles.addButton}

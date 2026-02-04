@@ -16,6 +16,7 @@ import CustomHeader from '../components/common/CustomHeader';
 import { useLanguage } from '../context/LanguageContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { translations } from '../translations';
+import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
 
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -105,10 +106,14 @@ const AllProducts = ({ navigation }) => {
           imageUrl
         });
 
+        const basePrice = product.price || 0;
+        const priceWithMarkup = formatPriceWithMarkup(basePrice);
+        
         return {
           id: product.id,
           name: product.name || product.libelle || "",
-          price: product.price || "",
+          price: priceWithMarkup,
+          rawPrice: basePrice, // Conserver le prix original
           description: product.description || "",
           imageUrl: imageUrl,
           hasValidImage: isValidImage,
@@ -124,7 +129,6 @@ const AllProducts = ({ navigation }) => {
         };
       });
 
-      console.log(`${mappedProducts.length} produits chargés avec leurs images`);
       setProducts(mappedProducts);
     } catch (error) {
       console.error("Erreur lors du chargement des produits:", error);

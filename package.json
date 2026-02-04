@@ -10,7 +10,19 @@
     "build:android": "expo build:android -t apk",
     "prebuild": "npx expo prebuild",
     "clean": "cd android && ./gradlew clean && cd ..",
-    "bundle": "npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle"
+    "bundle": "npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle",
+    "postinstall": "npm install --legacy-peer-deps || true && node ./scripts/fix-lightningcss.js || true",
+    "prepare": "node ./scripts/fix-lightningcss.js || true"
+  },
+  "npmConfig": {
+    "legacy-peer-deps": true
+  },
+  "overrides": {
+    "@react-native-masked-view/masked-view": "0.3.2",
+    "react-native-skeleton-placeholder": {
+      "@react-native-masked-view/masked-view": "0.3.2"
+    },
+    "lightningcss": "^1.30.2"
   },
   "dependencies": {
     "@expo-google-fonts/montserrat": "^0.2.3",
@@ -19,6 +31,9 @@
     "@expo/prebuild-config": "~8.0.0",
     "@mapbox/polyline": "^1.2.1",
     "@react-native-async-storage/async-storage": "1.23.1",
+    "@react-native-community/netinfo": "11.4.1",
+    "@react-native-firebase/app": "^23.8.4",
+    "@react-native-firebase/messaging": "^23.8.4",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@react-native-picker/picker": "2.9.0",
     "@react-navigation/bottom-tabs": "^7.2.0",
@@ -77,6 +92,7 @@
     "@react-native-community/cli": "^12.3.5",
     "@react-native-community/cli-platform-android": "^12.3.5",
     "eas-cli": "^16.17.4",
+    "firebase-admin": "^13.6.0",
     "react-native-dotenv": "^3.4.11"
   },
   "expo.doctor.reactNativeDirectoryCheck.exclude": [

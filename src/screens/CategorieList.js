@@ -20,6 +20,7 @@ import ProductModal from '../components/ProductModal';
 import CustomHeader from '../components/common/CustomHeader';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
+import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const windowWidth = Dimensions.get('window').width;
@@ -123,8 +124,9 @@ const CategorieList = ({ route, navigation }) => {
             hasValidImage: hasValidImage,
             productKey: `${product.id || index}-${Date.now()}`,
             quantity: 1,
-            unitPrice: parseFloat(product.price) || 0,
-            total: parseFloat(product.price) || 0,
+            unitPrice: applyMarkup(parseFloat(product.price) || 0),
+            total: applyMarkup(parseFloat(product.price) || 0),
+            rawPrice: product.price, // Conserver le prix original
             type: 'product'
           };
         });
@@ -187,11 +189,14 @@ const CategorieList = ({ route, navigation }) => {
 
   const handleAddToCart = async (product) => {
     try {
-      const price = parseInt(product.rawPrice);
-      if (isNaN(price) || price <= 0) {
+      const basePrice = parseInt(product.rawPrice);
+      if (isNaN(basePrice) || basePrice <= 0) {
         showToast(t.categories.productNotAvailable, 'error');
         return;
       }
+
+      // Appliquer la majoration de 7%
+      const price = applyMarkup(basePrice);
 
       const cartItems = await AsyncStorage.getItem('cartItems');
       let updatedCart = cartItems ? JSON.parse(cartItems) : [];
@@ -269,7 +274,9 @@ const CategorieList = ({ route, navigation }) => {
                 <Text style={styles.productName} numberOfLines={2}>
                   {item.name}
                 </Text>
-                <Text style={styles.productPrice}>{item.price}</Text>
+                <Text style={styles.productPrice}>
+                  {formatPriceWithMarkup(item.rawPrice || item.price || 0)}
+                </Text>
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={(e) => {
@@ -307,7 +314,9 @@ const CategorieList = ({ route, navigation }) => {
                   <Text style={styles.productName} numberOfLines={2}>
                     {nextItem.name}
                   </Text>
-                  <Text style={styles.productPrice}>{nextItem.price}</Text>
+                  <Text style={styles.productPrice}>
+                    {formatPriceWithMarkup(nextItem.rawPrice || nextItem.price || 0)}
+                  </Text>
                   <TouchableOpacity
                     style={styles.addButton}
                     onPress={(e) => {

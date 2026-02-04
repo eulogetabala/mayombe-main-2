@@ -103,7 +103,6 @@ const HomeScreen = ({ navigation }) => {
   const fetchBanners = async () => {
     try {
       setBannersLoading(true);
-      console.log('🖼️ Récupération des bannières...');
       
       const response = await fetch(`${API_BASE_URL}/banniere`, {
         method: 'GET',
@@ -113,22 +112,12 @@ const HomeScreen = ({ navigation }) => {
       });
 
       const data = await response.json();
-      console.log('📥 Réponse bannières brute:', data);
-      console.log('📥 Type de données:', typeof data);
-      console.log('📥 Est un tableau?', Array.isArray(data));
 
       if (response.ok && Array.isArray(data)) {
-        console.log('📥 Nombre de bannières reçues:', data.length);
-        console.log('📥 Première bannière:', data[0]);
-        
         const mappedBanners = data.map((banner, index) => {
-          console.log(`📥 Bannière ${index}:`, banner);
-          
           const imageUri = banner.cover 
             ? `${BASE_URL}/${banner.cover}`
             : null;
-          
-          console.log(`📥 URL image ${index}:`, imageUri);
           
           const bannerObj = {
             id: banner.id || index,
@@ -141,16 +130,8 @@ const HomeScreen = ({ navigation }) => {
             description: '', // Pas de description
           };
           
-          console.log(`📥 Bannière ${index} mappée:`, bannerObj);
           return bannerObj;
         }).filter(banner => banner.active); // Filtrer seulement les bannières actives
-
-        console.log('✅ Bannières finales:', mappedBanners);
-        console.log('✅ Nombre de bannières actives:', mappedBanners.length);
-        
-        // Vérifier que les bannières ont des images différentes
-        const uniqueImages = new Set(mappedBanners.map(b => b.image.uri));
-        console.log('✅ Images uniques:', uniqueImages.size, 'sur', mappedBanners.length);
         
         setBanners(mappedBanners);
       } else {

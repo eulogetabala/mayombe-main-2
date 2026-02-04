@@ -4,6 +4,14 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, StyleSheet, LogBox } from "react-native";
 
+// Import conditionnel de NetInfo (peut ne pas être disponible si l'app n'est pas reconstruite)
+let NetInfo = null;
+try {
+  NetInfo = require("@react-native-community/netinfo").default;
+} catch (error) {
+  console.log("⚠️ NetInfo non disponible - l'app fonctionnera sans détection de connexion");
+}
+
 // Désactiver l'inspecteur de développement
 if (!__DEV__) {
   LogBox.ignoreAllLogs(true);
@@ -20,6 +28,7 @@ import { FavoritesProvider } from './src/context/FavoritesContext';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import getStripePublishableKey from './src/config/stripe';
 import { initializeImageCache } from './src/config/ImageCacheConfig';
+import { showFCMTokenOnStartup } from './src/Utils/showFCMToken';
 
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/Auth/LoginScreen";
@@ -55,6 +64,7 @@ import OrderTrackingScreen from './src/screens/OrderTrackingScreen';
 import DriverRatingScreen from './src/screens/DriverRatingScreen';
 import StripeTest from './src/components/StripeTest';
 import StripePaymentScreen from './src/screens/StripePaymentScreen';
+import NoConnectionScreen from './src/components/common/NoConnectionScreen';
 
 SplashScreen.preventAutoHideAsync();
 const Stack = createNativeStackNavigator();
@@ -165,7 +175,41 @@ const  AppNavigator = ({ initialRoute }) => {
 export default function App() {
   const [isAppReady, setIsAppReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState("LanguageSelection");
+  const [isConnected, setIsConnected] = useState(true);
   
+  // Détecter l'état de la connexion réseau (si NetInfo est disponible)
+  useEffect(() => {
+    if (!NetInfo) {
+      // NetInfo non disponible, considérer qu'on est connecté par défaut
+      setIsConnected(true);
+      return;
+    }
+
+    // Vérifier l'état initial
+    const checkInitialConnection = async () => {
+      try {
+        const netInfoState = await NetInfo.fetch();
+        setIsConnected(netInfoState.isConnected ?? false);
+      } catch (error) {
+        console.log("⚠️ Erreur vérification connexion:", error);
+        setIsConnected(true); // Par défaut, considérer connecté
+      }
+    };
+    
+    checkInitialConnection();
+
+    // Écouter les changements de connexion
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsConnected(state.isConnected ?? false);
+    });
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
+
   useEffect(() => {
     const prepareApp = async () => {
       try {
@@ -202,6 +246,9 @@ export default function App() {
 
         // Initialiser le cache d'images
         await initializeImageCache();
+        
+        // Afficher le token FCM au démarrage si disponible
+        showFCMTokenOnStartup();
       } catch (error) {
         console.error("Erreur de chargement des polices:", error);
       } finally {
@@ -224,6 +271,27 @@ export default function App() {
           source={require("./assets/images/logo_mayombe.jpg")}
         />
       </View>
+    );
+  }
+
+  // Si pas de connexion, afficher uniquement l'écran "Pas de connexion"
+  if (!isConnected && NetInfo) {
+    return (
+      <NoConnectionScreen
+        onRetry={async () => {
+          if (NetInfo) {
+            try {
+              const netInfoState = await NetInfo.fetch();
+              setIsConnected(netInfoState.isConnected ?? false);
+            } catch (error) {
+              console.log("⚠️ Erreur vérification connexion:", error);
+              setIsConnected(true);
+            }
+          } else {
+            setIsConnected(true);
+          }
+        }}
+      />
     );
   }
 

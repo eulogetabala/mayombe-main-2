@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, SafeAreaView, StatusBar, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
+import fcmService from '../services/fcmService';
+import { showFCMToken, forceGetFCMToken } from '../Utils/showFCMToken';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -120,6 +122,10 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
+  const handleShowFCMToken = () => {
+    navigation.navigate('FCMToken');
+  };
+
   const menuItems = [
     {
       icon: 'person-outline',
@@ -135,6 +141,11 @@ const ProfileScreen = ({ navigation }) => {
       icon: 'language',
       title: t.profile.language,
       onPress: () => navigation.navigate('LanguageSettings')
+    },
+    {
+      icon: 'notifications-outline',
+      title: 'Afficher le token FCM',
+      onPress: handleShowFCMToken
     }
   ];
 

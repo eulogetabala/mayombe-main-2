@@ -1,6 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
+import { ref, set } from 'firebase/database';
+import { database } from './firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Configuration des notifications
 Notifications.setNotificationHandler({
@@ -43,9 +46,35 @@ class PushNotificationService {
       // Obtenir le token Expo Push
       if (Device.isDevice) {
         this.expoPushToken = await Notifications.getExpoPushTokenAsync({
-          projectId: 'mayombe-ba11b',
+          projectId: '6837dea2-ee67-43e8-84ee-89c88d78277c', // Expo Project ID
         });
         console.log('📱 Token Expo Push obtenu:', this.expoPushToken.data);
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('📱 TOKEN EXPO PUSH POUR TESTER:');
+        console.log('═══════════════════════════════════════════════════════');
+        console.log(this.expoPushToken.data);
+        console.log('═══════════════════════════════════════════════════════');
+        
+        // Stocker le token dans AsyncStorage
+        await AsyncStorage.setItem('expoPushToken', this.expoPushToken.data);
+        
+        // Essayer de stocker dans Firebase si on a un userId
+        try {
+          const userId = await AsyncStorage.getItem('fcmUserId');
+          if (userId) {
+            const tokenRef = ref(database, `expo_push_tokens/${userId}`);
+            await set(tokenRef, {
+              token: this.expoPushToken.data,
+              device_type: Platform.OS,
+              created_at: Date.now(),
+              updated_at: Date.now(),
+              enabled: true,
+            });
+            console.log('✅ Token Expo Push sauvegardé dans Firebase pour:', userId);
+          }
+        } catch (error) {
+          // Ignorer les erreurs de sauvegarde Firebase
+        }
       }
 
       // Configurer les notifications pour Android

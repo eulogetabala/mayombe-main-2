@@ -188,7 +188,9 @@ const CartScreen = ({ navigation, route }) => {
 
   const formatPrice = (price) => {
     const numPrice = Number(price);
-    return isNaN(numPrice) ? 0 : numPrice;
+    if (isNaN(numPrice)) return 0;
+    // Les prix sont déjà majorés dans CartContext, on les formate juste pour l'affichage
+    return numPrice.toLocaleString();
   };
 
   // Fonction pour calculer les frais de livraison selon la distance
