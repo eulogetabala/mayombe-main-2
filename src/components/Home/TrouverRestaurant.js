@@ -13,8 +13,12 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import * as Animatable from 'react-native-animatable';
 import { useLanguage } from '../../context/LanguageContext';
+import { useRatings } from '../../context/RatingsContext';
 import { translations } from '../../translations';
 import { TrouverRestaurantSkeleton } from '../Skeletons';
+import restaurantStatusService from '../../services/restaurantStatusService';
+import InteractiveRating from '../InteractiveRating';
+import StatusBadge from '../StatusBadge';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const BASE_URL = "https://www.api-mayombe.mayombe-app.com/public";
@@ -28,6 +32,7 @@ const TrouverRestaurant = ({ navigation }) => {
   const [restaurants, setRestaurants] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { getBatchRatings } = useRatings();
 
   // Image statique pour les restaurants
   const staticImage = require("../../../assets/images/2.jpg");
@@ -64,10 +69,17 @@ const TrouverRestaurant = ({ navigation }) => {
       const data = await response.json();
 
       if (response.ok && Array.isArray(data)) {
-        setCities(data);
+        // Filtrer uniquement Brazzaville et Pointe-Noire
+        const filteredCities = data.filter(city => {
+          const cityName = city.libelle || city.name || "";
+          return cityName.toLowerCase().includes("brazzaville") || 
+                 cityName.toLowerCase().includes("pointe-noire") ||
+                 cityName.toLowerCase().includes("pointe noire");
+        });
+        setCities(filteredCities);
         // Sélectionner la première ville par défaut
-        if (data.length > 0) {
-          setSelectedCity(data[0].libelle || data[0].name);
+        if (filteredCities.length > 0) {
+          setSelectedCity(filteredCities[0].libelle || filteredCities[0].name);
         }
       } else {
         throw new Error('Format de données invalide pour les villes');
@@ -94,8 +106,16 @@ const TrouverRestaurant = ({ navigation }) => {
       const data = await response.json();
 
       if (response.ok && Array.isArray(data)) {
+        // Filtrer uniquement Brazzaville et Pointe-Noire
+        const filteredData = data.filter(restaurant => {
+          const cityName = restaurant.ville?.libelle || restaurant.ville?.name || cityData.libelle || cityData.name || "";
+          return cityName.toLowerCase().includes("brazzaville") || 
+                 cityName.toLowerCase().includes("pointe-noire") ||
+                 cityName.toLowerCase().includes("pointe noire");
+        });
+
         // Trier les restaurants du plus récent au plus ancien (par id décroissant)
-        const sortedData = data.sort((a, b) => b.id - a.id);
+        const sortedData = filteredData.sort((a, b) => b.id - a.id);
         const mappedRestaurants = sortedData.map(restaurant => ({
           id: restaurant.id,
           name: restaurant.name || "Nom non disponible",
@@ -106,9 +126,45 @@ const TrouverRestaurant = ({ navigation }) => {
             : require("../../../assets/images/2.jpg"),
         }));
 
+        // Récupérer les ratings et statuts depuis Firebase
+        const restaurantIds = mappedRestaurants.map(r => r.id.toString());
+        let ratingsMap = {};
+        let statusesMap = {};
+        
+        try {
+          if (getBatchRatings && typeof getBatchRatings === 'function') {
+            ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
+          }
+          statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+        } catch (error) {
+          console.error('❌ Erreur lors de la récupération des ratings ou statuts:', error);
+        }
+
+        // Enrichir les restaurants avec ratings et statuts
+        const enrichedRestaurants = mappedRestaurants.map(restaurant => {
+          const restaurantIdStr = restaurant.id.toString();
+          const rating = ratingsMap[restaurantIdStr] || { averageRating: 0, totalRatings: 0 };
+          const status = statusesMap[restaurantIdStr] || { isOpen: true };
+          
+          return {
+            ...restaurant,
+            averageRating: rating.averageRating,
+            totalRatings: rating.totalRatings,
+            isOpen: status.isOpen,
+          };
+        });
+
+        // Trier par note moyenne décroissante
+        const sortedRestaurants = enrichedRestaurants.sort((a, b) => {
+          if (b.averageRating !== a.averageRating) {
+            return b.averageRating - a.averageRating;
+          }
+          return b.totalRatings - a.totalRatings;
+        });
+
         setRestaurants(prevRestaurants => ({
           ...prevRestaurants,
-          [selectedCity]: mappedRestaurants
+          [selectedCity]: sortedRestaurants
         }));
       }
     } catch (error) {
@@ -182,9 +238,21 @@ const TrouverRestaurant = ({ navigation }) => {
       <View style={styles.cardContent}>
         <View style={styles.mainInfo}>
           <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-          <View style={styles.categoryBadge}>
-            <Text style={styles.categoryText}>Ouvert</Text>
+          <View style={styles.statusContainer}>
+            <StatusBadge isOpen={item.isOpen} size="small" />
           </View>
+        </View>
+        <View style={styles.ratingContainer}>
+          <InteractiveRating 
+            itemId={item.id}
+            type="restaurant"
+            rating={item.averageRating || 0} 
+            totalRatings={item.totalRatings || 0}
+            size={12}
+            onRatingSubmitted={() => {
+              fetchRestaurantsByCity(selectedCity);
+            }}
+          />
         </View>
 
         <View style={styles.locationInfo}>
@@ -379,16 +447,11 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: 8,
   },
-  categoryBadge: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+  statusContainer: {
+    marginVertical: 4,
   },
-  categoryText: {
-    color: '#2E7D32',
-    fontSize: 10,
-    fontFamily: 'Montserrat-Bold',
+  ratingContainer: {
+    marginVertical: 4,
   },
   locationInfo: {
     flexDirection: 'row',

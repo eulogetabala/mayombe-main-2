@@ -17,9 +17,13 @@ import { useCart } from '../../context/CartContext';
 import { useRefresh } from '../../context/RefreshContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useFavorites } from '../../context/FavoritesContext';
+import { useRatings } from '../../context/RatingsContext';
 import { translations } from '../../translations';
 import { withRefreshAndLoading } from '../common/withRefreshAndLoading';
 import { applyMarkup, formatPriceWithMarkup } from '../../Utils/priceUtils';
+import promosService from '../../services/promosService';
+import InteractiveRating from '../InteractiveRating';
+import PromoBadge from '../PromoBadge';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const STORAGE_URL = "https://www.api-mayombe.mayombe-app.com/storage";
@@ -31,7 +35,8 @@ const ProductSectionContent = ({
   handleToggleFavorite,
   checkIsFavorite,
   navigation,
-  t
+  t,
+  fetchProducts
 }) => {
   return (
     <View style={styles.container}>
@@ -73,6 +78,24 @@ const ProductSectionContent = ({
             </View>
             <View style={styles.productInfo}>
               <Text style={styles.productName} numberOfLines={1}>{item.name}</Text>
+              <View style={styles.ratingContainer}>
+                <InteractiveRating 
+                  itemId={item.id}
+                  type="product"
+                  rating={item.averageRating || 0} 
+                  totalRatings={item.totalRatings || 0}
+                  size={12}
+                  onRatingSubmitted={fetchProducts}
+                />
+              </View>
+              {item.promo && (
+                <PromoBadge 
+                  originalPrice={item.rawPrice} 
+                  promoPrice={item.promo.promoPrice} 
+                  discountPercentage={item.promo.discountPercentage} 
+                  size="small" 
+                />
+              )}
               <View style={styles.priceContainer}>
                 <Text style={styles.productPrice}>{item.price}</Text>
                 <Text style={styles.uniteText}>{item.unite}</Text>
@@ -113,6 +136,7 @@ const ProductSection = ({ listMode = "vertical" }) => {
   const refresh = useRefresh();
   const { currentLanguage } = useLanguage();
   const { toggleFavorite, isFavorite, favorites } = useFavorites();
+  const { getBatchRatings } = useRatings();
   const t = translations[currentLanguage];
 
   useEffect(() => {
@@ -278,7 +302,46 @@ const ProductSection = ({ listMode = "vertical" }) => {
         };
       });
 
-      setProducts(mappedProducts);
+      // Récupérer les ratings et promos depuis Firebase
+      const productIds = mappedProducts.map(p => p.id.toString());
+      let ratingsMap = {};
+      let promosMap = {};
+      
+      try {
+        if (getBatchRatings && typeof getBatchRatings === 'function') {
+          ratingsMap = await getBatchRatings(productIds, 'product');
+        }
+        promosMap = await promosService.getBatchPromos(productIds);
+      } catch (error) {
+        console.error('❌ Erreur lors de la récupération des ratings ou promos:', error);
+      }
+
+      // Enrichir les produits avec ratings et promos
+      const enrichedProducts = mappedProducts.map(product => {
+        const productIdStr = product.id.toString();
+        const rating = ratingsMap[productIdStr] || { averageRating: 0, totalRatings: 0 };
+        const promo = promosMap[productIdStr];
+        const priceAfterPromo = promo ? promosService.calculatePromoPrice(product.rawPrice, promo) : product.rawPrice;
+
+        return {
+          ...product,
+          averageRating: rating.averageRating,
+          totalRatings: rating.totalRatings,
+          promo: promo,
+          price: formatPriceWithMarkup(priceAfterPromo), // Afficher le prix promo
+          oldPrice: promo ? formatPriceWithMarkup(product.rawPrice) : null, // Ancien prix barré
+        };
+      });
+
+      // Trier par note moyenne décroissante pour "Produits populaires"
+      const sortedProducts = enrichedProducts.sort((a, b) => {
+        if (b.averageRating !== a.averageRating) {
+          return b.averageRating - a.averageRating;
+        }
+        return b.totalRatings - a.totalRatings;
+      });
+
+      setProducts(sortedProducts);
       setLoading(false);
     } catch (error) {
       console.error("Erreur lors du chargement des produits:", error);
@@ -297,6 +360,7 @@ const ProductSection = ({ listMode = "vertical" }) => {
         checkIsFavorite={checkIsFavorite}
         navigation={navigation}
         t={t}
+        fetchProducts={fetchProducts}
       />
       <ProductModal
         visible={modalVisible}
@@ -385,6 +449,9 @@ const styles = StyleSheet.create({
     color: '#666',
     fontFamily: "Montserrat-Regular",
     marginLeft: 2,
+  },
+  ratingContainer: {
+    marginVertical: 4,
   },
   discountBadge: {
     position: "absolute",

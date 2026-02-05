@@ -15,8 +15,12 @@ import ProductModal from '../components/ProductModal';
 import CustomHeader from '../components/common/CustomHeader';
 import { useLanguage } from '../context/LanguageContext';
 import { useFavorites } from '../context/FavoritesContext';
+import { useRatings } from '../context/RatingsContext';
 import { translations } from '../translations';
 import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
+import promosService from '../services/promosService';
+import InteractiveRating from '../components/InteractiveRating';
+import PromoBadge from '../components/PromoBadge';
 
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -25,6 +29,7 @@ const AllProducts = ({ navigation }) => {
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { getBatchRatings } = useRatings();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -129,7 +134,46 @@ const AllProducts = ({ navigation }) => {
         };
       });
 
-      setProducts(mappedProducts);
+      // Récupérer les ratings et promos depuis Firebase
+      const productIds = mappedProducts.map(p => p.id.toString());
+      let ratingsMap = {};
+      let promosMap = {};
+      
+      try {
+        if (getBatchRatings && typeof getBatchRatings === 'function') {
+          ratingsMap = await getBatchRatings(productIds, 'product');
+        }
+        promosMap = await promosService.getBatchPromos(productIds);
+      } catch (error) {
+        console.error('❌ Erreur lors de la récupération des ratings ou promos:', error);
+      }
+
+      // Enrichir les produits avec ratings et promos
+      const enrichedProducts = mappedProducts.map(product => {
+        const productIdStr = product.id.toString();
+        const rating = ratingsMap[productIdStr] || { averageRating: 0, totalRatings: 0 };
+        const promo = promosMap[productIdStr];
+        const priceAfterPromo = promo ? promosService.calculatePromoPrice(product.rawPrice, promo) : product.rawPrice;
+
+        return {
+          ...product,
+          averageRating: rating.averageRating,
+          totalRatings: rating.totalRatings,
+          promo: promo,
+          price: formatPriceWithMarkup(priceAfterPromo), // Afficher le prix promo
+          oldPrice: promo ? formatPriceWithMarkup(product.rawPrice) : null, // Ancien prix barré
+        };
+      });
+
+      // Trier par note moyenne décroissante
+      const sortedProducts = enrichedProducts.sort((a, b) => {
+        if (b.averageRating !== a.averageRating) {
+          return b.averageRating - a.averageRating;
+        }
+        return b.totalRatings - a.totalRatings;
+      });
+
+      setProducts(sortedProducts);
     } catch (error) {
       console.error("Erreur lors du chargement des produits:", error);
       setError(t.products.loadError);
@@ -175,6 +219,24 @@ const AllProducts = ({ navigation }) => {
 
       <View style={styles.productInfo}>
         <Text style={styles.productName}>{item.name}</Text>
+        <View style={styles.ratingContainer}>
+          <InteractiveRating 
+            itemId={item.id}
+            type="product"
+            rating={item.averageRating || 0} 
+            totalRatings={item.totalRatings || 0}
+            size={12}
+            onRatingSubmitted={fetchProducts}
+          />
+        </View>
+        {item.promo && (
+          <PromoBadge 
+            originalPrice={item.rawPrice} 
+            promoPrice={item.promo.promoPrice} 
+            discountPercentage={item.promo.discountPercentage} 
+            size="small" 
+          />
+        )}
         <View style={styles.priceContainer}>
           <Text style={styles.productPrice}>{`${item.price} ${t.products.currency}`}</Text>
           {item.oldPrice && (
@@ -290,6 +352,9 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 4,
     fontFamily: 'Montserrat-Bold',
+  },
+  ratingContainer: {
+    marginVertical: 4,
   },
   productPrice: {
     fontSize: 14,

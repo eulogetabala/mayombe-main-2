@@ -12,6 +12,10 @@ import {
   FlatList,
 } from 'react-native';
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
+import { useRatings } from '../context/RatingsContext';
+import restaurantStatusService from '../services/restaurantStatusService';
+import InteractiveRating from '../components/InteractiveRating';
+import StatusBadge from '../components/StatusBadge';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -21,6 +25,7 @@ const RestaurantList = ({ route, navigation }) => {
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { getBatchRatings } = useRatings();
 
   // Image statique pour les restaurants
   const staticImage = require("../../assets/images/mayombe_1.jpg");
@@ -64,16 +69,61 @@ const RestaurantList = ({ route, navigation }) => {
       console.log('Restaurants reçus:', data);
 
       if (response.ok && Array.isArray(data)) {
-        const mappedRestaurants = data.map(resto => ({
+        // Filtrer uniquement Brazzaville et Pointe-Noire
+        const filteredData = data.filter(resto => {
+          const cityName = resto.ville?.libelle || resto.ville?.name || "";
+          return cityName.toLowerCase().includes("brazzaville") || 
+                 cityName.toLowerCase().includes("pointe-noire") ||
+                 cityName.toLowerCase().includes("pointe noire");
+        });
+
+        const mappedRestaurants = filteredData.map(resto => ({
           id: resto.id,
           name: resto.name || "Nom non disponible",
           address: resto.adresse || "Adresse non disponible",
           phone: resto.phone || "Téléphone non disponible",
           website: resto.website,
-          image: staticImage,
+          image: resto.cover && typeof resto.cover === 'string'
+            ? { uri: `https://www.mayombe-app.com/uploads_admin/${resto.cover}` }
+            : staticImage,
         }));
 
-        setRestaurants(mappedRestaurants);
+        // Récupérer les ratings et statuts depuis Firebase
+        const restaurantIds = mappedRestaurants.map(r => r.id.toString());
+        let ratingsMap = {};
+        let statusesMap = {};
+        
+        try {
+          if (getBatchRatings && typeof getBatchRatings === 'function') {
+            ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
+          }
+          statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+        } catch (error) {
+          console.error('❌ Erreur lors de la récupération des ratings ou statuts:', error);
+        }
+
+        // Enrichir les restaurants avec ratings et statuts
+        const enrichedRestaurants = mappedRestaurants.map(restaurant => {
+          const restaurantIdStr = restaurant.id.toString();
+          const rating = ratingsMap[restaurantIdStr] || { averageRating: 0, totalRatings: 0 };
+          const status = statusesMap[restaurantIdStr] || { isOpen: true };
+          
+          return {
+            ...restaurant,
+            averageRating: rating.averageRating,
+            totalRatings: rating.totalRatings,
+            isOpen: status.isOpen,
+          };
+        });
+
+        // Trier par note moyenne décroissante
+        const sortedRestaurants = enrichedRestaurants.sort((a, b) => {
+          if (b.averageRating !== a.averageRating) {
+            return b.averageRating - a.averageRating;
+          }
+          return b.totalRatings - a.totalRatings;
+        });
+        setRestaurants(sortedRestaurants);
       } else {
         throw new Error('Erreur lors du chargement des restaurants');
       }
@@ -93,6 +143,19 @@ const RestaurantList = ({ route, navigation }) => {
       <Image source={item.image} style={styles.restaurantImage} />
       <View style={styles.restaurantInfo}>
         <Text style={styles.restaurantName}>{item.name}</Text>
+        <View style={styles.ratingContainer}>
+          <InteractiveRating 
+            itemId={item.id}
+            type="restaurant"
+            rating={item.averageRating || 0} 
+            totalRatings={item.totalRatings || 0}
+            size={12}
+            onRatingSubmitted={fetchRestaurants}
+          />
+        </View>
+        <View style={styles.statusContainer}>
+          <StatusBadge isOpen={item.isOpen} size="small" />
+        </View>
         <View style={styles.infoRow}>
           <Ionicons name="location-outline" size={16} color="#666" />
           <Text style={styles.infoText}>{item.address}</Text>
@@ -183,6 +246,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Bold',
     color: '#333',
     marginBottom: 10,
+  },
+  ratingContainer: {
+    marginVertical: 4,
+  },
+  statusContainer: {
+    marginVertical: 4,
   },
   infoRow: {
     flexDirection: 'row',

@@ -9,6 +9,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
+import { useRatings } from '../context/RatingsContext';
+import restaurantStatusService from '../services/restaurantStatusService';
+import InteractiveRating from '../components/InteractiveRating';
+import StatusBadge from '../components/StatusBadge';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -16,6 +20,7 @@ const TopRatedRestaurants = ({ navigation }) => {
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { getBatchRatings } = useRatings();
 
   useEffect(() => {
     navigation.setOptions({
@@ -45,18 +50,59 @@ const TopRatedRestaurants = ({ navigation }) => {
       const data = await response.json();
 
       if (response.ok && Array.isArray(data)) {
-        const mappedRestaurants = data.map(restaurant => ({
+        // Filtrer uniquement Brazzaville et Pointe-Noire
+        const filteredData = data.filter(restaurant => {
+          const cityName = restaurant.ville?.libelle || restaurant.ville?.name || "";
+          return cityName.toLowerCase().includes("brazzaville") || 
+                 cityName.toLowerCase().includes("pointe-noire") ||
+                 cityName.toLowerCase().includes("pointe noire");
+        });
+
+        const mappedRestaurants = filteredData.map(restaurant => ({
           id: restaurant.id,
           name: restaurant.name || "Nom non disponible",
           address: restaurant.adresse || "Adresse non disponible",
           phone: restaurant.phone || "Téléphone non disponible",
-          rating: 4.8, // À remplacer par la vraie note quand disponible
-          reviews: Math.floor(Math.random() * 150) + 100,
-          image: require("../../assets/images/2.jpg"),
+          image: restaurant.cover && typeof restaurant.cover === 'string'
+            ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
+            : require("../../assets/images/2.jpg"),
         }));
 
-        // Trier par note décroissante
-        const sortedRestaurants = mappedRestaurants.sort((a, b) => b.rating - a.rating);
+        // Récupérer les ratings et statuts depuis Firebase
+        const restaurantIds = mappedRestaurants.map(r => r.id.toString());
+        let ratingsMap = {};
+        let statusesMap = {};
+        
+        try {
+          if (getBatchRatings && typeof getBatchRatings === 'function') {
+            ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
+          }
+          statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+        } catch (error) {
+          console.error('❌ Erreur lors de la récupération des ratings ou statuts:', error);
+        }
+
+        // Enrichir les restaurants avec ratings et statuts
+        const enrichedRestaurants = mappedRestaurants.map(restaurant => {
+          const restaurantIdStr = restaurant.id.toString();
+          const rating = ratingsMap[restaurantIdStr] || { averageRating: 0, totalRatings: 0 };
+          const status = statusesMap[restaurantIdStr] || { isOpen: true };
+          
+          return {
+            ...restaurant,
+            averageRating: rating.averageRating,
+            totalRatings: rating.totalRatings,
+            isOpen: status.isOpen,
+          };
+        });
+
+        // Trier par note moyenne décroissante
+        const sortedRestaurants = enrichedRestaurants.sort((a, b) => {
+          if (b.averageRating !== a.averageRating) {
+            return b.averageRating - a.averageRating;
+          }
+          return b.totalRatings - a.totalRatings;
+        });
         setRestaurants(sortedRestaurants);
       }
     } catch (error) {
@@ -76,9 +122,18 @@ const TopRatedRestaurants = ({ navigation }) => {
         <View style={styles.headerRow}>
           <Text style={styles.restaurantName}>{item.name}</Text>
           <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={16} color="#FFD700" />
-            <Text style={styles.rating}>{item.rating}</Text>
+            <InteractiveRating 
+              itemId={item.id}
+              type="restaurant"
+              rating={item.averageRating || 0} 
+              totalRatings={item.totalRatings || 0}
+              size={12}
+              onRatingSubmitted={fetchRestaurants}
+            />
           </View>
+        </View>
+        <View style={styles.statusContainer}>
+          <StatusBadge isOpen={item.isOpen} size="small" />
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="location-outline" size={16} color="#666" />
@@ -88,7 +143,6 @@ const TopRatedRestaurants = ({ navigation }) => {
           <Ionicons name="call-outline" size={16} color="#666" />
           <Text style={styles.infoText}>{item.phone}</Text>
         </View>
-        <Text style={styles.reviews}>({item.reviews} avis)</Text>
       </View>
     </TouchableOpacity>
   );
@@ -165,14 +219,10 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    marginVertical: 4,
   },
-  rating: {
-    fontSize: 14,
-    fontFamily: 'Montserrat-Bold',
-    color: '#333',
+  statusContainer: {
+    marginVertical: 4,
   },
   infoRow: {
     flexDirection: 'row',

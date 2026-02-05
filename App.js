@@ -25,6 +25,7 @@ import Toast from 'react-native-toast-message';
 import { RefreshProvider } from './src/context/RefreshContext';
 import { LanguageProvider } from './src/context/LanguageContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
+import { RatingsProvider } from './src/context/RatingsContext';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import getStripePublishableKey from './src/config/stripe';
 import { initializeImageCache } from './src/config/ImageCacheConfig';
@@ -303,11 +304,13 @@ export default function App() {
           <RefreshProvider>
             <CartProvider>
               <FavoritesProvider>
-                <ConnectivityBanner isConnected={isConnected} />
-                <NavigationContainer>
-                  <AppNavigator initialRoute={initialRoute} />
-                </NavigationContainer>
-                <Toast />
+                <RatingsProvider>
+                  <ConnectivityBanner isConnected={isConnected} />
+                  <NavigationContainer>
+                    <AppNavigator initialRoute={initialRoute} />
+                  </NavigationContainer>
+                  <Toast />
+                </RatingsProvider>
               </FavoritesProvider>
             </CartProvider>
           </RefreshProvider>

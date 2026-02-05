@@ -13,7 +13,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from '@react-navigation/native';
 import { useFavorites } from '../context/FavoritesContext';
+import { useRatings } from '../context/RatingsContext';
 import * as Location from 'expo-location';
+import restaurantStatusService from '../services/restaurantStatusService';
+import InteractiveRating from '../components/InteractiveRating';
+import StatusBadge from '../components/StatusBadge';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const { width } = Dimensions.get('window');
@@ -27,6 +31,7 @@ const AllRestaurants = ({ route, navigation }) => {
   const [error, setError] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const { toggleRestaurantFavorite, isRestaurantFavorite } = useFavorites();
+  const { getBatchRatings } = useRatings();
 
   useEffect(() => {
     // Désactiver le header pour cet écran
@@ -87,8 +92,15 @@ const AllRestaurants = ({ route, navigation }) => {
       const data = await response.json();
 
       if (response.ok && Array.isArray(data)) {
-        // Filtrer les restaurants actifs
-        const activeRestaurants = data.filter(restaurant => restaurant.statut === "actif");
+        // Filtrer les restaurants actifs et uniquement Brazzaville et Pointe-Noire
+        const activeRestaurants = data.filter(restaurant => {
+          const isActive = restaurant.statut === "actif";
+          const cityName = restaurant.ville?.libelle || restaurant.ville?.name || "";
+          const isAllowedCity = cityName.toLowerCase().includes("brazzaville") || 
+                               cityName.toLowerCase().includes("pointe-noire") ||
+                               cityName.toLowerCase().includes("pointe noire");
+          return isActive && isAllowedCity;
+        });
 
         const mappedRestaurants = activeRestaurants.map(restaurant => {
           let distance = null;
@@ -120,8 +132,41 @@ const AllRestaurants = ({ route, navigation }) => {
           };
         });
 
-        // Trier les restaurants par ID décroissant (les plus récents en premier)
-        const sortedRestaurants = mappedRestaurants.sort((a, b) => b.id - a.id);
+        // Récupérer les ratings et statuts depuis Firebase
+        const restaurantIds = mappedRestaurants.map(r => r.id.toString());
+        let ratingsMap = {};
+        let statusesMap = {};
+        
+        try {
+          if (getBatchRatings && typeof getBatchRatings === 'function') {
+            ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
+          }
+          statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+        } catch (error) {
+          console.error('❌ Erreur lors de la récupération des ratings ou statuts:', error);
+        }
+
+        // Enrichir les restaurants avec ratings et statuts
+        const enrichedRestaurants = mappedRestaurants.map(restaurant => {
+          const restaurantIdStr = restaurant.id.toString();
+          const rating = ratingsMap[restaurantIdStr] || { averageRating: 0, totalRatings: 0 };
+          const status = statusesMap[restaurantIdStr] || { isOpen: true };
+          
+          return {
+            ...restaurant,
+            averageRating: rating.averageRating,
+            totalRatings: rating.totalRatings,
+            isOpen: status.isOpen,
+          };
+        });
+
+        // Trier par note moyenne décroissante
+        const sortedRestaurants = enrichedRestaurants.sort((a, b) => {
+          if (b.averageRating !== a.averageRating) {
+            return b.averageRating - a.averageRating;
+          }
+          return b.totalRatings - a.totalRatings;
+        });
         setRestaurants(sortedRestaurants);
       } else {
         throw new Error('Format de données invalide');
@@ -156,13 +201,21 @@ const AllRestaurants = ({ route, navigation }) => {
         </TouchableOpacity>
         
         <View style={styles.badgeContainer}>
-          <Text style={[styles.badge, item.isOpen ? styles.open : styles.closed]}>
-            {item.isOpen ? 'Ouvert' : 'Fermé'}
-          </Text>
+          <StatusBadge isOpen={item.isOpen} size="small" />
         </View>
       </View>
       <View style={styles.cardContent}>
         <Text style={styles.restaurantName} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.ratingContainer}>
+          <InteractiveRating 
+            itemId={item.id}
+            type="restaurant"
+            rating={item.averageRating || 0} 
+            totalRatings={item.totalRatings || 0}
+            size={12}
+            onRatingSubmitted={fetchRestaurants}
+          />
+        </View>
         <Text style={styles.cuisineType} numberOfLines={1}>{item.cuisine}</Text>
         
         <View style={styles.infoRow}>
@@ -319,6 +372,9 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 4,
     fontFamily: 'Montserrat-Bold',
+  },
+  ratingContainer: {
+    marginVertical: 4,
   },
   cuisineType: {
     fontSize: 14,

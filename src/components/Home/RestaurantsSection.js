@@ -16,10 +16,14 @@ import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';
+import { useRatings } from '../../context/RatingsContext';
 import Toast from 'react-native-toast-message';
 import { useRefresh } from '../../context/RefreshContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { translations } from '../../translations';
+import restaurantStatusService from '../../services/restaurantStatusService';
+import InteractiveRating from '../InteractiveRating';
+import StatusBadge from '../StatusBadge';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const BASE_URL = "https://www.api-mayombe.mayombe-app.com/public";
@@ -36,6 +40,7 @@ const RestaurantsSection = () => {
   const [userLocation, setUserLocation] = useState(null);
   const { addToCart } = useCart();
   const { toggleRestaurantFavorite, isRestaurantFavorite } = useFavorites();
+  const { getBatchRatings } = useRatings();
   const refresh = useRefresh();
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
@@ -133,7 +138,15 @@ const RestaurantsSection = () => {
       const data = await response.json();
 
       if (response.ok && Array.isArray(data)) {
-        const mappedRestaurants = data.map(restaurant => {
+        // Filtrer uniquement Brazzaville et Pointe-Noire
+        const filteredData = data.filter(restaurant => {
+          const cityName = cities[restaurant.ville_id] || restaurant.ville?.libelle || restaurant.ville?.name || "";
+          return cityName.toLowerCase().includes("brazzaville") || 
+                 cityName.toLowerCase().includes("pointe-noire") ||
+                 cityName.toLowerCase().includes("pointe noire");
+        });
+
+        const mappedRestaurants = filteredData.map(restaurant => {
           // Calcul distance si possible
           let distance = null;
           
@@ -177,7 +190,43 @@ const RestaurantsSection = () => {
           };
         });
 
-        const topRatedRestaurants = mappedRestaurants
+        // Récupérer les ratings et statuts depuis Firebase
+        const restaurantIds = mappedRestaurants.map(r => r.id.toString());
+        let ratingsMap = {};
+        let statusesMap = {};
+        
+        try {
+          if (getBatchRatings && typeof getBatchRatings === 'function') {
+            ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
+          }
+          statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+        } catch (error) {
+          console.error('❌ Erreur lors de la récupération des ratings ou statuts:', error);
+        }
+
+        // Enrichir les restaurants avec ratings et statuts
+        const enrichedRestaurants = mappedRestaurants.map(restaurant => {
+          const restaurantIdStr = restaurant.id.toString();
+          const rating = ratingsMap[restaurantIdStr] || { averageRating: 0, totalRatings: 0 };
+          const status = statusesMap[restaurantIdStr] || { isOpen: true };
+          
+          return {
+            ...restaurant,
+            averageRating: rating.averageRating,
+            totalRatings: rating.totalRatings,
+            isOpen: status.isOpen,
+          };
+        });
+
+        // Trier par note moyenne décroissante pour "Restaurants disponibles"
+        const sortedRestaurants = enrichedRestaurants.sort((a, b) => {
+          if (b.averageRating !== a.averageRating) {
+            return b.averageRating - a.averageRating;
+          }
+          return b.totalRatings - a.totalRatings;
+        });
+
+        const topRatedRestaurants = sortedRestaurants
           .slice(0, 4);
 
         setRestaurants(topRatedRestaurants);
@@ -244,13 +293,21 @@ const RestaurantsSection = () => {
         </TouchableOpacity>
         
         <View style={styles.badgeContainer}>
-          <Text style={[styles.badge, restaurant.isOpen ? styles.open : styles.closed]}>
-            {restaurant.isOpen ? 'Ouvert' : 'Fermé'}
-          </Text>
+          <StatusBadge isOpen={restaurant.isOpen} size="small" />
         </View>
       </View>
       <View style={styles.content}>
         <Text style={styles.restaurantName} numberOfLines={1}>{restaurant.name}</Text>
+        <View style={styles.ratingContainer}>
+          <InteractiveRating 
+            itemId={restaurant.id}
+            type="restaurant"
+            rating={restaurant.averageRating || 0} 
+            totalRatings={restaurant.totalRatings || 0}
+            size={12}
+            onRatingSubmitted={fetchRestaurants}
+          />
+        </View>
         <Text style={styles.restaurantAddress} numberOfLines={1}>{restaurant.address}</Text>
         <View style={styles.infoRow}>
           {restaurant.distance && (
@@ -432,6 +489,9 @@ const styles = StyleSheet.create({
     color: '#666',
     fontFamily: 'Montserrat',
     marginBottom: 4,
+  },
+  ratingContainer: {
+    marginVertical: 4,
   },
   infoRow: {
     flexDirection: 'row',

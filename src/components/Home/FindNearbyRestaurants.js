@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, Dimensions, ActivityIn
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
-import WebViewMapComponent from '../WebViewMapComponent';
+import MapView, { Marker } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const FindNearbyRestaurants = () => {
@@ -100,8 +100,16 @@ const FindNearbyRestaurants = () => {
       const data = await response.json();
 
       if (response.ok && Array.isArray(data)) {
+        // Filtrer uniquement Brazzaville et Pointe-Noire
+        const filteredData = data.filter(restaurant => {
+          const cityName = restaurant.ville?.libelle || restaurant.ville?.name || "";
+          return cityName.toLowerCase().includes("brazzaville") || 
+                 cityName.toLowerCase().includes("pointe-noire") ||
+                 cityName.toLowerCase().includes("pointe noire");
+        });
+
         // Calculer la distance pour chaque restaurant
-        const restaurantsWithDistance = data
+        const restaurantsWithDistance = filteredData
           .filter(restaurant => 
             restaurant.altitude && 
             restaurant.longitude && 
@@ -124,6 +132,7 @@ const FindNearbyRestaurants = () => {
               distance: parseFloat(distance),
               altitude: restaurant.altitude,
               longitude: restaurant.longitude,
+              address: restaurant.adresse || "Adresse non disponible",
               image: restaurant.cover
                 ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
                 : require("../../../assets/images/2.jpg"),
@@ -216,10 +225,45 @@ const FindNearbyRestaurants = () => {
           <View style={styles.modalContent}>
             {/* Carte */}
             <View style={styles.mapSection}>
-              <WebViewMapComponent
-                style={styles.mapContainer}
-                showRoute={false}
-              />
+              {userLocation ? (
+                <MapView
+                  style={styles.mapContainer}
+                  initialRegion={{
+                    latitude: userLocation.latitude,
+                    longitude: userLocation.longitude,
+                    latitudeDelta: 0.05,
+                    longitudeDelta: 0.05,
+                  }}
+                  showsUserLocation={true}
+                  showsMyLocationButton={true}
+                >
+                  {nearbyRestaurants.map((restaurant) => {
+                    if (restaurant.altitude && restaurant.longitude) {
+                      const lat = parseFloat(restaurant.altitude);
+                      const lon = parseFloat(restaurant.longitude);
+                      if (!isNaN(lat) && !isNaN(lon)) {
+                        return (
+                          <Marker
+                            key={restaurant.id}
+                            coordinate={{
+                              latitude: lat,
+                              longitude: lon,
+                            }}
+                            title={restaurant.name}
+                            description={restaurant.address}
+                          />
+                        );
+                      }
+                    }
+                    return null;
+                  })}
+                </MapView>
+              ) : (
+                <View style={styles.mapPlaceholder}>
+                  <ActivityIndicator size="large" color="#FF9800" />
+                  <Text style={styles.mapPlaceholderText}>Chargement de la carte...</Text>
+                </View>
+              )}
             </View>
 
             {/* Liste des restaurants */}
@@ -395,6 +439,19 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     flex: 1,
+    width: '100%',
+  },
+  mapPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+  },
+  mapPlaceholderText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#666',
+    fontFamily: 'Montserrat',
   },
   restaurantsSection: {
     flex: 1,

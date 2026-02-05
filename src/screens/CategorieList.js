@@ -19,9 +19,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import ProductModal from '../components/ProductModal';
 import CustomHeader from '../components/common/CustomHeader';
 import { useLanguage } from '../context/LanguageContext';
+import { useRatings } from '../context/RatingsContext';
 import { translations } from '../translations';
 import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
 import ApiService from '../services/apiService';
+import promosService from '../services/promosService';
+import InteractiveRating from '../components/InteractiveRating';
+import PromoBadge from '../components/PromoBadge';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const windowWidth = Dimensions.get('window').width;
@@ -30,6 +34,7 @@ const cardWidth = (windowWidth - 30) / 2;
 const CategorieList = ({ route, navigation }) => {
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
+  const { getBatchRatings } = useRatings();
   const { categoryId, categoryName } = route.params;
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -110,8 +115,47 @@ const CategorieList = ({ route, navigation }) => {
           };
         });
 
-        setProducts(mappedProducts);
-        console.log('Produits mappés avec succès:', mappedProducts.length);
+        // Récupérer les ratings et promos depuis Firebase
+        const productIds = mappedProducts.map(p => p.id.toString());
+        let ratingsMap = {};
+        let promosMap = {};
+        
+        try {
+          if (getBatchRatings && typeof getBatchRatings === 'function') {
+            ratingsMap = await getBatchRatings(productIds, 'product');
+          }
+          promosMap = await promosService.getBatchPromos(productIds);
+        } catch (error) {
+          console.error('❌ Erreur lors de la récupération des ratings ou promos:', error);
+        }
+
+        // Enrichir les produits avec ratings et promos
+        const enrichedProducts = mappedProducts.map(product => {
+          const productIdStr = product.id.toString();
+          const rating = ratingsMap[productIdStr] || { averageRating: 0, totalRatings: 0 };
+          const promo = promosMap[productIdStr];
+          const priceAfterPromo = promo ? promosService.calculatePromoPrice(product.rawPrice, promo) : product.rawPrice;
+
+          return {
+            ...product,
+            averageRating: rating.averageRating,
+            totalRatings: rating.totalRatings,
+            promo: promo,
+            price: formatPriceWithMarkup(priceAfterPromo), // Afficher le prix promo
+            oldPrice: promo ? formatPriceWithMarkup(product.rawPrice) : null, // Ancien prix barré
+          };
+        });
+
+        // Trier par note moyenne décroissante
+        const sortedProducts = enrichedProducts.sort((a, b) => {
+          if (b.averageRating !== a.averageRating) {
+            return b.averageRating - a.averageRating;
+          }
+          return b.totalRatings - a.totalRatings;
+        });
+
+        setProducts(sortedProducts);
+        console.log('Produits mappés avec succès:', sortedProducts.length);
       } else {
         console.log('Aucun produit trouvé ou données invalides');
         setProducts([]);
@@ -253,6 +297,24 @@ const CategorieList = ({ route, navigation }) => {
                 <Text style={styles.productName} numberOfLines={2}>
                   {item.name}
                 </Text>
+                <View style={styles.ratingContainer}>
+                  <InteractiveRating 
+                    itemId={item.id}
+                    type="product"
+                    rating={item.averageRating || 0} 
+                    totalRatings={item.totalRatings || 0}
+                    size={12}
+                    onRatingSubmitted={fetchProducts}
+                  />
+                </View>
+                {item.promo && (
+                  <PromoBadge 
+                    originalPrice={item.rawPrice} 
+                    promoPrice={item.promo.promoPrice} 
+                    discountPercentage={item.promo.discountPercentage} 
+                    size="small" 
+                  />
+                )}
                 <Text style={styles.productPrice}>
                   {formatPriceWithMarkup(item.rawPrice || item.price || 0)}
                 </Text>
@@ -293,6 +355,24 @@ const CategorieList = ({ route, navigation }) => {
                   <Text style={styles.productName} numberOfLines={2}>
                     {nextItem.name}
                   </Text>
+                  <View style={styles.ratingContainer}>
+                    <InteractiveRating 
+                      itemId={nextItem.id}
+                      type="product"
+                      rating={nextItem.averageRating || 0} 
+                      totalRatings={nextItem.totalRatings || 0}
+                      size={12}
+                      onRatingSubmitted={fetchProducts}
+                    />
+                  </View>
+                  {nextItem.promo && (
+                    <PromoBadge 
+                      originalPrice={nextItem.rawPrice} 
+                      promoPrice={nextItem.promo.promoPrice} 
+                      discountPercentage={nextItem.promo.discountPercentage} 
+                      size="small" 
+                    />
+                  )}
                   <Text style={styles.productPrice}>
                     {formatPriceWithMarkup(nextItem.rawPrice || nextItem.price || 0)}
                   </Text>
@@ -456,6 +536,9 @@ const styles = StyleSheet.create({
     color: "#333",
     marginBottom: 8,
     height: 40,
+  },
+  ratingContainer: {
+    marginVertical: 4,
   },
   productPrice: {
     fontSize: 16,
