@@ -219,19 +219,15 @@ const AllRestaurants = ({ route, navigation }) => {
         <Text style={styles.cuisineType} numberOfLines={1}>{item.cuisine}</Text>
         
         <View style={styles.infoRow}>
-          <View style={styles.deliveryContainer}>
-            <Ionicons name="time-outline" size={scaleFont(12)} color="#FF9800" />
-            <Text style={styles.deliveryTime}>{item.deliveryTime} min</Text>
-          </View>
+          {item.distance && (
+            <>
+              <Ionicons name="walk-outline" size={scaleFont(12)} color="#FF9800" />
+              <Text style={styles.distanceText}>{item.distance} km</Text>
+            </>
+          )}
+          <Ionicons name="time-outline" size={scaleFont(12)} color="#FF9800" />
+          <Text style={styles.deliveryTime}>{item.deliveryTime} min</Text>
         </View>
-        
-        {/* Distance réelle */}
-        {item.distance && (
-          <View style={styles.distanceContainer}>
-            <Ionicons name="location-outline" size={scaleFont(12)} color="#4CAF50" />
-            <Text style={styles.distanceText}>{item.distance} km</Text>
-          </View>
-        )}
       </View>
     </TouchableOpacity>
   );

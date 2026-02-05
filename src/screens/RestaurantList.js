@@ -12,6 +12,7 @@ import {
   FlatList,
 } from 'react-native';
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
+import * as Location from 'expo-location';
 import { useRatings } from '../context/RatingsContext';
 import restaurantStatusService from '../services/restaurantStatusService';
 import InteractiveRating from '../components/InteractiveRating';
@@ -25,6 +26,7 @@ const RestaurantList = ({ route, navigation }) => {
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
   const { getBatchRatings } = useRatings();
 
   // Image statique pour les restaurants
@@ -48,8 +50,61 @@ const RestaurantList = ({ route, navigation }) => {
   }, [navigation, city]);
 
   useEffect(() => {
+    // Récupérer la localisation de l'utilisateur
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Permission de localisation refusée');
+        return;
+      }
+      let location = await Location.getCurrentPositionAsync({});
+      setUserLocation(location.coords);
+    })();
+    
     fetchRestaurants();
   }, [city]);
+
+  // Recharger les restaurants quand la localisation change
+  useEffect(() => {
+    if (userLocation) {
+      fetchRestaurants();
+    }
+  }, [userLocation]);
+
+  // Calcul de la distance (Haversine)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Rayon de la Terre en km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(2);
+  };
+
+  // Calcul de la durée de livraison basée sur la distance
+  const calculateDeliveryTime = (distance) => {
+    if (!distance) return "20-30";
+    
+    const distanceNum = parseFloat(distance);
+    
+    // Temps de base : 15 minutes
+    const baseTime = 15;
+    
+    // Temps supplémentaire par km : 2 minutes
+    const timePerKm = 2;
+    
+    // Calcul du temps total
+    const totalTime = Math.round(baseTime + (distanceNum * timePerKm));
+    
+    // Retourner une fourchette de temps
+    const minTime = Math.max(15, totalTime - 5);
+    const maxTime = totalTime + 5;
+    
+    return `${minTime}-${maxTime}`;
+  };
 
   const fetchRestaurants = async () => {
     try {
@@ -77,16 +132,45 @@ const RestaurantList = ({ route, navigation }) => {
                  cityName.toLowerCase().includes("pointe noire");
         });
 
-        const mappedRestaurants = filteredData.map(resto => ({
-          id: resto.id,
-          name: resto.name || "Nom non disponible",
-          address: resto.adresse || "Adresse non disponible",
-          phone: resto.phone || "Téléphone non disponible",
-          website: resto.website,
-          image: resto.cover && typeof resto.cover === 'string'
-            ? { uri: `https://www.mayombe-app.com/uploads_admin/${resto.cover}` }
-            : staticImage,
-        }));
+        const mappedRestaurants = filteredData.map(resto => {
+          // Calcul distance si possible
+          let distance = null;
+          
+          if (
+            userLocation &&
+            resto.altitude &&
+            resto.longitude &&
+            !isNaN(parseFloat(resto.altitude)) &&
+            !isNaN(parseFloat(resto.longitude))
+          ) {
+            const lat = parseFloat(resto.altitude);
+            const lon = parseFloat(resto.longitude);
+            
+            if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+              distance = calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                lat,
+                lon
+              );
+            }
+          }
+          
+          const deliveryTime = calculateDeliveryTime(distance);
+          
+          return {
+            id: resto.id,
+            name: resto.name || "Nom non disponible",
+            address: resto.adresse || "Adresse non disponible",
+            phone: resto.phone || "Téléphone non disponible",
+            website: resto.website,
+            image: resto.cover && typeof resto.cover === 'string'
+              ? { uri: `https://www.mayombe-app.com/uploads_admin/${resto.cover}` }
+              : staticImage,
+            distance: distance,
+            deliveryTime: deliveryTime,
+          };
+        });
 
         // Récupérer les ratings et statuts depuis Firebase
         const restaurantIds = mappedRestaurants.map(r => r.id.toString());
@@ -159,6 +243,16 @@ const RestaurantList = ({ route, navigation }) => {
         <View style={styles.infoRow}>
           <Ionicons name="location-outline" size={16} color="#666" />
           <Text style={styles.infoText}>{item.address}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          {item.distance && (
+            <>
+              <Ionicons name="walk-outline" size={14} color="#FF9800" />
+              <Text style={styles.distance}>{item.distance} km</Text>
+            </>
+          )}
+          <Ionicons name="time-outline" size={14} color="#FF9800" />
+          <Text style={[styles.deliveryTime, { color: '#FF9800' }]}>{item.deliveryTime} min</Text>
         </View>
         <View style={styles.infoRow}>
           <Ionicons name="call-outline" size={16} color="#666" />
@@ -264,6 +358,17 @@ const styles = StyleSheet.create({
     color: '#666',
     fontFamily: 'Montserrat',
     flex: 1,
+  },
+  distance: {
+    fontSize: 12,
+    color: '#FF9800',
+    fontFamily: 'Montserrat-Bold',
+    marginRight: 8,
+  },
+  deliveryTime: {
+    fontSize: 12,
+    fontFamily: 'Montserrat-Bold',
+    marginLeft: 4,
   },
   loadingContainer: {
     flex: 1,

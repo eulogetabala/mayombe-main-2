@@ -90,8 +90,16 @@ class PromosService {
       
       return promos;
     } catch (error) {
+      // Si l'erreur est liée à un index manquant ou en construction
+      if (error.code === 'failed-precondition') {
+        if (error.message?.includes('index')) {
+          console.log('ℹ️ Index Firestore pour les promos en cours de construction ou manquant. Utilisation d\'une requête simplifiée.');
+          console.log('💡 Vérifiez que l\'index est complètement construit dans Firebase Console.');
+        }
+        return this.getActivePromosFallback();
+      }
+      // Pour les autres erreurs, logger et utiliser le fallback
       console.error('❌ Erreur lors de la récupération des promos:', error);
-      // Fallback: récupérer toutes les promos et filtrer côté client
       return this.getActivePromosFallback();
     }
   }
