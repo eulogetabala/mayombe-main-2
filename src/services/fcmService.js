@@ -9,6 +9,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 let messaging = null;
 let messagingInstance = null;
 
+// Configurer le handler de notifications pour qu'elles s'affichent même quand l'app est au premier plan
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 try {
   // Essayer d'importer le module de manière standard
   const messagingModule = require('@react-native-firebase/messaging');

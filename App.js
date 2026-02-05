@@ -256,6 +256,12 @@ export default function App() {
         ]);
 
         await initializeImageCache();
+        
+        // Initialiser le service FCM (listeners) MÊME si on a déjà un token
+        // C'est crucial pour recevoir les notifications quand l'app est ouverte
+        const fcmService = require('./src/services/fcmService').default;
+        await fcmService.initialize();
+        
         showFCMTokenOnStartup();
       } catch (error) {
         console.error("Erreur de chargement des polices:", error);

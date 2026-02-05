@@ -1,0 +1,144 @@
+.restaurant-status-manager {
+  background: white;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.manager-header h2 {
+  font-size: 24px;
+  color: #333;
+}
+
+.search-box {
+  flex: 1;
+  max-width: 400px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.restaurants-list {
+  display: grid;
+  gap: 20px;
+}
+
+.restaurant-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  transition: box-shadow 0.2s;
+}
+
+.restaurant-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.restaurant-info {
+  flex: 1;
+}
+
+.restaurant-info h3 {
+  font-size: 18px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.restaurant-address {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.restaurant-city {
+  color: #999;
+  font-size: 12px;
+}
+
+.restaurant-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.status-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-label {
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 60px;
+}
+
+.status-toggle.open .status-label {
+  color: #51A905;
+}
+
+.status-toggle.closed .status-label {
+  color: #ff4444;
+}
+
+.toggle-btn {
+  width: 50px;
+  height: 26px;
+  background: #ccc;
+  border-radius: 13px;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.3s;
+  padding: 0;
+}
+
+.toggle-btn.active {
+  background: #51A905;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-btn.active .toggle-slider {
+  transform: translateX(24px);
+}
+
+.loading,
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+}
