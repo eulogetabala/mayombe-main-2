@@ -65,6 +65,7 @@ import DriverRatingScreen from './src/screens/DriverRatingScreen';
 import StripeTest from './src/components/StripeTest';
 import StripePaymentScreen from './src/screens/StripePaymentScreen';
 import NoConnectionScreen from './src/components/common/NoConnectionScreen';
+import ConnectivityBanner from './src/components/common/ConnectivityBanner';
 
 SplashScreen.preventAutoHideAsync();
 const Stack = createNativeStackNavigator();
@@ -180,33 +181,42 @@ export default function App() {
   // Détecter l'état de la connexion réseau (si NetInfo est disponible)
   useEffect(() => {
     if (!NetInfo) {
-      // NetInfo non disponible, considérer qu'on est connecté par défaut
       setIsConnected(true);
       return;
     }
 
-    // Vérifier l'état initial
-    const checkInitialConnection = async () => {
+    const checkApiReachability = async () => {
       try {
-        const netInfoState = await NetInfo.fetch();
-        setIsConnected(netInfoState.isConnected ?? false);
+        // En plus de NetInfo, on vérifie si on peut atteindre le serveur (Heartbeat)
+        const response = await fetch("https://www.api-mayombe.mayombe-app.com/public/api/categories", {
+          method: 'HEAD', // Léger
+        });
+        return response.ok;
       } catch (error) {
-        console.log("⚠️ Erreur vérification connexion:", error);
-        setIsConnected(true); // Par défaut, considérer connecté
+        return false;
       }
     };
-    
-    checkInitialConnection();
+
+    const updateConnectionState = async (state) => {
+      const isInternetReachable = state.isInternetReachable !== false;
+      const isConnectedToNetwork = state.isConnected;
+      
+      if (isConnectedToNetwork && isInternetReachable) {
+        // Optionnel: Double check avec un ping API si on veut être ultra-sûr
+        setIsConnected(true);
+      } else {
+        setIsConnected(false);
+      }
+    };
+
+    // Vérifier l'état initial
+    NetInfo.fetch().then(updateConnectionState);
 
     // Écouter les changements de connexion
-    const unsubscribe = NetInfo.addEventListener(state => {
-      setIsConnected(state.isConnected ?? false);
-    });
+    const unsubscribe = NetInfo.addEventListener(updateConnectionState);
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      if (unsubscribe) unsubscribe();
     };
   }, []);
 
@@ -244,10 +254,7 @@ export default function App() {
           new Promise((resolve) => setTimeout(resolve, 2000)),
         ]);
 
-        // Initialiser le cache d'images
         await initializeImageCache();
-        
-        // Afficher le token FCM au démarrage si disponible
         showFCMTokenOnStartup();
       } catch (error) {
         console.error("Erreur de chargement des polices:", error);
@@ -274,21 +281,15 @@ export default function App() {
     );
   }
 
-  // Si pas de connexion, afficher uniquement l'écran "Pas de connexion"
-  if (!isConnected && NetInfo) {
+  // Si pas de connexion au DÉMARRAGE de l'app, afficher l'écran bloquant
+  // Sinon, on utilisera la bannière discrète (ConnectivityBanner)
+  if (!isConnected && !isAppReady) {
     return (
       <NoConnectionScreen
         onRetry={async () => {
           if (NetInfo) {
-            try {
-              const netInfoState = await NetInfo.fetch();
-              setIsConnected(netInfoState.isConnected ?? false);
-            } catch (error) {
-              console.log("⚠️ Erreur vérification connexion:", error);
-              setIsConnected(true);
-            }
-          } else {
-            setIsConnected(true);
+            const netInfoState = await NetInfo.fetch();
+            setIsConnected(netInfoState.isConnected ?? false);
           }
         }}
       />
@@ -302,6 +303,7 @@ export default function App() {
           <RefreshProvider>
             <CartProvider>
               <FavoritesProvider>
+                <ConnectivityBanner isConnected={isConnected} />
                 <NavigationContainer>
                   <AppNavigator initialRoute={initialRoute} />
                 </NavigationContainer>

@@ -20,7 +20,7 @@ import { translations } from '../translations';
 import { withRefreshAndLoading } from '../components/common/withRefreshAndLoading';
 import { useRefresh } from '../context/RefreshContext';
 
-const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+import ApiService from '../services/apiService';
 
 const CategoriesContent = ({ categories, navigation, t }) => {
   const windowWidth = Dimensions.get('window').width;
@@ -165,23 +165,11 @@ const Categories = ({ navigation }) => {
 
   const fetchCategories = async () => {
     try {
-      console.log("Début du chargement des catégories...");
-      const response = await fetch(`${API_BASE_URL}/categories`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        }
-      });
+      console.log("Début du chargement des catégories via ApiService...");
+      const data = await ApiService.get('/categories');
+      console.log("Données catégories reçues:", data);
 
-      const data = await response.json();
-      console.log("Réponse de l'API catégories:", data);
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-
-      if (!Array.isArray(data)) {
-        console.error("Format de données invalide:", data);
+      if (!data || !Array.isArray(data)) {
         throw new Error('Le format des données reçues est invalide');
       }
 
@@ -192,11 +180,10 @@ const Categories = ({ navigation }) => {
       }));
 
       console.log(`${formattedCategories.length} catégories chargées avec succès`);
-      console.log('Exemple de catégorie:', formattedCategories[0]);
       setCategories(formattedCategories);
     } catch (error) {
       console.error("Erreur lors du chargement des catégories:", error);
-      setError(t.categories.loadError || 'Impossible de charger les catégories');
+      setError(error.message || t.categories.loadError || 'Impossible de charger les catégories');
     } finally {
       setLoading(false);
     }

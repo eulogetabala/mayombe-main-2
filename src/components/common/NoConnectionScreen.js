@@ -11,7 +11,7 @@ import * as Animatable from 'react-native-animatable';
 
 const { width } = Dimensions.get('window');
 
-const NoConnectionScreen = ({ onRetry }) => {
+const NoConnectionScreen = ({ onRetry, isRetrying }) => {
   return (
     <View style={styles.container}>
       <Animatable.View
@@ -19,28 +19,40 @@ const NoConnectionScreen = ({ onRetry }) => {
         duration={1000}
         style={styles.content}
       >
-        {/* Emoji ou icône */}
-        <View style={styles.iconContainer}>
-          <Text style={styles.emoji}>📡</Text>
-        </View>
+        {/* Icône animée */}
+        <Animatable.View 
+          animation="pulse" 
+          iterationCount="infinite" 
+          duration={2000}
+          style={styles.iconContainer}
+        >
+          <Ionicons name="cloud-offline-outline" size={100} color="#FF9800" />
+        </Animatable.View>
 
         {/* Titre */}
-        <Text style={styles.title}>Pas de connexion Internet</Text>
+        <Text style={styles.title}>Oups ! Connexion Perdue</Text>
 
         {/* Message */}
         <Text style={styles.message}>
-          Vérifiez votre connexion réseau et réessayez.
+          Il semble que vous soyez déconnecté. Vérifiez vos paramètres réseau pour continuer à naviguer sur Mayombe.
         </Text>
 
         {/* Bouton Réessayer */}
         {onRetry && (
           <TouchableOpacity
-            style={styles.retryButton}
+            style={[styles.retryButton, isRetrying && styles.retryButtonDisabled]}
             onPress={onRetry}
+            disabled={isRetrying}
             activeOpacity={0.8}
           >
-            <Ionicons name="refresh" size={20} color="#FFF" style={styles.retryIcon} />
-            <Text style={styles.retryText}>Réessayer</Text>
+            {isRetrying ? (
+              <ActivityIndicator color="#FFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="refresh" size={20} color="#FFF" style={styles.retryIcon} />
+                <Text style={styles.retryText}>Réessayer</Text>
+              </>
+            )}
           </TouchableOpacity>
         )}
       </Animatable.View>
@@ -54,7 +66,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 30,
+    paddingHorizontal: 40,
   },
   content: {
     alignItems: 'center',
@@ -62,14 +74,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   iconContainer: {
-    marginBottom: 30,
-  },
-  emoji: {
-    fontSize: 80,
-    textAlign: 'center',
+    marginBottom: 40,
+    backgroundColor: '#FFF8E1',
+    padding: 30,
+    borderRadius: 100,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontFamily: 'Montserrat-Bold',
     color: '#333',
     textAlign: 'center',
@@ -78,29 +89,32 @@ const styles = StyleSheet.create({
   message: {
     fontSize: 16,
     fontFamily: 'Montserrat-Regular',
-    color: '#666',
+    color: '#777',
     textAlign: 'center',
-    marginBottom: 40,
+    marginBottom: 50,
     lineHeight: 24,
-    paddingHorizontal: 20,
   },
   retryButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#51A905',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
+    backgroundColor: '#FF9800', // Coherent with Mayombe brand
+    paddingHorizontal: 40,
+    paddingVertical: 16,
     borderRadius: 30,
-    elevation: 3,
-    shadowColor: '#51A905',
-    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+    shadowColor: '#FF9800',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
-    shadowRadius: 4,
-    minWidth: 150,
+    shadowRadius: 8,
+    minWidth: 180,
     justifyContent: 'center',
   },
+  retryButtonDisabled: {
+    backgroundColor: '#CCCCCC',
+    shadowOpacity: 0.1,
+  },
   retryIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   retryText: {
     color: '#FFF',

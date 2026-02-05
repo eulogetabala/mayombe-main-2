@@ -7,7 +7,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>Mayombe</string>
+    <string>mayombeclient</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -48,7 +48,7 @@
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>
-      <false/>
+      <true/>
       <key>NSExceptionDomains</key>
       <dict>
         <key>mayombe-app.com</key>
@@ -56,7 +56,7 @@
           <key>NSExceptionAllowsInsecureHTTPLoads</key>
           <true/>
           <key>NSExceptionMinimumTLSVersion</key>
-          <string>1.2</string>
+          <string>1.0</string>
           <key>NSExceptionRequiresForwardSecrecy</key>
           <false/>
           <key>NSIncludesSubdomains</key>
@@ -64,16 +64,16 @@
         </dict>
       </dict>
     </dict>
+    <key>NSCameraUsageDescription</key>
+    <string>Cette application nécessite l'accès à la caméra pour vous permettre de prendre des photos pour votre profil ou vos commandes.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
     <string>Mayombe needs access to your location to find nearby restaurants and provide delivery services.</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>Mayombe needs access to your location to find nearby restaurants and provide delivery services.</string>
+    <string>Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Mayombe needs access to your location to find nearby restaurants and provide delivery services.</string>
+    <string>Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Mayombe needs access to your photo library to allow you to select images for your profile or orders.</string>
-    <key>NSCameraUsageDescription</key>
-    <string>Mayombe needs access to your camera to allow you to take photos for your profile or orders.</string>
+    <string>Cette application nécessite l'accès à votre photothèque pour vous permettre de sélectionner des images pour votre profil ou vos commandes.</string>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>

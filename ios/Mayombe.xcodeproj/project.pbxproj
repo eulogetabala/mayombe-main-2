@@ -16,6 +16,7 @@
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		CD87B9CD3342A4C9E701A59C /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8724511039FD6033C4F1A8FC /* PrivacyInfo.xcprivacy */; };
 		CF0B388363764115B32952C5 /* noop-file.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDE14DEF1BC24C63BE2EED4D /* noop-file.swift */; };
+		17BE8ACF3208474797BA38FD /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 7CFF8AD5DA2D4CDEAB60529D /* GoogleService-Info.plist */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		CDE14DEF1BC24C63BE2EED4D /* noop-file.swift */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 4; includeInIndex = 0; lastKnownFileType = sourcecode.swift; name = "noop-file.swift"; path = "Mayombe/noop-file.swift"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		FAC715A2D49A985799AEE119 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-Mayombe/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		7CFF8AD5DA2D4CDEAB60529D /* GoogleService-Info.plist */ = {isa = PBXFileReference; name = "GoogleService-Info.plist"; path = "Mayombe/GoogleService-Info.plist"; sourceTree = "<group>"; fileEncoding = 4; lastKnownFileType = text.plist.xml; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +66,7 @@
 				CDE14DEF1BC24C63BE2EED4D /* noop-file.swift */,
 				5024991CE44D4EC39AE088A5 /* Mayombe-Bridging-Header.h */,
 				8724511039FD6033C4F1A8FC /* PrivacyInfo.xcprivacy */,
+				7CFF8AD5DA2D4CDEAB60529D /* GoogleService-Info.plist */,
 			);
 			name = Mayombe;
 			sourceTree = "<group>";
@@ -207,6 +210,7 @@
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				CD87B9CD3342A4C9E701A59C /* PrivacyInfo.xcprivacy in Resources */,
+				17BE8ACF3208474797BA38FD /* GoogleService-Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -471,7 +475,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.thprojet.mayombeclient;
-				PRODUCT_NAME = Mayombe;
+				PRODUCT_NAME = "mayombeclient";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Mayombe;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -510,7 +514,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.thprojet.mayombeclient;
-				PRODUCT_NAME = Mayombe;
+				PRODUCT_NAME = "mayombeclient";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = Mayombe;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

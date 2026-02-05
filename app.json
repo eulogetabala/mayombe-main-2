@@ -16,6 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.thprojet.mayombeclient",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "buildNumber": "18",
       "userInterfaceStyle": "light",
       "config": {
@@ -45,6 +46,7 @@
         "backgroundColor": "#FFFFFF"
       },
       "package": "com.mayombe.app",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 15,
       "permissions": [
         "ACCESS_FINE_LOCATION",

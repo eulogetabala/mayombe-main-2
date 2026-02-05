@@ -20,6 +20,7 @@ import { BaseScreen } from '../components/common/BaseScreen';
 import { RestaurantSkeletonLoader } from '../components/common/SkeletonLoader';
 import { useAuth } from '../../contexts/AuthContext';
 import { HomeSkeleton } from '../components/Skeletons';
+import ApiService from '../services/apiService';
 
 import RestaurantsSection from "../components/Home/RestaurantsSection";
 import HeaderSection from "../components/Home/HeaderSection";
@@ -103,17 +104,9 @@ const HomeScreen = ({ navigation }) => {
   const fetchBanners = async () => {
     try {
       setBannersLoading(true);
-      
-      const response = await fetch(`${API_BASE_URL}/banniere`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
+      const data = await ApiService.get('/banniere');
 
-      const data = await response.json();
-
-      if (response.ok && Array.isArray(data)) {
+      if (data && Array.isArray(data)) {
         const mappedBanners = data.map((banner, index) => {
           const imageUri = banner.cover 
             ? `${BASE_URL}/${banner.cover}`

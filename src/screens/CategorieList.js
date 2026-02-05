@@ -21,6 +21,7 @@ import CustomHeader from '../components/common/CustomHeader';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
+import ApiService from '../services/apiService';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const windowWidth = Dimensions.get('window').width;
@@ -62,32 +63,10 @@ const CategorieList = ({ route, navigation }) => {
       setLoading(true);
       setError(null);
       
-      console.log('Tentative de chargement des produits pour la catégorie:', categoryId, 'Nom:', categoryName);
-      
-      const url = `${API_BASE_URL}/products-by-id-category?id_category=${categoryId}`;
-      console.log('URL de l\'API:', url);
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-      });
+      console.log('Tentative de chargement via ApiService pour la catégorie:', categoryId);
+      const data = await ApiService.get(`/products-by-id-category?id_category=${categoryId}`);
 
-      console.log('Statut de la réponse:', response.status);
-      console.log('Headers de la réponse:', response.headers);
-
-      const data = await response.json();
-      console.log('Données reçues:', data);
-      console.log('Type de données:', typeof data);
-      console.log('Est un tableau?', Array.isArray(data));
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status} - ${response.statusText}`);
-      }
-
-      if (Array.isArray(data)) {
+      if (data && Array.isArray(data)) {
         console.log('Nombre de produits reçus:', data.length);
         
         if (data.length > 0) {
