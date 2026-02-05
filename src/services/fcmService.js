@@ -499,6 +499,17 @@ class FCMService {
         console.log('   - Clés disponibles:', messagingInstance ? Object.keys(messagingInstance).slice(0, 10) : 'null');
         
         if (messagingInstance && typeof messagingInstance.getToken === 'function') {
+          // Sur iOS, il faut s'enregistrer pour les messages distants avant de demander le token
+          if (Platform.OS === 'ios' && typeof messagingInstance.registerDeviceForRemoteMessages === 'function') {
+            console.log('📱 iOS: Enregistrement pour les messages distants (registerDeviceForRemoteMessages)...');
+            try {
+              await messagingInstance.registerDeviceForRemoteMessages();
+              console.log('✅ iOS: Enregistrement réussi');
+            } catch (regError) {
+              console.log('⚠️ iOS: Erreur lors de registerDeviceForRemoteMessages:', regError.message);
+            }
+          }
+
           console.log('🔐 Demande du token FCM à Firebase...');
           try {
             token = await messagingInstance.getToken();
@@ -888,6 +899,15 @@ class FCMService {
           }
           
           if (messagingInstance && typeof messagingInstance.getToken === 'function') {
+            // Sur iOS, il faut s'enregistrer pour les messages distants avant de demander le token
+            if (Platform.OS === 'ios' && typeof messagingInstance.registerDeviceForRemoteMessages === 'function') {
+              console.log('📱 iOS: Enregistrement pour les messages distants (forceGetAndShowToken)...');
+              try {
+                await messagingInstance.registerDeviceForRemoteMessages();
+              } catch (regError) {
+                console.log('⚠️ iOS: Erreur lors de registerDeviceForRemoteMessages:', regError.message);
+              }
+            }
             token = await messagingInstance.getToken();
             this.fcmToken = token;
             await AsyncStorage.setItem('fcmToken', token);

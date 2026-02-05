@@ -140,135 +140,85 @@ const SimpleMapComponent = React.forwardRef(({ driverLocation, destinationLocati
                 zoomControl: true
               });
 
-              // Marqueur destination (rouge)
+              // Service de directions pour un vrai trajet
+              const directionsService = new google.maps.DirectionsService();
+              const directionsRenderer = new google.maps.DirectionsRenderer({
+                suppressMarkers: true, // On utilise nos propres marqueurs personnalisés
+                polylineOptions: {
+                  strokeColor: '#2196F3', // Uber Blue
+                  strokeOpacity: 0.9,
+                  strokeWeight: 6,
+                  edgeWidth: 1,
+                  edgeColor: '#1976D2'
+                }
+              });
+              directionsRenderer.setMap(map);
+
+              // Icônes personnalisées (Simulation d'icônes Uber-like)
+              // Marqueur destination (Point noir élégant)
               const destinationMarker = new google.maps.Marker({
                 position: { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} },
                 map: map,
-                title: 'Destination de livraison',
                 icon: {
-                  url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-                  scaledSize: new google.maps.Size(40, 40)
+                  path: google.maps.SymbolPath.CIRCLE,
+                  scale: 8,
+                  fillColor: "#000",
+                  fillOpacity: 1,
+                  strokeWeight: 2,
+                  strokeColor: "#FFF"
                 },
-                animation: google.maps.Animation.DROP
+                zIndex: 10
               });
 
-              // InfoWindow pour la destination
-              const destinationInfoWindow = new google.maps.InfoWindow({
-                content: '<div style="padding: 8px;"><strong>📍 Destination</strong><br/>Livraison prévue</div>'
-              });
-              destinationMarker.addListener('click', () => {
-                destinationInfoWindow.open(map, destinationMarker);
-              });
-
-              // Marqueur restaurant (bleu)
+              // Marqueur restaurant (Store icon)
               const restaurantMarker = new google.maps.Marker({
                 position: { lat: ${safePickupLocation.latitude}, lng: ${safePickupLocation.longitude} },
                 map: map,
-                title: 'Restaurant',
                 icon: {
-                  url: 'https://maps.google.com/mapfiles/ms/icons/blue-dot.png',
-                  scaledSize: new google.maps.Size(40, 40)
-                },
-                animation: google.maps.Animation.DROP
+                  url: 'https://cdn-icons-png.flaticon.com/512/606/606544.png', // Shop icon
+                  scaledSize: new google.maps.Size(30, 30),
+                  anchor: new google.maps.Point(15, 15)
+                }
               });
 
-              // InfoWindow pour le restaurant
-              const restaurantInfoWindow = new google.maps.InfoWindow({
-                content: '<div style="padding: 8px;"><strong>🏪 Restaurant</strong><br/>Point de départ</div>'
-              });
-              restaurantMarker.addListener('click', () => {
-                restaurantInfoWindow.open(map, restaurantMarker);
-              });
-
-              // Marqueur driver (vert avec animation)
+              // Marqueur driver (Moto/Vehicule)
               let driverMarker = null;
               if (${safeDriverLocation ? 'true' : 'false'}) {
                 driverMarker = new google.maps.Marker({
                   position: { lat: ${safeDriverLocation ? safeDriverLocation.latitude : centerLat}, lng: ${safeDriverLocation ? safeDriverLocation.longitude : centerLng} },
                   map: map,
-                  title: 'Livreur',
                   icon: {
-                    url: 'https://maps.google.com/mapfiles/ms/icons/green-dot.png',
-                    scaledSize: new google.maps.Size(35, 35)
+                    url: 'https://cdn-icons-png.flaticon.com/512/2964/2964648.png', // Moto icon
+                    scaledSize: new google.maps.Size(40, 40),
+                    anchor: new google.maps.Point(20, 20)
                   },
-                  animation: google.maps.Animation.BOUNCE
-                });
-
-                // InfoWindow pour le driver
-                const driverInfoWindow = new google.maps.InfoWindow({
-                  content: '<div style="padding: 8px;"><strong>🚗 Livreur</strong><br/>En route vers vous</div>'
-                });
-                driverMarker.addListener('click', () => {
-                  driverInfoWindow.open(map, driverMarker);
+                  zIndex: 100
                 });
               }
 
-              // Service de directions pour un vrai trajet
-              const directionsService = new google.maps.DirectionsService();
-              const directionsRenderer = new google.maps.DirectionsRenderer({
-                suppressMarkers: false,
-                polylineOptions: {
-                  strokeColor: '#FF9800',
-                  strokeOpacity: 0.8,
-                  strokeWeight: 4
-                }
-              });
-              directionsRenderer.setMap(map);
-
-              // Calculer le trajet optimal - LOGIQUE CORRECTE COMME WAZE
-              // Si on a la position du driver, le trajet va du driver vers le client
-              // Sinon, le trajet va du restaurant vers le client
+              // Calculer le trajet optimal
               let origin, destination;
               
               if (${safeDriverLocation ? 'true' : 'false'}) {
-                // Driver vers client (comme Waze)
                 origin = { lat: ${safeDriverLocation ? safeDriverLocation.latitude : centerLat}, lng: ${safeDriverLocation ? safeDriverLocation.longitude : centerLng} };
                 destination = { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} };
-                console.log('🗺️ Trajet: Driver vers Client (comme Waze)');
               } else {
-                // Restaurant vers client (fallback)
                 origin = { lat: ${safePickupLocation.latitude}, lng: ${safePickupLocation.longitude} };
                 destination = { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} };
-                console.log('🗺️ Trajet: Restaurant vers Client (fallback)');
               }
 
               const request = {
                 origin: origin,
                 destination: destination,
-                travelMode: google.maps.TravelMode.DRIVING,
-                avoidHighways: false,
-                avoidTolls: false
+                travelMode: google.maps.TravelMode.DRIVING
               };
 
               directionsService.route(request, function(result, status) {
                 if (status === 'OK') {
-                  console.log('🗺️ Trajet calculé avec succès');
                   directionsRenderer.setDirections(result);
-                  
-                  // Ajuster la vue pour voir tout le trajet
                   const bounds = new google.maps.LatLngBounds();
-                  result.routes[0].overview_path.forEach(point => {
-                    bounds.extend(point);
-                  });
-                  map.fitBounds(bounds);
-                } else {
-                  console.log('⚠️ Erreur calcul trajet:', status);
-                  // Fallback: ligne droite du driver vers client (ou restaurant vers client)
-                  const fallbackOrigin = ${safeDriverLocation ? 'true' : 'false'} ? 
-                    { lat: ${safeDriverLocation ? safeDriverLocation.latitude : centerLat}, lng: ${safeDriverLocation ? safeDriverLocation.longitude : centerLng} } :
-                    { lat: ${safePickupLocation.latitude}, lng: ${safePickupLocation.longitude} };
-                    
-                  const fallbackLine = new google.maps.Polyline({
-                    path: [
-                      fallbackOrigin,
-                      { lat: ${safeDestinationLocation.latitude}, lng: ${safeDestinationLocation.longitude} }
-                    ],
-                    geodesic: true,
-                    strokeColor: '#FF9800',
-                    strokeOpacity: 0.8,
-                    strokeWeight: 4
-                  });
-                  fallbackLine.setMap(map);
+                  result.routes[0].overview_path.forEach(point => bounds.extend(point));
+                  map.fitBounds(bounds, { padding: 50 });
                 }
               });
 

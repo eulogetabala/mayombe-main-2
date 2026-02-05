@@ -406,36 +406,34 @@ const RestaurantDetails = ({ route, navigation }) => {
       console.log('ID du produit:', product.id);
       console.log('Type de l\'ID:', typeof product.id);
       
-      // S'assurer que le prix est un nombre
+      // NE PAS appliquer la majoration ici - elle sera appliquée dans RestaurantProductModal
+      // Passer le prix brut au produit
       const basePrice = typeof product.price === 'string' 
         ? parseFloat(product.price.replace(/[^\d.-]/g, ''))
         : product.price || 0;
 
-      // Appliquer la majoration de 7%
-      const priceWithMarkup = applyMarkup(basePrice);
-
-      // Calculer le prix total des compléments avec majoration
-      const complementsTotal = product.selectedComplements?.reduce((sum, complement) => 
-        sum + applyMarkup(parseFloat(complement.price) || 0), 0) || 0;
-        
       const productToAdd = {
         id: product.id,
         name: product.name,
-        basePrice: basePrice,
-        price: priceWithMarkup,
+        price: basePrice, // Prix brut sans majoration
         image: product.image,
         quantity: product.quantity || 1,
-        complements: product.selectedComplements || [],
-        restaurant: restaurant.name,
-        totalPrice: (priceWithMarkup + complementsTotal) * (product.quantity || 1),
-        productKey: `${product.id}-${product.selectedComplements?.map(c => c.id).join('-') || ''}`,
+        complements: product.complements || [], // Compléments avec prix bruts
+        restaurant: restaurant, // Passer l'objet restaurant complet (avec altitude/longitude)
+        productKey: `${product.id}-${product.complements?.map(c => c.id).join('-') || ''}`,
         isMenu: true,
         menu_id: product.id,
-        product_id: null, // S'assurer que product_id est null pour les menus
-        type: 'menu' // Ajouter un type explicite
+        product_id: null,
+        type: 'menu'
       };
 
-      console.log('Produit formaté pour le panier:', productToAdd);
+      console.log('🛒 [RestaurantDetailsScreen] Tentative ajout au panier:', productToAdd.name);
+      console.log('🏢 [RestaurantDetailsScreen] Restaurant transmis:', {
+        id: restaurant.id,
+        name: restaurant.name,
+        lat: restaurant.altitude || restaurant.latitude,
+        lng: restaurant.longitude
+      });
       
       const success = await addToCart(productToAdd);
       if (success) {

@@ -84,7 +84,7 @@ const OrderTrackingScreen = ({ route, navigation }) => {
         // Mettre à jour le tracking avec les données Firebase
         setTrackingData(prev => ({
           ...prev,
-          status: orderData.status || 'pending',
+          status: orderData.status || 'En attente',
           destinationLocation: orderData.delivery_address && orderData.delivery_address.latitude && orderData.delivery_address.longitude ? {
             latitude: orderData.delivery_address.latitude,
             longitude: orderData.delivery_address.longitude
@@ -715,7 +715,7 @@ const OrderTrackingScreen = ({ route, navigation }) => {
           <View style={styles.stepsViewContainer}>
             <DeliveryStepsComponent 
               currentStatus={trackingData.status}
-              orderStatus={trackingData.status || orderDetails?.status || 'pending'}
+              orderStatus={trackingData.status || orderDetails?.status || 'En attente'}
             />
           </View>
         ) : (
@@ -754,243 +754,70 @@ const OrderTrackingScreen = ({ route, navigation }) => {
         )}
       </View>
 
-      {/* Container compact en bas */}
-      <View style={styles.bottomInfoContainer}>
-        {/* Header avec statut et référence */}
-        <View style={styles.compactHeader}>
-          <View style={styles.statusIndicator}>
-            <View style={[styles.statusDot, { backgroundColor: firebaseConnected ? '#4CAF50' : '#FF9800' }]} />
-            <Text style={styles.statusText}>
-              {firebaseConnected ? 'Firebase connecté' : 'Firebase déconnecté'}
-            </Text>
-          </View>
-          <Text style={styles.orderId}>
-            {getCommandeReference(commandeDetails)}
+      {/* Panneau de suivi flottant (Uber Style) */}
+      <View style={styles.floatingPanel}>
+        {/* Barre de progression horizontale */}
+        <View style={styles.progressHeader}>
+          <Text style={styles.panelEtaTitle}>
+            {trackingData.status === 'terminé' ? 'Livré' : 'Arrivée estimée'}
+          </Text>
+          <Text style={styles.panelEtaValue}>
+            {trackingData.status === 'terminé' ? 'Merci !' : (trackingData.estimatedTime ? formatEstimatedTime(trackingData.estimatedTime) : '-- min')}
           </Text>
         </View>
-        
-        
-        {/* Message d'information */}
-        {!trackingData.driverLocation && trackingData.status !== 'terminé' && trackingData.status !== 'delivered' && trackingData.status !== 'completed' && trackingData.status !== 'livré' && (
-          <View style={styles.infoContainer}>
-            <Text style={styles.infoText}>
-              ⚠️ En attente de la position du livreur. 
-              Le livreur doit démarrer sa course pour que vous puissiez le suivre en temps réel.
-            </Text>
-            
-            
-          </View>
-        )}
 
-        
-        {/* Message de livraison terminée */}
-        {(trackingData.status === 'terminé' || trackingData.status === 'delivered' || trackingData.status === 'completed' || trackingData.status === 'livré') && (
-          <View style={styles.successContainer}>
-            <Text style={styles.successText}>
-              🎉 Livraison terminée avec succès !
-            </Text>
-            <Text style={styles.successSubText}>
-              Votre commande a été livrée. Merci d'avoir utilisé Mayombe !
-            </Text>
-            
-            <TouchableOpacity 
-              style={styles.ratingButton}
-              onPress={() => {
-                // Rediriger vers la page de notation
-                navigation.navigate('DriverRating', {
-                  orderId: orderId,
-                  driverName: 'Le livreur'
-                });
-              }}
-            >
-              <Ionicons name="star" size={20} color="#FFF" />
-              <Text style={styles.ratingButtonText}>Noter le livreur</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        
-        {/* Métriques compactes - VERSION AMÉLIORÉE - Masquées si livraison terminée */}
-        {!(trackingData.status === 'terminé' || trackingData.status === 'delivered' || trackingData.status === 'completed' || trackingData.status === 'livré') && (
-          <View style={styles.compactMetrics}>
-            <View style={styles.compactMetric}>
-              <Ionicons name="location" size={20} color="#FF9800" />
-              <Text style={styles.compactMetricValue}>
-                {trackingData.distance !== null && trackingData.distance !== undefined ? formatDistance(trackingData.distance) : '--'}
-              </Text>
-              <Text style={styles.compactMetricLabel}>Distance</Text>
-            </View>
-            
-            <View style={styles.compactMetric}>
-              <Ionicons name="time" size={20} color="#FF9800" />
-              <Text style={styles.compactMetricValue}>
-                {trackingData.estimatedTime !== null && trackingData.estimatedTime !== undefined ? formatEstimatedTime(trackingData.estimatedTime) : '--'}
-              </Text>
-              <Text style={styles.compactMetricLabel}>Temps estimé</Text>
-            </View>
-            
-            <View style={styles.compactMetric}>
-              <Ionicons name="speedometer" size={20} color="#FF9800" />
-              <Text style={styles.compactMetricValue}>
-                {trackingData.speed ? `${Math.round(trackingData.speed)} km/h` : '--'}
-              </Text>
-              <Text style={styles.compactMetricLabel}>Vitesse</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Bouton Terminer la course - Après les métriques */}
-        {trackingData.driverLocation && trackingData.status !== 'terminé' && trackingData.status !== 'delivered' && trackingData.status !== 'completed' && trackingData.status !== 'livré' && (
-          <View style={styles.completeDeliveryContainer}>
-            <TouchableOpacity 
-              style={styles.completeDeliveryButton}
-              onPress={async () => {
-                Alert.alert(
-                  'Terminer la course',
-                  'Confirmez-vous avoir reçu votre commande ?',
-                  [
-                    {
-                      text: 'Annuler',
-                      style: 'cancel'
-                    },
-                    {
-                      text: 'Confirmer',
-                      onPress: async () => {
-                        try {
-                          
-                          // Utiliser directement l'OrderId sans préfixe (compatible avec le driver)
-                          const firebaseOrderId = orderId;
-                          
-                          // 1. Mettre à jour le statut dans Firebase
-                          await FirebaseTrackingService.updateDeliveryStatus(firebaseOrderId, 'terminé');
-                          
-                          // 2. Mettre à jour le statut dans l'API backend
-                          try {
-                            const response = await fetch(`https://www.api-mayombe.mayombe-app.com/public/api/orders/${orderId}/status`, {
-                              method: 'PUT',
-                              headers: {
-                                'Content-Type': 'application/json',
-                              },
-                              body: JSON.stringify({
-                                status: 'delivered',
-                                delivery_status: 'Livré'
-                              })
-                            });
-                            
-                            if (response.ok) {
-                              console.log('✅ Statut API backend mis à jour vers "Livré"');
-                            } else {
-                              console.log('⚠️ Erreur mise à jour API backend:', response.status);
-                            }
-                          } catch (apiError) {
-                            console.log('⚠️ Erreur API backend:', apiError);
-                          }
-                          
-                          // Mettre à jour l'état local
-                          setTrackingData(prev => ({
-                            ...prev,
-                            status: 'terminé',
-                            lastUpdate: Date.now()
-                          }));
-                          
-                          
-                          // Déclencher les notifications de fin de livraison
-                          handleStatusNotifications('terminé');
-                          
-                        } catch (error) {
-                          console.error('❌ Erreur lors de la fin de course:', error);
-                          Alert.alert('Erreur', 'Impossible de terminer la course. Veuillez réessayer.');
-                        }
-                      }
-                    }
-                  ]
-                );
-              }}
-            >
-              <Ionicons name="checkmark-circle" size={20} color="#FFF" />
-              <Text style={styles.completeDeliveryButtonText}>Terminer la course</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        
-        
-        
-        {/* Statut détaillé */}
-        <View style={styles.statusContainer}>
-          <View style={styles.statusRow}>
-            <Ionicons 
-              name={getStatusIcon(trackingData.status)} 
-              size={24} 
-              color={getStatusColor(trackingData.status)} 
-            />
-            <Text style={[styles.statusText, { color: getStatusColor(trackingData.status) }]}>
-              {trackingData.status}
-            </Text>
-          </View>
-          
-          {/* Indicateurs dynamiques */}
-          {trackingData.driverLocation && (
-            <View style={styles.dynamicIndicators}>
-              <View style={styles.indicatorRow}>
-                <Ionicons name="speedometer" size={16} color="#FF9800" />
-                <Text style={styles.indicatorText}>
-                  Vitesse: {trackingData.driverLocation.speed || 0} km/h
-                </Text>
-              </View>
-              <View style={styles.indicatorRow}>
-                <Ionicons name="location" size={16} color="#4CAF50" />
-                <Text style={styles.indicatorText}>
-                  Distance: {trackingData.distance?.toFixed(2) || 0} km
-                </Text>
-              </View>
-              <View style={styles.indicatorRow}>
-                <Ionicons name="time" size={16} color="#2196F3" />
-                <Text style={styles.indicatorText}>
-                  ETA: {trackingData.estimatedTime || 0} min
-                </Text>
-              </View>
-            </View>
-          )}
-          
-          {trackingData.lastUpdate && (
-            <Text style={styles.lastUpdateText}>
-              Dernière mise à jour: {formatLastUpdate(trackingData.lastUpdate)}
-            </Text>
-          )}
+        {/* Barre de statut horizontale */}
+        <View style={styles.horizontalProgressBar}>
+          <View style={[styles.progressSegment, { backgroundColor: '#4CAF50' }]} />
+          <View style={[styles.progressSegment, { backgroundColor: trackingData.status !== 'En attente' ? '#4CAF50' : '#E0E0E0' }]} />
+          <View style={[styles.progressSegment, { backgroundColor: (trackingData.status === 'En cours de livraison' || trackingData.status === 'terminé') ? '#4CAF50' : '#E0E0E0' }]} />
+          <View style={[styles.progressSegment, { backgroundColor: trackingData.status === 'terminé' ? '#4CAF50' : '#E0E0E0' }]} />
         </View>
-        
-        {/* Informations de livraison - Seulement l'adresse */}
-        <View style={styles.deliveryInfo}>
-          <View style={styles.deliveryRow}>
-            <Ionicons name="location" size={16} color="#666" />
-            <Text style={styles.deliveryText} numberOfLines={2}>
+
+        {/* Info Statut et Détails */}
+        <View style={styles.panelContent}>
+          {/* Bannières d'alerte en haut pour visibilité immédiate */}
+          {isPendingOrder && (
+            <View style={styles.miniAlert}>
+              <Ionicons name="hourglass-outline" size={16} color="#F57C00" />
+              <Text style={styles.miniAlertText}>En attente d'assignation...</Text>
+            </View>
+          )}
+
+          {!trackingData.driverLocation && !isPendingOrder && (
+            <View style={styles.miniAlert}>
+              <Ionicons name="information-circle-outline" size={16} color="#F57C00" />
+              <Text style={styles.miniAlertText}>En attente du livreur...</Text>
+            </View>
+          )}
+
+          <View style={styles.statusPrimaryRow}>
+            <Text style={styles.statusMainText}>{trackingData.status}</Text>
+            <TouchableOpacity style={styles.helpButton}>
+              <Ionicons name="help-circle-outline" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.addressLineCompact}>
+            <Ionicons name="location-outline" size={16} color="#999" />
+            <Text style={styles.addressTextCompact} numberOfLines={1}>
               {commandeDetails?.delivery_address}
             </Text>
           </View>
         </View>
-        
-        {/* Message informatif compact */}
-        {!trackingData.driverLocation && (
-          <View style={styles.compactInfoMessage}>
-            <Ionicons name="information-circle" size={16} color="#2196F3" />
-            <Text style={styles.compactInfoText}>
-              {firebaseConnected 
-                ? 'Données en attente du driver'
-                : 'Connexion lente - mise à jour plus lente'
-              }
-            </Text>
-          </View>
+
+        {/* Bouton d'action si livraison terminée */}
+        {(trackingData.status === 'terminé' || trackingData.status === 'delivered') && (
+          <TouchableOpacity 
+            style={styles.actionButtonPrimary}
+            onPress={() => navigation.navigate('DriverRating', { orderId, driverName: 'Livreur' })}
+          >
+            <Text style={styles.actionButtonText}>Noter la livraison</Text>
+          </TouchableOpacity>
         )}
       </View>
 
-      {/* Message pour commandes en attente */}
-      {isPendingOrder && (
-        <View style={styles.pendingMessage}>
-          <Ionicons name="information-circle" size={20} color="#FF9800" />
-          <Text style={styles.pendingText}>
-            Votre commande est en attente d'assignation à un livreur
-          </Text>
-        </View>
-      )}
+        {/* Pas de message séparé ici, il est intégré au container */}
     </SafeAreaView>
   );
 };
@@ -1067,316 +894,100 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
  },
-  bottomInfoContainer: {
+  floatingPanel: {
     position: 'absolute',
-    bottom: 20,
-    left: 16,
-    right: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 16,
-    padding: 16,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 12,
+    paddingBottom: 45, // Plus de padding pour ne pas être caché par le home indicator
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    backdropFilter: 'blur(10px)',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 20,
   },
-  compactHeader: {
+  progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'baseline',
+    marginBottom: 10,
   },
-  statusIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  statusText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-  },
-  orderId: {
+  panelEtaTitle: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#FF9800',
+    color: '#666',
+    fontWeight: '500',
   },
-  commandeInfoContainer: {
-    backgroundColor: '#F5F5F5',
-    padding: 12,
-    borderRadius: 8,
+  panelEtaValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#000',
+  },
+  horizontalProgressBar: {
+    flexDirection: 'row',
+    height: 4,
+    gap: 6,
     marginBottom: 20,
   },
-  commandeInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  commandeAddress: {
+  progressSegment: {
     flex: 1,
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 8,
-    fontWeight: '500',
+    borderRadius: 2,
   },
-  commandePhone: {
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 8,
-    fontWeight: '500',
+  panelContent: {
+    marginBottom: 10,
   },
-  commandeAmount: {
-    fontSize: 14,
-    color: '#FF9800',
-    marginLeft: 8,
-    fontWeight: '600',
-  },
-  compactMetrics: {
+  statusPrimaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  compactMetric: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 8,
+  statusMainText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
   },
-  compactMetricValue: {
+  miniAlert: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  miniAlertText: {
+    fontSize: 12,
+    color: '#F57C00',
+    marginLeft: 6,
+    fontWeight: '600',
+  },
+  addressLineCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    opacity: 0.7,
+  },
+  addressTextCompact: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 6,
+  },
+  actionButtonPrimary: {
+    backgroundColor: '#000',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  actionButtonText: {
+    color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
-    color: '#333',
-    marginTop: 4,
   },
-  compactMetricLabel: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  statusContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#FF9800',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  lastUpdateText: {
-    fontSize: 11,
-    color: '#999',
-    fontStyle: 'italic',
-  },
-  dynamicIndicators: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e9ecef'
-  },
-  indicatorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6
-  },
-  indicatorText: {
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 8,
-    fontWeight: '500'
-  },
-  diagnosticContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    padding: 8,
-    borderRadius: 4,
-    marginBottom: 8
-  },
-  diagnosticText: {
-    color: '#FFF',
-    fontSize: 10,
-    textAlign: 'center',
-    fontFamily: 'monospace'
-  },
-  infoContainer: {
-    backgroundColor: 'rgba(255, 152, 0, 0.1)',
-    borderColor: '#FF9800',
-    borderWidth: 1,
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8
-  },
-  infoText: {
-    color: '#FF9800',
-    fontSize: 12,
-    textAlign: 'center',
-    fontWeight: '500'
-  },
-  successContainer: {
-    backgroundColor: '#4CAF50',
-    padding: 20,
-    borderRadius: 12,
-    margin: 16,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#45A049'
-  },
-  successText: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 8
-  },
-  successSubText: {
-    color: '#E8F5E8',
-    fontSize: 14,
-    textAlign: 'center',
-    fontWeight: '500'
-  },
-  ratingButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
-    marginTop: 16,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  ratingButtonText: {
-    color: '#333',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8
-  },
-  completeDeliveryContainer: {
-    backgroundColor: '#E3F2FD',
-    padding: 16,
-    borderRadius: 12,
-    margin: 16,
-    borderWidth: 2,
-    borderColor: '#2196F3'
-  },
-  completeDeliveryText: {
-    color: '#1976D2',
-    fontSize: 16,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 8
-  },
-  completeDeliverySubText: {
-    color: '#1976D2',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 16,
-    fontStyle: 'italic'
-  },
-  completeDeliveryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#4CAF50',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 25,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  completeDeliveryButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 8
-  },
-  deliveryInfo: {
-    marginBottom: 8,
-  },
-  deliveryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  deliveryText: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 6,
-    flex: 1,
-  },
-  compactInfoMessage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(33, 150, 243, 0.1)',
-    padding: 8,
-    borderRadius: 8,
-  },
-  compactInfoText: {
-    fontSize: 11,
-    color: '#1976D2',
-    marginLeft: 6,
-    flex: 1,
-  },
-  infoContainer: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    backgroundColor: '#E3F2FD',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 16,
-    marginHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 3,
-  },
-  infoIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#2196F3',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1976D2',
-    marginBottom: 4,
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#1976D2',
-    lineHeight: 20,
+  helpButton: {
+    padding: 4,
   },
 
   pendingMessage: {

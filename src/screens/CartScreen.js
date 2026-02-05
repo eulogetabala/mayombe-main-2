@@ -14,6 +14,7 @@ import CustomHeader from '../components/common/CustomHeader';
 import ShareInstructionsModal from '../components/ShareInstructionsModal';
 import FirebaseTrackingService from '../services/firebase';
 import sharedCartService from '../services/sharedCartService';
+import * as ExpoLocation from 'expo-location';
 import { CartSkeleton } from '../components/Skeletons';
 
 
@@ -288,8 +289,8 @@ const CartScreen = ({ navigation, route }) => {
           throw new Error(`ID invalide pour l'article: ${item.name}`);
         }
 
-        // S'assurer que le prix est un nombre
-        const price = formatPrice(item.unitPrice);
+        // S'assurer que le prix est un nombre (utiliser directement unitPrice, pas formatPrice)
+        const price = Number(item.unitPrice);
         if (isNaN(price)) {
           throw new Error(`Prix invalide pour l'article: ${item.name}`);
         }
@@ -305,7 +306,7 @@ const CartScreen = ({ navigation, route }) => {
 
       const requestBody = {
         items: formattedItems,
-        total_amount: formatPrice(totalAmount),
+        total_amount: Number(totalAmount), // Utiliser le nombre directement
         delivery_fee: deliveryFee // Utiliser les frais dynamiques calculés
       };
 
@@ -388,9 +389,9 @@ const CartScreen = ({ navigation, route }) => {
         // Si pas d'adresse utilisateur, essayer la position GPS
         if (!userAddress) {
           try {
-            const { status } = await Location.requestForegroundPermissionsAsync();
+            const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
             if (status === 'granted') {
-              const location = await Location.getCurrentPositionAsync({});
+              const location = await ExpoLocation.getCurrentPositionAsync({});
               deliveryLocation = {
                 latitude: location.coords.latitude,
                 longitude: location.coords.longitude,
@@ -485,13 +486,17 @@ const CartScreen = ({ navigation, route }) => {
 
       // Sauvegarder les détails de la commande (sans vider le panier encore)
       const orderDetails = {
-        items: [...cartItems],
+        items: [...cartItems], // Utiliser les articles complets avec les objets restaurant
         subtotal: totalAmount,
         deliveryFee: deliveryFee,
         total: totalAmount + deliveryFee,
         orderId: orderId,
         distance: deliveryDistance
       };
+
+      console.log('💳 [CartScreen] Navigation vers PaymentScreen avec items:', 
+        orderDetails.items.map(i => `${i.name} (Resto: ${typeof i.restaurant})`)
+      );
 
       // NE PAS vider le panier ici - il sera vidé seulement après paiement réussi
       navigation.navigate('PaymentScreen', { 
@@ -748,31 +753,13 @@ const CartScreen = ({ navigation, route }) => {
                       <Text style={styles.priceLabel}>Sous-total</Text>
                       <Text style={styles.priceValue}>{formatPrice(totalAmount)} FCFA</Text>
                     </View>
-                    <View style={styles.priceRow}>
-                      <Text style={styles.priceLabel}>
-                        {isLoadingLocation 
-                          ? '📍 Calcul de la distance...'
-                          : `${getDeliveryFeeDescription(deliveryDistance)} `
-                        }
-                      </Text>
-                      <Text style={styles.priceValue}>
-                        {isLoadingLocation ? (
-                          <ActivityIndicator size="small" color="#51A905" />
-                        ) : (
-                          `${deliveryFee} FCFA`
-                        )}
-                      </Text>
-                    </View>
-                    {!isLoadingLocation && (
-                      <View style={styles.priceRow}>
-                        <Text style={styles.priceLabel}>Distance</Text>
-                        <Text style={styles.priceValue}>{formatDistance(deliveryDistance)}</Text>
-                      </View>
-                    )}
                     <View style={[styles.priceRow, styles.totalRow]}>
                       <Text style={styles.totalLabel}>Total</Text>
-                      <Text style={styles.totalValue}>{formatPrice(totalAmount + deliveryFee)} FCFA</Text>
+                      <Text style={styles.totalValue}>{formatPrice(totalAmount)} FCFA</Text>
                     </View>
+                    <Text style={styles.deliveryNote}>
+                      💡 Les frais de livraison seront calculés après la saisie de votre adresse
+                    </Text>
                   </View>
 
                   <View style={styles.footer}>
@@ -1069,6 +1056,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#51A905',
     fontFamily: 'Montserrat-Bold',
+  },
+  deliveryNote: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Montserrat',
+    marginTop: 10,
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   loadingText: {
     fontSize: 14,

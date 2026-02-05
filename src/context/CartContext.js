@@ -52,6 +52,9 @@ export const CartProvider = ({ children }) => {
 
   const addToCart = async (product, quantity = 1) => {
     try {
+      console.log('➕ [CartContext] addToCart appelé pour:', product?.name);
+      console.log('➕ [CartContext] Restaurant data:', JSON.stringify(product?.restaurant, null, 2));
+      
       // Utiliser l'état actuel du panier au lieu de recharger depuis AsyncStorage
       let cart = [...cartItems];
       
@@ -60,16 +63,25 @@ export const CartProvider = ({ children }) => {
         ? `${product.id}-${product.complements.map(c => c.id).join('-')}`
         : `${product.id}`;
 
-      // Convertir le prix en nombre et appliquer la majoration de 7%
-      const basePrice = Number(product.price.toString().replace(/[^\d.-]/g, ''));
-      const productPrice = applyMarkup(basePrice);
+      // Vérifier si le prix unitaire est déjà calculé (venant de RestaurantProductModal)
+      let unitPrice;
       
-      // Calculer le prix des compléments avec majoration
-      const complementsPrice = product.complements?.reduce((sum, comp) => 
-        sum + applyMarkup(Number(comp.price || 0)), 0) || 0;
+      if (product.unitPrice) {
+        // Le prix est déjà majoré, on l'utilise directement
+        unitPrice = product.unitPrice;
+        console.log('✅ Prix pré-calculé utilisé (déjà avec majoration):', unitPrice);
+      } else {
+        // Fallback: calculer le prix avec majoration (pour compatibilité avec d'autres écrans)
+        const basePrice = Number(product.price.toString().replace(/[^\d.-]/g, ''));
+        const productPrice = applyMarkup(basePrice);
+        
+        // Calculer le prix des compléments avec majoration
+        const complementsPrice = product.complements?.reduce((sum, comp) => 
+          sum + applyMarkup(Number(comp.price || 0)), 0) || 0;
 
-      // Prix total pour une unité (déjà avec majoration)
-      const unitPrice = productPrice + complementsPrice;
+        unitPrice = productPrice + complementsPrice;
+        console.log('⚠️ Prix calculé avec majoration (fallback):', unitPrice);
+      }
       
       const existingItem = cart.find(item => 
         item.productKey === productKey

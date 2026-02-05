@@ -356,7 +356,7 @@ const LivreurSimulatorScreen = ({ navigation }) => {
               </View>
               <View style={styles.infoRow}>
                 <Ionicons name="time" size={20} color="#FF9800" />
-                <Text style={styles.infoText}>Statut: En attente de paiement</Text>
+                <Text style={styles.infoText}>Statut: À régler à la livraison</Text>
               </View>
             </View>
 

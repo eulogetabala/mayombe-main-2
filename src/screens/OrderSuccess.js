@@ -109,14 +109,14 @@ const OrderSuccess = ({ navigation, route }) => {
           <View style={styles.orderDetailRow}>
             <Ionicons name="checkmark-circle-outline" size={24} color="#51A905" />
             <Text style={styles.orderDetailText}>
-              Statut : {orderDetails.payment_method === 'cash' ? 'En attente de paiement' : 'Paiement confirmé'}
+              Statut : {orderDetails.payment_method === 'cash' ? 'À régler à la livraison' : 'Paiement confirmé'}
             </Text>
           </View>
           
           <View style={styles.orderDetailRow}>
             <Ionicons name="time-outline" size={24} color="#51A905" />
             <Text style={styles.orderDetailText}>
-              Temps de préparation : 15-30 minutes
+              Préparation & Livraison : env. 25-40 min
             </Text>
           </View>
         </View>

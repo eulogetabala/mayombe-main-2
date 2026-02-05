@@ -34,16 +34,15 @@ target 'Mayombe' do
     ]
   end
 
-# @generated begin react-native-maps - expo prebuild (DO NOT MODIFY) sync-e9cc66c360abe50bc66d89fffb3c55b034d7d369
-  pod 'react-native-maps', path: File.dirname(`node --print "require.resolve('react-native-maps/package.json')"`)
-# @generated end react-native-maps
-  
   # Activer modular headers pour les pods Firebase qui en ont besoin
   pod 'GoogleUtilities', :modular_headers => true
   pod 'FirebaseCore', :modular_headers => true
   pod 'FirebaseCoreInternal', :modular_headers => true
   pod 'FirebaseMessaging', :modular_headers => true
-  
+
+# @generated begin react-native-maps - expo prebuild (DO NOT MODIFY) sync-e9cc66c360abe50bc66d89fffb3c55b034d7d369
+  pod 'react-native-google-maps', path: File.dirname(`node --print "require.resolve('react-native-maps/package.json')"`)
+# @generated end react-native-maps
   config = use_native_modules!(config_command)
 
   use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
@@ -65,8 +64,12 @@ target 'Mayombe' do
       :ccache_enabled => podfile_properties['apple.ccacheEnabled'] == 'true',
     )
     
-    # Fix for Hermes dSYM issue - Enhanced version
     installer.pods_project.targets.each do |target|
+      # Force deployment target to 15.1 for all pods
+      target.build_configurations.each do |config|
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
+      end
+
       if target.name == 'hermes-engine'
         target.build_configurations.each do |config|
           config.build_settings['DEBUG_INFORMATION_FORMAT'] = 'dwarf-with-dsym'

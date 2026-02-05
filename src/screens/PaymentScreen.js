@@ -27,6 +27,8 @@ import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { LinearGradient } from 'expo-linear-gradient';
+import geocodingService from '../services/geocodingService';
+import { getDistanceToRestaurant } from '../services/LocationService';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const { width, height } = Dimensions.get('window');
@@ -44,6 +46,10 @@ const PaymentScreen = ({ route, navigation }) => {
   const [addressModalVisible, setAddressModalVisible] = useState(false);
   const [countryCode, setCountryCode] = useState("CG"); // Code pays par défaut (Congo)
   const [callingCode, setCallingCode] = useState("242"); // Indicatif par défaut (Congo)
+  const [deliveryDistance, setDeliveryDistance] = useState(orderDetails.distance || null);
+  const [deliveryFee, setDeliveryFee] = useState(orderDetails.deliveryFee || 1000);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+  const [currentOrderDetails, setCurrentOrderDetails] = useState(orderDetails);
 
   const paymentMethods = [
     {
@@ -75,6 +81,104 @@ const PaymentScreen = ({ route, navigation }) => {
       description: 'Payer à la réception'
     },
   ];
+
+  // Calculer la distance et les frais de livraison quand l'adresse change
+  useEffect(() => {
+    if (!address) return;
+
+    const calculateDynamicDistance = async () => {
+      setIsCalculatingDistance(true);
+      try {
+        console.log('🔄 [PaymentScreen] Calcul dynamique pour:', address);
+        
+        // 1. Géocoder l'adresse de livraison
+        const deliveryLocation = await geocodingService.geocodeAddress(address);
+        console.log('📍 [PaymentScreen] Delivery Location:', deliveryLocation);
+        
+        if (!deliveryLocation) {
+          console.log('⚠️ [PaymentScreen] Échec géocodage adresse livraison');
+          setIsCalculatingDistance(false);
+          return;
+        }
+
+        // 2. Récupérer les coordonnées du restaurant depuis le premier article
+        const firstItem = orderDetails.items[0];
+        console.log('🍴 [PaymentScreen] Premier article:', firstItem?.name);
+        console.log('🏢 [PaymentScreen] Restaurant raw data type:', typeof firstItem?.restaurant);
+        console.log('🏢 [PaymentScreen] Restaurant raw value:', JSON.stringify(firstItem?.restaurant, null, 2));
+
+        let distance = null;
+        let fee = 1000;
+
+        // On cherche les coordonnées
+        let restaurantLocation = null;
+        
+        const restaurantRaw = firstItem?.restaurant;
+        
+        // Si c'est un objet, on cherche les coordonnées dedans
+        if (restaurantRaw && typeof restaurantRaw === 'object') {
+          if (restaurantRaw.altitude || restaurantRaw.latitude) {
+            restaurantLocation = {
+              latitude: parseFloat(restaurantRaw.altitude || restaurantRaw.latitude),
+              longitude: parseFloat(restaurantRaw.longitude)
+            };
+          }
+        } 
+        // Si c'est une chaîne ou si les coordonnées manquent, on essaie de fallback
+        // Mais pour l'instant on logue simplement
+        
+        if (restaurantLocation && !isNaN(restaurantLocation.latitude) && !isNaN(restaurantLocation.longitude)) {
+          console.log('📍 [PaymentScreen] Coordonnées restaurant trouvées:', restaurantLocation);
+
+          // 3. Calculer la distance
+          distance = geocodingService.calculateDistance(
+            restaurantLocation.latitude,
+            restaurantLocation.longitude,
+            deliveryLocation.latitude,
+            deliveryLocation.longitude
+          );
+          
+          distance = parseFloat(distance.toFixed(2));
+          console.log('📏 [PaymentScreen] Distance recalculée:', distance, 'km');
+
+          // 4. Calculer les frais selon la règle
+          if (distance <= 10) {
+            fee = 1000;
+          } else if (distance <= 20) {
+            fee = 1500;
+          } else {
+            fee = 2000;
+          }
+        } else {
+          console.log('ℹ️ [PaymentScreen] Coordonnées restaurant absentes ou invalides. Frais par défaut.');
+          distance = null;
+          fee = 1000;
+        }
+
+        console.log('💰 [PaymentScreen] Frais finaux:', fee, 'Distance:', distance);
+
+        setDeliveryDistance(distance);
+        setDeliveryFee(fee);
+        
+        // Mettre à jour les détails de la commande pour l'affichage et le paiement
+        setCurrentOrderDetails(prev => ({
+          ...prev,
+          deliveryFee: fee,
+          distance: distance,
+          total: prev.subtotal + fee
+        }));
+
+      } catch (error) {
+        console.error('❌ Erreur lors du calcul de la distance:', error);
+        // Fallback en cas d'erreur
+        setDeliveryFee(1000);
+      } finally {
+        setIsCalculatingDistance(false);
+      }
+    };
+
+    calculateDynamicDistance();
+  }, [address]);
 
   // Fonction pour enregistrer le mode de paiement via l'API
   const savePaymentMethod = async (paymentMethod) => {
@@ -162,10 +266,10 @@ const PaymentScreen = ({ route, navigation }) => {
     if (selectedMethod === 'cash') {
       console.log('🚀 Paiement cash sélectionné, redirection directe...');
       proceedWithPayment({
-        ...orderDetails,
+        ...currentOrderDetails,
         paymentMethod: selectedMethod,
-        address: address || orderDetails.address || '',
-        phone: phone || orderDetails.phone || '',
+        address: address || currentOrderDetails.address || '',
+        phone: phone || currentOrderDetails.phone || '',
       });
       return;
     }
@@ -180,10 +284,10 @@ const PaymentScreen = ({ route, navigation }) => {
     }
 
     proceedWithPayment({
-      ...orderDetails,
+      ...currentOrderDetails,
       paymentMethod: selectedMethod,
-      address: address || orderDetails.address || '',
-      phone: phone || orderDetails.phone || '',
+      address: address || currentOrderDetails.address || '',
+      phone: phone || currentOrderDetails.phone || '',
     });
   };
 
@@ -386,23 +490,45 @@ const PaymentScreen = ({ route, navigation }) => {
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>{t.payment.subtotal}</Text>
             <Text style={styles.summaryValue}>
-              {orderDetails.subtotal} FCFA
+              {currentOrderDetails.subtotal.toLocaleString()} FCFA
             </Text>
           </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>{t.payment.deliveryFee}</Text>
-            <Text style={styles.summaryValue}>
-              {orderDetails.deliveryFee} FCFA
-            </Text>
-          </View>
+          
+          {isCalculatingDistance ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>
+                <ActivityIndicator size="small" color="#FF6B00" /> Calcul de la distance...
+              </Text>
+            </View>
+          ) : (
+            <>
+              {deliveryDistance !== null && (
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>
+                    <Ionicons name="location" size={14} color="#666" /> Distance
+                  </Text>
+                  <Text style={styles.summaryValue}>
+                    {deliveryDistance} km
+                  </Text>
+                </View>
+              )}
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.payment.deliveryFee}</Text>
+                <Text style={styles.summaryValue}>
+                  {deliveryFee.toLocaleString()} FCFA
+                </Text>
+              </View>
+            </>
+          )}
+
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>{t.payment.total}</Text>
-            <Text style={styles.totalValue}>{orderDetails.total} FCFA</Text>
+            <Text style={styles.totalValue}>
+              {currentOrderDetails.total.toLocaleString()} FCFA
+            </Text>
           </View>
         </View>
-      </ScrollView>
 
-      <View style={styles.footer}>
         <TouchableOpacity
           style={[
             styles.payButton,
@@ -415,11 +541,11 @@ const PaymentScreen = ({ route, navigation }) => {
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <Text style={styles.payButtonText}>
-              {t.payment.proceedToPayment.replace('{amount}', orderDetails.total)}
+              {t.payment.proceedToPayment.replace('{amount}', currentOrderDetails.total.toLocaleString())}
             </Text>
           )}
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       <AddressModal
         visible={addressModalVisible}
@@ -603,23 +729,13 @@ const styles = StyleSheet.create({
     color: '#51A905',
     fontFamily: 'Montserrat-Bold',
   },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    padding: 16,
-    paddingBottom: Platform.OS === 'android' ? 20 : 20,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
   payButton: {
     backgroundColor: '#51A905',
     padding: scaleFont(15),
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 90,
+    marginTop: 20,
+    marginBottom: 20,
   },
   payButtonDisabled: {
     backgroundColor: '#ccc',
@@ -632,6 +748,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     padding: 20,
+    paddingBottom: 30, // Espace normal en bas
   },
   formGroup: {
     marginBottom: 15,

@@ -2316,7 +2316,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
-  - react-native-maps (from `/Users/smartvision2/Desktop/2025_Projet/mayombe-main-2-main/node_modules/react-native-maps`)
+  - react-native-maps (from `../node_modules/react-native-maps`)
   - "react-native-netinfo (from `../node_modules/@react-native-community/netinfo`)"
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - react-native-webview (from `../node_modules/react-native-webview`)
@@ -2507,7 +2507,7 @@ EXTERNAL SOURCES:
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
   react-native-maps:
-    :path: "/Users/smartvision2/Desktop/2025_Projet/mayombe-main-2-main/node_modules/react-native-maps"
+    :path: "../node_modules/react-native-maps"
   react-native-netinfo:
     :path: "../node_modules/@react-native-community/netinfo"
   react-native-safe-area-context:
@@ -2725,6 +2725,6 @@ SPEC CHECKSUMS:
   StripeUICore: f2d514e900c37436dc5427fdf2c29d68ab1c2935
   Yoga: 40f19fff64dce86773bf8b602c7070796c007970
 
-PODFILE CHECKSUM: 5db4f7333b7fe913bd5bebc9a3c3558ad15bbd79
+PODFILE CHECKSUM: 38995c2514c9f571bf758cf8f9832339968aaf37
 
 COCOAPODS: 1.16.2

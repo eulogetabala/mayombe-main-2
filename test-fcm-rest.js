@@ -4,7 +4,7 @@ const fs = require('fs');
 
 async function sendTest() {
   const serviceAccountPath = '/Users/smartvision2/Desktop/2025_Projet/mayombe-main-2-main/mayombe-ba11b-firebase-adminsdk-fbsvc-7928168601.json';
-  const token = 'dFKgYm2JPkxdlsrZr-49AS:APA91bEhsBwpHYujW8hmvOWWlNCPOf61eVnREfalf9Hmuyzhp3HTyBcDCfwoIXQQqQY4RfND1PouehRL_t6Q19TU89WLIs4hZQcLtI4nyqJ_thX4OjjcDnQ';
+  const token = 'cPrzMvdWTEVjkwWL23yT5J:APA91bHGFYSgbpJvsJcsyAWluJ1Unn_4HyBDIdcDO3fJHclDk5Seir9HM5eLBiZpXhqCFsMHXaa6XQ3z_EfMVZIsvW_cs5UVOjaLGYFWvaqqKTFxi-LPziE';
   
   console.log('🔐 Génération du jeton OAuth2...');
   const auth = new GoogleAuth({
@@ -21,7 +21,7 @@ async function sendTest() {
     message: {
       token: token,
       notification: {
-        title: '🧪 Test REST v1',
+        title: '🧪 Test push notification',
         body: 'Test de diagnostic FCM raw'
       },
       apns: {

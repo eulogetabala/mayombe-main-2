@@ -38,11 +38,30 @@ const RestaurantProductModal = ({
   }, [visible, product]);
 
   const handleAddToCart = async () => {
+    // Calculer le prix de base avec majoration
+    const basePrice = typeof product.price === 'string' 
+      ? parseFloat(product.price.replace(/[^\d.-]/g, ''))
+      : product.price;
+    const priceWithMarkup = applyMarkup(basePrice);
+    
+    // Calculer le prix des compléments avec majoration
+    const complementsWithMarkup = selectedComplements.map(comp => ({
+      ...comp,
+      price: applyMarkup(parseFloat(comp.price) || 0)
+    }));
+    
+    const complementsPrice = complementsWithMarkup.reduce((sum, comp) => 
+      sum + comp.price, 0);
+    
+    // Prix unitaire total (déjà avec majoration)
+    const unitPrice = priceWithMarkup + complementsPrice;
+    
     const productWithComplements = {
       ...product,
       quantity,
-      selectedComplements: selectedComplements,
-      totalPrice: calculateTotalPrice(),
+      complements: complementsWithMarkup, // Compléments avec prix déjà majorés
+      unitPrice, // Prix unitaire pré-calculé avec majoration
+      totalPrice: unitPrice * quantity,
     };
     
     console.log('Produit à ajouter:', productWithComplements);
