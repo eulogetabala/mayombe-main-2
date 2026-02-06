@@ -50,26 +50,51 @@ const Restaurants = () => {
   const handleToggleStatus = async (restaurant) => {
     try {
       const newStatus = restaurant.statut === 'actif' || restaurant.statut === 'ouvert' ? 'fermé' : 'actif'
+      const isOpen = newStatus === 'actif' || newStatus === 'ouvert'
       
-      console.log(`Changement de statut du restaurant ${restaurant.id} vers "${newStatus}"`)
+      console.log(`Changement de statut du restaurant ${restaurant.id} vers "${newStatus}" (isOpen: ${isOpen})`)
       
-      // Importer firebaseService
-      const { default: firebaseService } = await import('../services/firebaseService')
+      // Importer Firebase
+      const { getDatabase, ref, set } = await import('firebase/database')
+      const { initializeApp, getApps } = await import('firebase/app')
       
-      // Mettre à jour le statut dans Firebase pour la synchronisation en temps réel
-      await firebaseService.updateRestaurant(restaurant.id.toString(), {
+      // Configuration Firebase
+      const firebaseConfig = {
+        apiKey: "AIzaSyB6Foh29YS-VQLMhw-gO83L_OSVullVvI8",
+        authDomain: "mayombe-ba11b.firebaseapp.com",
+        databaseURL: "https://mayombe-ba11b-default-rtdb.firebaseio.com",
+        projectId: "mayombe-ba11b",
+        storageBucket: "mayombe-ba11b.firebasestorage.app",
+        messagingSenderId: "784517096614",
+        appId: "1:784517096614:android:41b02898b40426e23fc067"
+      }
+      
+      // Initialiser Firebase si nécessaire
+      let app
+      if (getApps().length === 0) {
+        app = initializeApp(firebaseConfig)
+      } else {
+        app = getApps()[0]
+      }
+      
+      const database = getDatabase(app)
+      
+      // Écrire dans le bon chemin Firebase que l'app mobile lit: restaurant_status/{id}
+      const statusRef = ref(database, `restaurant_status/${restaurant.id}`)
+      await set(statusRef, {
+        isOpen: isOpen,
         statut: newStatus,
-        name: restaurant.name || restaurant.libelle,
-        adresse: restaurant.adresse || restaurant.address,
-        phone: restaurant.phone || restaurant.telephone,
+        updatedAt: new Date().toISOString(),
       })
+      
+      console.log(`✅ Statut mis à jour dans Firebase: restaurant_status/${restaurant.id}`)
       
       // Mettre à jour localement pour un feedback immédiat
       setRestaurants(restaurants.map(r => 
         r.id === restaurant.id ? { ...r, statut: newStatus } : r
       ))
       
-      alert(`Restaurant ${newStatus === 'actif' ? 'ouvert' : 'fermé'} avec succès!\n\nLe changement est visible dans l'application mobile.`)
+      alert(`Restaurant ${newStatus === 'actif' ? 'ouvert' : 'fermé'} avec succès!\n\n✅ Rafraîchissez l'app mobile pour voir le changement.`)
     } catch (error) {
       console.error('Erreur lors du changement de statut:', error)
       alert(`Erreur: ${error.message || 'Impossible de changer le statut du restaurant'}`)
