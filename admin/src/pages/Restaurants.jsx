@@ -81,7 +81,7 @@ const Restaurants = () => {
       
       // Écrire dans le bon chemin Firebase que l'app mobile lit: restaurant_status/{id}
       const statusRef = ref(database, `restaurant_status/${restaurant.id}`)
-      await set(statusRef, {
+      await update(statusRef, {
         isOpen: isOpen,
         statut: newStatus,
         updatedAt: new Date().toISOString(),
@@ -130,11 +130,21 @@ const Restaurants = () => {
     try {
       if (editingRestaurant) {
         // Uploader les images si nécessaire
+        let coverPath = null
+        let logoPath = null
+
         if (formData.cover) {
-          await restaurantService.uploadCover(editingRestaurant.id, formData.cover)
+          const result = await restaurantService.uploadCover(editingRestaurant.id, formData.cover)
+          coverPath = result.cover || result.data?.cover
         }
         if (formData.logo) {
-          await restaurantService.uploadLogo(editingRestaurant.id, formData.logo)
+          const result = await restaurantService.uploadLogo(editingRestaurant.id, formData.logo)
+          logoPath = result.logo || result.data?.logo
+        }
+
+        // Synchroniser avec Firebase si des images ont été téléchargées
+        if (coverPath || logoPath) {
+          await firebaseService.syncRestaurantImages(editingRestaurant.id, coverPath, logoPath)
         }
 
         // Mettre à jour les informations du restaurant

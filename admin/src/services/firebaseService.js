@@ -75,14 +75,35 @@ class FirebaseService {
    */
   async updateRestaurantStatus(restaurantId, status) {
     try {
-      const restaurantRef = ref(database, `restaurants/${restaurantId}`)
+      const restaurantRef = ref(database, `restaurant_status/${restaurantId}`)
       await update(restaurantRef, {
+        isOpen: status === 'ouvert' || status === 'actif',
         statut: status,
         updatedAt: new Date().toISOString()
       })
       return true
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Synchroniser les images d'un restaurant avec Firebase pour le temps réel
+   */
+  async syncRestaurantImages(restaurantId, cover, logo) {
+    try {
+      const restaurantRef = ref(database, `restaurant_status/${restaurantId}`)
+      const updates = {}
+      if (cover) updates.cover = cover
+      if (logo) updates.logo = logo
+      
+      if (Object.keys(updates).length > 0) {
+        await update(restaurantRef, updates)
+      }
+      return true
+    } catch (error) {
+      console.error('Erreur lors de la synchronisation des images:', error)
       throw error
     }
   }

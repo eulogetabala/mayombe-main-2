@@ -133,15 +133,25 @@ const RestaurantDetails = ({ route, navigation }) => {
   useEffect(() => {
     if (!restaurant?.id) return;
     
-    console.log(`📡 Mise en place de l'écoute du statut pour le restaurant ${restaurant.id}`);
+    console.log(`📡 Mise en place de l'écoute du statut et images pour le restaurant ${restaurant.id}`);
     const unsubscribe = restaurantStatusService.subscribeToRestaurantStatus(
       restaurant.id.toString(),
       (status) => {
-        console.log(`🔔 Nouveau statut reçu pour ${restaurant.name}:`, status);
-        setRestaurant(prev => ({
-          ...prev,
-          isOpen: status.isOpen
-        }));
+        console.log(`🔔 Mise à jour Firebase reçue pour ${restaurant.name}:`, status);
+        
+        setRestaurant(prev => {
+          const newState = { ...prev, isOpen: status.isOpen };
+          
+          // Si Firebase contient de nouvelles images, on les utilise
+          if (status.cover) {
+            newState.image = { uri: `https://www.mayombe-app.com/uploads_admin/${status.cover}` };
+          }
+          if (status.logo) {
+            newState.logo = { uri: `https://www.mayombe-app.com/uploads_admin/${status.logo}` };
+          }
+          
+          return newState;
+        });
       }
     );
     
@@ -373,6 +383,14 @@ const RestaurantDetails = ({ route, navigation }) => {
     <View style={styles.header}>
       <Image source={restaurant.image} style={styles.coverImage} />
       <View style={styles.headerOverlay} />
+      
+      {/* Logo du restaurant */}
+      {restaurant.logo && (
+        <View style={styles.logoContainer}>
+          <Image source={restaurant.logo} style={styles.logoImage} />
+        </View>
+      )}
+
       <UniformHeader
         onBack={() => navigation.goBack()}
         title={restaurant.name}
@@ -625,6 +643,28 @@ const styles = StyleSheet.create({
   header: {
     height: 220,
     position: 'relative',
+  },
+  logoContainer: {
+    position: 'absolute',
+    top: 60,
+    alignSelf: 'center',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#fff',
+    padding: 2,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 10,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 40,
+    resizeMode: 'cover',
   },
   headerOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -205,10 +205,21 @@ const AllRestaurants = ({ route, navigation }) => {
         return prevRestaurants.map(restaurant => {
           const restaurantIdStr = restaurant.id.toString();
           if (allStatuses[restaurantIdStr]) {
-            return {
+            const status = allStatuses[restaurantIdStr];
+            const updated = {
               ...restaurant,
-              isOpen: allStatuses[restaurantIdStr].isOpen
+              isOpen: status.isOpen
             };
+            
+            // Sync images en temps réel
+            if (status.cover) {
+              updated.image = { uri: `https://www.mayombe-app.com/uploads_admin/${status.cover}` };
+            }
+            if (status.logo) {
+              updated.logo = { uri: `https://www.mayombe-app.com/uploads_admin/${status.logo}` };
+            }
+            
+            return updated;
           }
           return restaurant;
         });
