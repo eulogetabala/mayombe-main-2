@@ -11,6 +11,7 @@ import {
   Loader2
 } from 'lucide-react'
 import restaurantService from '../services/restaurantService'
+import firebaseService from '../services/firebaseService'
 
 const Restaurants = () => {
   const [restaurants, setRestaurants] = useState([])
@@ -54,47 +55,20 @@ const Restaurants = () => {
       
       console.log(`Changement de statut du restaurant ${restaurant.id} vers "${newStatus}" (isOpen: ${isOpen})`)
       
-      // Importer Firebase
-      const { getDatabase, ref, set } = await import('firebase/database')
-      const { initializeApp, getApps } = await import('firebase/app')
+      // Mettre à jour dans l'API REST
+      await restaurantService.updateStatus(restaurant.id, newStatus)
       
-      // Configuration Firebase
-      const firebaseConfig = {
-        apiKey: "AIzaSyB6Foh29YS-VQLMhw-gO83L_OSVullVvI8",
-        authDomain: "mayombe-ba11b.firebaseapp.com",
-        databaseURL: "https://mayombe-ba11b-default-rtdb.firebaseio.com",
-        projectId: "mayombe-ba11b",
-        storageBucket: "mayombe-ba11b.firebasestorage.app",
-        messagingSenderId: "784517096614",
-        appId: "1:784517096614:android:41b02898b40426e23fc067"
-      }
+      // Mettre à jour dans Firebase via le service
+      await firebaseService.updateRestaurantStatus(restaurant.id, newStatus)
       
-      // Initialiser Firebase si nécessaire
-      let app
-      if (getApps().length === 0) {
-        app = initializeApp(firebaseConfig)
-      } else {
-        app = getApps()[0]
-      }
-      
-      const database = getDatabase(app)
-      
-      // Écrire dans le bon chemin Firebase que l'app mobile lit: restaurant_status/{id}
-      const statusRef = ref(database, `restaurant_status/${restaurant.id}`)
-      await update(statusRef, {
-        isOpen: isOpen,
-        statut: newStatus,
-        updatedAt: new Date().toISOString(),
-      })
-      
-      console.log(`✅ Statut mis à jour dans Firebase: restaurant_status/${restaurant.id}`)
+      console.log(`✅ Statut mis à jour dans Firebase pour ${restaurant.id}`)
       
       // Mettre à jour localement pour un feedback immédiat
       setRestaurants(restaurants.map(r => 
         r.id === restaurant.id ? { ...r, statut: newStatus } : r
       ))
       
-      alert(`Restaurant ${newStatus === 'actif' ? 'ouvert' : 'fermé'} avec succès!\n\n✅ Rafraîchissez l'app mobile pour voir le changement.`)
+      alert(`Restaurant ${newStatus === 'actif' ? 'ouvert' : 'fermé'} avec succès!`)
     } catch (error) {
       console.error('Erreur lors du changement de statut:', error)
       alert(`Erreur: ${error.message || 'Impossible de changer le statut du restaurant'}`)
@@ -129,34 +103,85 @@ const Restaurants = () => {
 
     try {
       if (editingRestaurant) {
-        // Uploader les images si nécessaire
-        let coverPath = null
-        let logoPath = null
+        console.log('📤 Tentative de mise à jour...')
+        
+        let result = null
+        let apiError = null
+        let firebaseCoverUrl = null
+        let firebaseLogoUrl = null
 
-        if (formData.cover) {
-          const result = await restaurantService.uploadCover(editingRestaurant.id, formData.cover)
-          coverPath = result.cover || result.data?.cover
+        // 1. Upload vers Firebase Storage en parallèle (Si de nouveaux fichiers sont sélectionnés)
+        try {
+          const uploadPromises = []
+          if (formData.cover instanceof File) {
+            console.log('☁️ Upload cover vers Firebase Storage...')
+            uploadPromises.push(
+              firebaseService.uploadImage(formData.cover, `restaurants/${editingRestaurant.id}/cover_${Date.now()}`)
+                .then(url => { firebaseCoverUrl = url })
+            )
+          }
+          if (formData.logo instanceof File) {
+            console.log('☁️ Upload logo vers Firebase Storage...')
+            uploadPromises.push(
+              firebaseService.uploadImage(formData.logo, `restaurants/${editingRestaurant.id}/logo_${Date.now()}`)
+                .then(url => { firebaseLogoUrl = url })
+            )
+          }
+          await Promise.all(uploadPromises)
+        } catch (storageErr) {
+          console.error('❌ Erreur Firebase Storage:', storageErr)
+          // On continue, peut-être que l'API fonctionnera ou on utilisera les anciennes images
         }
-        if (formData.logo) {
-          const result = await restaurantService.uploadLogo(editingRestaurant.id, formData.logo)
-          logoPath = result.logo || result.data?.logo
+
+        // 2. Tentative de mise à jour via l'API (Multipart si possible, sinon JSON)
+        try {
+          const updateData = new FormData()
+          updateData.append('name', formData.name)
+          updateData.append('libelle', formData.name)
+          updateData.append('adresse', formData.adresse)
+          updateData.append('phone', formData.phone)
+          updateData.append('statut', formData.statut)
+          
+          if (formData.cover) updateData.append('cover', formData.cover)
+          if (formData.logo) updateData.append('logo', formData.logo)
+
+          console.log('📡 Envoi Multipart à l\'API...')
+          result = await restaurantService.update(editingRestaurant.id, updateData)
+          console.log('✅ API Multipart réussie')
+        } catch (err) {
+          console.warn('⚠️ Échec Multipart API. Tentative JSON uniquement...', err)
+          apiError = err
+          try {
+            result = await restaurantService.update(editingRestaurant.id, {
+              name: formData.name,
+              libelle: formData.name,
+              adresse: formData.adresse,
+              phone: formData.phone,
+              statut: formData.statut
+            })
+            console.log('✅ API JSON réussie')
+          } catch (jsonErr) {
+            console.error('❌ Échec total API:', jsonErr)
+          }
         }
 
-        // Synchroniser avec Firebase si des images ont été téléchargées
-        if (coverPath || logoPath) {
-          await firebaseService.syncRestaurantImages(editingRestaurant.id, coverPath, logoPath)
+        // 3. Synchronisation Firebase (Database temps réel)
+        try {
+          console.log('📡 Synchronisation Database Firebase...')
+          
+          // La source de vérité pour les images est maintenant : 
+          // URL Firebase > Réponse API > Image existante
+          const coverToSync = firebaseCoverUrl || result?.cover || result?.data?.cover || editingRestaurant.cover_original
+          const logoToSync = firebaseLogoUrl || result?.logo || result?.data?.logo || editingRestaurant.logo_original
+
+          await firebaseService.syncRestaurantImages(editingRestaurant.id, coverToSync, logoToSync)
+          await firebaseService.updateRestaurantStatus(editingRestaurant.id, formData.statut)
+          
+          console.log('✅ Synchronisation Firebase terminée')
+        } catch (firebaseError) {
+          console.error('❌ Erreur synchronisation Firebase:', firebaseError)
         }
 
-        // Mettre à jour les informations du restaurant
-        await restaurantService.update(editingRestaurant.id, {
-          name: formData.name,
-          libelle: formData.name,
-          adresse: formData.adresse,
-          phone: formData.phone,
-          statut: formData.statut,
-        })
-
-        // Recharger la liste
         const updatedRestaurants = await restaurantService.getAll()
         setRestaurants(updatedRestaurants)
       }
@@ -175,14 +200,20 @@ const Restaurants = () => {
       })
     } catch (error) {
       console.error('Erreur lors de la mise à jour:', error)
-      alert('Erreur lors de la mise à jour du restaurant')
+      alert(`Erreur: ${error.message}`)
     } finally {
       setUploading(false)
     }
   }
 
   const handleEdit = (restaurant) => {
-    setEditingRestaurant(restaurant)
+    // Stocker les chemins originaux pour le fallback
+    setEditingRestaurant({
+      ...restaurant,
+      cover_original: restaurant.cover || restaurant.cover_url,
+      logo_original: restaurant.logo || restaurant.logo_url
+    })
+    
     setFormData({
       name: restaurant.name || restaurant.libelle || '',
       adresse: restaurant.adresse || restaurant.address || '',
@@ -190,7 +221,6 @@ const Restaurants = () => {
       statut: restaurant.statut || 'actif',
       cover: null,
       logo: null,
-      // Afficher les images actuelles en preview
       coverPreview: restaurant.cover || restaurant.cover_url || null,
       logoPreview: restaurant.logo || restaurant.logo_url || null,
     })

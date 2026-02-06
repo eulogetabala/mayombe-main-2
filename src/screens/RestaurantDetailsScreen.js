@@ -143,11 +143,19 @@ const RestaurantDetails = ({ route, navigation }) => {
           const newState = { ...prev, isOpen: status.isOpen };
           
           // Si Firebase contient de nouvelles images, on les utilise
+          const resolveImageUrl = (p) => {
+            if (!p) return null;
+            if (typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://'))) {
+              return { uri: p };
+            }
+            return { uri: `https://www.mayombe-app.com/uploads_admin/${p}` };
+          };
+
           if (status.cover) {
-            newState.image = { uri: `https://www.mayombe-app.com/uploads_admin/${status.cover}` };
+            newState.image = resolveImageUrl(status.cover);
           }
           if (status.logo) {
-            newState.logo = { uri: `https://www.mayombe-app.com/uploads_admin/${status.logo}` };
+            newState.logo = resolveImageUrl(status.logo);
           }
           
           return newState;
@@ -286,9 +294,15 @@ const RestaurantDetails = ({ route, navigation }) => {
             if (Array.isArray(data) && data.length > 0) {
               const mappedMenus = data.map(menu => {
                 console.log('Menu reçu:', menu);
-                const imageUrl = menu.cover && typeof menu.cover === 'string'
-                  ? `https://www.mayombe-app.com/uploads_admin/${menu.cover}`
-                  : null;
+                const resolveImageUrl = (p) => {
+                  if (!p) return null;
+                  if (typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://'))) {
+                    return p;
+                  }
+                  return `https://www.mayombe-app.com/uploads_admin/${p}`;
+                };
+                
+                const imageUrl = resolveImageUrl(menu.cover);
                 console.log('URL image menu:', imageUrl);
                 
                 const promoInfo = promosData[menu.id];

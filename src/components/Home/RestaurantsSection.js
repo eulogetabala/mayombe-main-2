@@ -207,9 +207,13 @@ const RestaurantsSection = () => {
             website: restaurant.website,
             ville_id: restaurant.ville_id,
             ville: cities[restaurant.ville_id] || "Ville inconnue",
-            image: restaurant.cover
-              ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
-              : require("../../../assets/images/2.jpg"),
+            image: (() => {
+              if (!restaurant.cover) return require("../../../assets/images/2.jpg");
+              if (typeof restaurant.cover === 'string' && (restaurant.cover.startsWith('http://') || restaurant.cover.startsWith('https://'))) {
+                return { uri: restaurant.cover };
+              }
+              return { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` };
+            })(),
             deliveryTime: deliveryTime,
             minOrder: "2000",
             isOpen: true,
@@ -282,12 +286,20 @@ const RestaurantsSection = () => {
               isOpen: status.isOpen
             };
             
+            const resolveImageUrl = (p) => {
+              if (!p) return null;
+              if (typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://'))) {
+                return { uri: p };
+              }
+              return { uri: `https://www.mayombe-app.com/uploads_admin/${p}` };
+            };
+
             // Sync images en temps réel
             if (status.cover) {
-              updated.image = { uri: `https://www.mayombe-app.com/uploads_admin/${status.cover}` };
+              updated.image = resolveImageUrl(status.cover);
             }
             if (status.logo) {
-              updated.logo = { uri: `https://www.mayombe-app.com/uploads_admin/${status.logo}` };
+              updated.logo = resolveImageUrl(status.logo);
             }
             
             return updated;

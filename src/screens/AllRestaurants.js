@@ -137,13 +137,20 @@ const AllRestaurants = ({ route, navigation }) => {
             deliveryTime = calculateDeliveryTime(parseFloat(distance));
           }
           
+          const resolveImageUrl = (path) => {
+            if (!path) return require("../../assets/images/2.jpg");
+            if (typeof path === 'string' && (path.startsWith('http://') || path.startsWith('https://'))) {
+              return { uri: path };
+            }
+            return { uri: `https://www.mayombe-app.com/uploads_admin/${path}` };
+          };
+
           return {
             id: restaurant.id,
             name: restaurant.libelle || restaurant.name,
             address: restaurant.adresse || "Adresse non disponible",
-            image: restaurant.cover && typeof restaurant.cover === 'string'
-              ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
-              : require("../../assets/images/2.jpg"),
+            image: resolveImageUrl(restaurant.cover),
+            logo: resolveImageUrl(restaurant.logo),
             cuisine: restaurant.cuisine || "Cuisine africaine",
             deliveryTime: deliveryTime,
             distance: distance,
@@ -211,12 +218,20 @@ const AllRestaurants = ({ route, navigation }) => {
               isOpen: status.isOpen
             };
             
+            const resolveImageUrl = (path) => {
+              if (!path) return null;
+              if (typeof path === 'string' && (path.startsWith('http://') || path.startsWith('https://'))) {
+                return { uri: path };
+              }
+              return { uri: `https://www.mayombe-app.com/uploads_admin/${path}` };
+            };
+
             // Sync images en temps réel
             if (status.cover) {
-              updated.image = { uri: `https://www.mayombe-app.com/uploads_admin/${status.cover}` };
+              updated.image = resolveImageUrl(status.cover);
             }
             if (status.logo) {
-              updated.logo = { uri: `https://www.mayombe-app.com/uploads_admin/${status.logo}` };
+              updated.logo = resolveImageUrl(status.logo);
             }
             
             return updated;

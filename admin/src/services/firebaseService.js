@@ -1,5 +1,6 @@
 import { ref, get, set, push, update, remove, onValue, off } from 'firebase/database'
-import { database } from '../config/firebase'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { database, storage } from '../config/firebase'
 
 /**
  * Service Firebase pour récupérer et gérer les données
@@ -84,6 +85,21 @@ class FirebaseService {
       return true
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Télécharger une image vers Firebase Storage et récupérer son URL
+   */
+  async uploadImage(file, path) {
+    try {
+      const storageReference = storageRef(storage, path)
+      const snapshot = await uploadBytes(storageReference, file)
+      const downloadURL = await getDownloadURL(snapshot.ref)
+      return downloadURL
+    } catch (error) {
+      console.error(`Erreur lors du téléchargement de l'image (${path}):`, error)
       throw error
     }
   }

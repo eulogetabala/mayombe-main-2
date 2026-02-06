@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRatings } from '../context/RatingsContext';
 import Toast from 'react-native-toast-message';
@@ -62,20 +62,20 @@ const InteractiveRating = ({ itemId, type, rating = 0, totalRatings = 0, size = 
   const displayTotalRatings = totalRatings;
 
   return (
-    <View style={styles.container} pointerEvents="box-none">
-      <View style={styles.starsContainer} pointerEvents="box-none">
+    <View style={styles.container}>
+      <View style={styles.starsContainer}>
         {[0, 1, 2, 3, 4].map((starIndex) => {
           const isFilled = starIndex < displayRating;
           const isSelected = starIndex < selectedRating;
           
           return (
-            <TouchableOpacity
+            <Pressable
               key={starIndex}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleStarPress(starIndex);
-              }}
-              style={styles.starButton}
+              onPress={() => handleStarPress(starIndex)}
+              style={({ pressed }) => [
+                styles.starButton,
+                { opacity: pressed ? 0.6 : 1 }
+              ]}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               disabled={isSubmitting}
             >
@@ -84,7 +84,7 @@ const InteractiveRating = ({ itemId, type, rating = 0, totalRatings = 0, size = 
                 size={size}
                 color={isFilled || isSelected ? '#FFD700' : '#DDD'}
               />
-            </TouchableOpacity>
+            </Pressable>
           );
         })}
       </View>

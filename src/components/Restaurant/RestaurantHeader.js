@@ -2,12 +2,21 @@ import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-export const RestaurantHeader = ({ restaurant, onBack }) => (
-  <View style={styles.header}>
-    <Image 
-      source={restaurant.cover ? { uri: restaurant.cover } : require('../../../assets/images/2.jpg')} 
-      style={styles.coverImage} 
-    />
+export const RestaurantHeader = ({ restaurant, onBack }) => {
+  const resolveImageUrl = (p) => {
+    if (!p) return require('../../../assets/images/2.jpg');
+    if (typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://'))) {
+      return { uri: p };
+    }
+    return { uri: `https://www.mayombe-app.com/uploads_admin/${p}` };
+  };
+
+  return (
+    <View style={styles.header}>
+      <Image 
+        source={resolveImageUrl(restaurant.cover || restaurant.image)} 
+        style={styles.coverImage} 
+      />
     <View style={styles.headerOverlay} />
     <TouchableOpacity
       style={styles.backButton}
@@ -15,11 +24,12 @@ export const RestaurantHeader = ({ restaurant, onBack }) => (
     >
       <Ionicons name="arrow-back" size={24} color="#FFF" />
     </TouchableOpacity>
-    <View style={styles.headerContent}>
-      <Text style={styles.headerName}>{restaurant.name}</Text>
+      <View style={styles.headerContent}>
+        <Text style={styles.headerName}>{restaurant.name}</Text>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   header: {

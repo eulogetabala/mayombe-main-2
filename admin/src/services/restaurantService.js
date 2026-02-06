@@ -1,4 +1,5 @@
-import { API_BASE_URL, UPLOADS_BASE_URL } from '../config/constants'
+import { UPLOADS_BASE_URL } from '../config/constants'
+import api from './api'
 
 /**
  * Service pour gérer les restaurants via l'API externe
@@ -9,19 +10,8 @@ class RestaurantService {
    */
   async getAll() {
     try {
-      const response = await fetch(`${API_BASE_URL}/resto`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
+      const response = await api.get('/resto')
+      const data = response.data
       
       // Normaliser les données
       if (Array.isArray(data)) {
@@ -85,20 +75,8 @@ class RestaurantService {
    */
   async getById(id) {
     try {
-      const response = await fetch(`${API_BASE_URL}/resto/${id}`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`)
-      }
-
-      const data = await response.json()
-      return data
+      const response = await api.get(`/resto/${id}`)
+      return response.data
     } catch (error) {
       console.error('Erreur lors de la récupération du restaurant:', error)
       throw error
@@ -110,34 +88,19 @@ class RestaurantService {
    */
   async updateStatus(id, status) {
     try {
-      // Récupérer d'abord le restaurant complet
+      // Récupérer d'abord le restaurant complet car le backend attend l'objet complet pour un PUT
       const restaurant = await this.getById(id)
       
-      // Mettre à jour avec PUT en incluant toutes les données
-      const response = await fetch(`${API_BASE_URL}/resto/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: restaurant.name,
-          adresse: restaurant.adresse,
-          phone: restaurant.phone,
-          altitude: restaurant.altitude,
-          longitude: restaurant.longitude,
-          ville_id: restaurant.ville_id,
-          statut: status,
-        }),
+      const response = await api.put(`/resto/${id}`, {
+        name: restaurant.name || restaurant.libelle,
+        adresse: restaurant.adresse || restaurant.address,
+        phone: restaurant.phone || restaurant.telephone,
+        altitude: restaurant.altitude,
+        longitude: restaurant.longitude,
+        ville_id: restaurant.ville_id,
+        statut: status,
       })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`Erreur HTTP ${response.status}: ${errorText}`)
-      }
-
-      const data = await response.json()
-      return data
+      return response.data
     } catch (error) {
       console.error('Erreur lors de la mise à jour du statut:', error)
       throw error
@@ -149,21 +112,24 @@ class RestaurantService {
    */
   async update(id, data) {
     try {
-      const response = await fetch(`${API_BASE_URL}/resto/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`)
+      // Si c'est du FormData (multipart), on tente l'envoi mais on s'attend à ce que ça puisse échouer
+      if (data instanceof FormData) {
+        // Ajouter le spoofing de méthode dans le corps du FormData
+        if (!data.has('_method')) {
+          data.append('_method', 'PUT')
+        }
+        
+        const response = await api.post(`/resto/${id}`, data, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          }
+        })
+        return response.data
+      } else {
+        // Envoi JSON standard
+        const response = await api.put(`/resto/${id}`, data)
+        return response.data
       }
-
-      const result = await response.json()
-      return result
     } catch (error) {
       console.error('Erreur lors de la mise à jour du restaurant:', error)
       throw error
@@ -180,11 +146,28 @@ class RestaurantService {
 
       const response = await fetch(`${API_BASE_URL}/resto/${id}/cover`, {
         method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+        },
         body: formData,
       })
 
       if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`)
+        if (response.status === 404) {
+          throw new Error("L'endpoint d'upload dédié (/cover) n'existe pas sur le serveur (404).")
+        }
+        
+        let errorMessage = `Erreur HTTP ${response.status}`
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+        } catch (e) {
+          try {
+            const errorText = await response.text()
+            errorMessage = errorText || errorMessage
+          } catch (e2) {}
+        }
+        throw new Error(`Upload couverture échoué: ${errorMessage}`)
       }
 
       const result = await response.json()
@@ -209,7 +192,17 @@ class RestaurantService {
       })
 
       if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`)
+        let errorMessage = `Erreur HTTP ${response.status}`
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.message || errorData.error || errorMessage
+        } catch (e) {
+          try {
+            const errorText = await response.text()
+            errorMessage = errorText || errorMessage
+          } catch (e2) {}
+        }
+        throw new Error(`Upload logo échoué: ${errorMessage}`)
       }
 
       const result = await response.json()
