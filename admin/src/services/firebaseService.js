@@ -222,6 +222,83 @@ class FirebaseService {
   }
 
   /**
+   * Définir un prix promotionnel pour un produit
+   */
+  async setProductPromoPrice(productId, promoPrice, startDate = null, endDate = null) {
+    try {
+      const promoRef = ref(database, `product_promos/${productId}`)
+      await set(promoRef, {
+        productId,
+        originalPrice: null, // Sera rempli par l'app mobile
+        promoPrice: parseFloat(promoPrice),
+        startDate: startDate || new Date().toISOString(),
+        endDate: endDate || null,
+        active: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+      return true
+    } catch (error) {
+      console.error('Erreur lors de la définition du prix promo:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Récupérer le prix promotionnel d'un produit
+   */
+  async getProductPromoPrice(productId) {
+    try {
+      const promoRef = ref(database, `product_promos/${productId}`)
+      const snapshot = await get(promoRef)
+      
+      if (snapshot.exists()) {
+        return snapshot.val()
+      }
+      return null
+    } catch (error) {
+      console.error('Erreur lors de la récupération du prix promo:', error)
+      return null
+    }
+  }
+
+  /**
+   * Récupérer tous les prix promotionnels
+   */
+  async getAllProductPromos() {
+    try {
+      const promosRef = ref(database, 'product_promos')
+      const snapshot = await get(promosRef)
+      
+      if (snapshot.exists()) {
+        const data = snapshot.val()
+        return Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }))
+      }
+      return []
+    } catch (error) {
+      console.error('Erreur lors de la récupération des prix promos:', error)
+      return []
+    }
+  }
+
+  /**
+   * Supprimer le prix promotionnel d'un produit
+   */
+  async removeProductPromoPrice(productId) {
+    try {
+      const promoRef = ref(database, `product_promos/${productId}`)
+      await remove(promoRef)
+      return true
+    } catch (error) {
+      console.error('Erreur lors de la suppression du prix promo:', error)
+      throw error
+    }
+  }
+
+  /**
    * Récupérer les commandes récentes
    */
   async getOrders() {

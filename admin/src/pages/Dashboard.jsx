@@ -4,7 +4,6 @@ import {
   Tag, 
   TrendingUp, 
   Users,
-  DollarSign,
   Clock,
   Loader2
 } from 'lucide-react'
@@ -15,7 +14,6 @@ const Dashboard = () => {
   const [stats, setStats] = useState({
     restaurants: 0,
     promos: 0,
-    revenus: 0,
     commandes: 0,
   })
   const [loading, setLoading] = useState(true)
@@ -33,16 +31,12 @@ const Dashboard = () => {
         const promos = await firebaseService.getPromos()
         const activePromos = promos.filter(p => p.active === true || p.statut === 'active')
         
-        // Récupérer les commandes depuis Firebase pour les revenus
+        // Récupérer les commandes depuis Firebase
         const orders = await firebaseService.getOrders()
-        const totalRevenue = orders.reduce((sum, order) => {
-          return sum + (parseFloat(order.total) || 0)
-        }, 0)
 
         setStats({
           restaurants: activeRestaurants.length,
           promos: activePromos.length,
-          revenus: totalRevenue,
           commandes: orders.length,
         })
       } catch (error) {
@@ -71,13 +65,6 @@ const Dashboard = () => {
       change: '+3 cette semaine',
     },
     {
-      title: 'Revenus',
-      value: `${(stats.revenus / 1000).toFixed(0)}K FCFA`,
-      icon: DollarSign,
-      color: 'bg-yellow-500',
-      change: '+12% ce mois',
-    },
-    {
       title: 'Commandes',
       value: stats.commandes,
       icon: TrendingUp,
@@ -103,7 +90,7 @@ const Dashboard = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {statCards.map((stat, index) => {
           const Icon = stat.icon
           return (

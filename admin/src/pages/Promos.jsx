@@ -1,116 +1,119 @@
 import React, { useState, useEffect } from 'react'
-import { Plus, Edit, Trash2, Tag, Calendar, Percent, Loader2 } from 'lucide-react'
+import { Search, Edit, Trash2, Tag, Loader2, DollarSign, Store } from 'lucide-react'
+import menuService from '../services/menuService'
 import firebaseService from '../services/firebaseService'
 
 const Promos = () => {
-  const [promos, setPromos] = useState([])
-  const [showModal, setShowModal] = useState(false)
-  const [editingPromo, setEditingPromo] = useState(null)
+  const [products, setProducts] = useState([])
+  const [filteredProducts, setFilteredProducts] = useState([])
+  const [productPromos, setProductPromos] = useState({})
   const [loading, setLoading] = useState(true)
-  const [formData, setFormData] = useState({
-    titre: '',
-    description: '',
-    reduction: '',
-    date_debut: '',
-    date_fin: '',
-    statut: 'active',
-    active: true,
-  })
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedRestaurant, setSelectedRestaurant] = useState('all')
+  const [showModal, setShowModal] = useState(false)
+  const [editingProduct, setEditingProduct] = useState(null)
+  const [promoPrice, setPromoPrice] = useState('')
 
   useEffect(() => {
-    // Charger les promos depuis Firebase
-    const loadPromos = async () => {
-      try {
-        setLoading(true)
-        const data = await firebaseService.getPromos()
-        setPromos(data)
-      } catch (error) {
-        console.error('Erreur lors du chargement des promos:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadPromos()
-
-    // S'abonner aux changements en temps réel
-    const unsubscribe = firebaseService.subscribeToPromos((data) => {
-      setPromos(data)
-    })
-
-    return () => {
-      if (unsubscribe) unsubscribe()
-    }
+    loadData()
   }, [])
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  useEffect(() => {
+    filterProducts()
+  }, [searchTerm, selectedRestaurant, products])
+
+  const loadData = async () => {
     try {
-      if (editingPromo) {
-        // Mettre à jour la promo dans Firebase
-        await firebaseService.updatePromo(editingPromo.id, {
-          title: formData.titre,
-          description: formData.description,
-          discount: parseFloat(formData.reduction),
-          startDate: formData.date_debut,
-          endDate: formData.date_fin,
-          active: formData.statut === 'active',
-          statut: formData.statut,
-        })
-      } else {
-        // Créer une nouvelle promo dans Firebase
-        await firebaseService.createPromo({
-          title: formData.titre,
-          description: formData.description,
-          discount: parseFloat(formData.reduction),
-          startDate: formData.date_debut,
-          endDate: formData.date_fin,
-          active: formData.statut === 'active',
-          statut: formData.statut,
-        })
-      }
-      setShowModal(false)
-      setEditingPromo(null)
-      setFormData({
-        titre: '',
-        description: '',
-        reduction: '',
-        date_debut: '',
-        date_fin: '',
-        statut: 'active',
-        active: true,
+      setLoading(true)
+      
+      // Charger tous les produits
+      const allProducts = await menuService.getAllMenus()
+      setProducts(allProducts)
+      
+      // Charger tous les prix promotionnels
+      const promos = await firebaseService.getAllProductPromos()
+      const promosMap = {}
+      promos.forEach(promo => {
+        promosMap[promo.productId] = promo
       })
+      setProductPromos(promosMap)
+      
     } catch (error) {
-      console.error('Erreur lors de la sauvegarde de la promo:', error)
-      alert('Erreur lors de la sauvegarde de la promo')
+      console.error('Erreur lors du chargement des données:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleEdit = (promo) => {
-    setEditingPromo(promo)
-    setFormData({
-      titre: promo.title || promo.titre || '',
-      description: promo.description || '',
-      reduction: (promo.discount || promo.reduction || 0).toString(),
-      date_debut: promo.startDate || promo.date_debut || '',
-      date_fin: promo.endDate || promo.date_fin || '',
-      statut: promo.active === false ? 'inactive' : (promo.statut || 'active'),
-      active: promo.active !== false,
-    })
+  const filterProducts = () => {
+    let filtered = [...products]
+    
+    // Filtre par recherche
+    if (searchTerm) {
+      filtered = filtered.filter(product =>
+        product.libelle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.restaurant_name?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+    
+    // Filtre par restaurant
+    if (selectedRestaurant !== 'all') {
+      filtered = filtered.filter(product => 
+        product.restaurant_id === parseInt(selectedRestaurant)
+      )
+    }
+    
+    setFilteredProducts(filtered)
+  }
+
+  const handleSetPromo = (product) => {
+    setEditingProduct(product)
+    const existingPromo = productPromos[product.id]
+    setPromoPrice(existingPromo ? existingPromo.promoPrice.toString() : '')
     setShowModal(true)
   }
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette promo ?')) {
-      try {
-        await firebaseService.deletePromo(id)
-        // La mise à jour se fera automatiquement via l'abonnement en temps réel
-      } catch (error) {
-        console.error('Erreur lors de la suppression de la promo:', error)
-        alert('Erreur lors de la suppression de la promo')
-      }
+  const handleSavePromo = async () => {
+    if (!editingProduct || !promoPrice) return
+    
+    try {
+      await firebaseService.setProductPromoPrice(
+        editingProduct.id,
+        parseFloat(promoPrice)
+      )
+      
+      // Recharger les données
+      await loadData()
+      setShowModal(false)
+      setEditingProduct(null)
+      setPromoPrice('')
+    } catch (error) {
+      console.error('Erreur lors de la sauvegarde du prix promo:', error)
+      alert('Erreur lors de la sauvegarde du prix promotionnel')
     }
   }
+
+  const handleRemovePromo = async (productId) => {
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce prix promotionnel ?')) {
+      return
+    }
+    
+    try {
+      await firebaseService.removeProductPromoPrice(productId)
+      await loadData()
+    } catch (error) {
+      console.error('Erreur lors de la suppression du prix promo:', error)
+      alert('Erreur lors de la suppression du prix promotionnel')
+    }
+  }
+
+  // Obtenir la liste unique des restaurants
+  const restaurants = [...new Set(products.map(p => ({
+    id: p.restaurant_id,
+    name: p.restaurant_name
+  })).filter(r => r.id && r.name))]
+    .filter((r, index, self) => self.findIndex(t => t.id === r.id) === index)
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   if (loading) {
     return (
@@ -123,194 +126,212 @@ const Promos = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gestion des Promos</h1>
-          <p className="text-gray-600 mt-1">Créez et gérez vos promotions</p>
-        </div>
-        <button
-          onClick={() => {
-            setEditingPromo(null)
-            setFormData({
-              titre: '',
-              description: '',
-              reduction: '',
-              date_debut: '',
-              date_fin: '',
-              statut: 'active',
-              active: true,
-            })
-            setShowModal(true)
-          }}
-          className="btn-primary flex items-center space-x-2"
-        >
-          <Plus size={20} />
-          <span>Nouvelle Promo</span>
-        </button>
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Gestion des Prix</h1>
+        <p className="text-gray-600 mt-1">Gérez les prix normaux et promotionnels de vos produits</p>
       </div>
 
-      {/* Promos List */}
-      {promos.length === 0 ? (
-        <div className="card text-center py-12">
-          <Tag className="mx-auto text-gray-400 mb-4" size={48} />
-          <p className="text-gray-600">Aucune promo trouvée</p>
-        </div>
-      ) : (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {promos.map((promo) => (
-          <div key={promo.id} className="card hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <Tag className="text-primary-600" size={20} />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{promo.title || promo.titre || 'Promo sans titre'}</h3>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    (promo.active !== false && promo.statut !== 'inactive') || promo.statut === 'active'
-                      ? 'bg-green-100 text-green-700' 
-                      : 'bg-gray-100 text-gray-700'
-                  }`}>
-                    {promo.active !== false && promo.statut !== 'inactive' ? 'active' : 'inactive'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <p className="text-gray-600 text-sm mb-4">{promo.description || 'Aucune description'}</p>
-
-            <div className="space-y-2 mb-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <Percent size={16} />
-                <span>Réduction: {promo.discount || promo.reduction || 0}%</span>
-              </div>
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <Calendar size={16} />
-                <span>Du {promo.startDate || promo.date_debut ? new Date(promo.startDate || promo.date_debut).toLocaleDateString('fr-FR') : 'N/A'} au {promo.endDate || promo.date_fin ? new Date(promo.endDate || promo.date_fin).toLocaleDateString('fr-FR') : 'N/A'}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2 pt-4 border-t border-gray-200">
-              <button
-                onClick={() => handleEdit(promo)}
-                className="flex-1 btn-secondary flex items-center justify-center space-x-2"
-              >
-                <Edit size={16} />
-                <span>Modifier</span>
-              </button>
-              <button
-                onClick={() => handleDelete(promo.id)}
-                className="px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
+      {/* Filters */}
+      <div className="card">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Search className="inline mr-2" size={16} />
+              Rechercher un produit
+            </label>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Nom du produit ou restaurant..."
+              className="input-field"
+            />
           </div>
-        ))}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Store className="inline mr-2" size={16} />
+              Filtrer par restaurant
+            </label>
+            <select
+              value={selectedRestaurant}
+              onChange={(e) => setSelectedRestaurant(e.target.value)}
+              className="input-field"
+            >
+              <option value="all">Tous les restaurants</option>
+              {restaurants.map(restaurant => (
+                <option key={restaurant.id} value={restaurant.id}>
+                  {restaurant.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
-      )}
+
+      {/* Products Table */}
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Produit
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Restaurant
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Prix Normal
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Prix Promo
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                    Aucun produit trouvé
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map((product) => {
+                  const promo = productPromos[product.id]
+                  return (
+                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-3">
+                          {product.image_url && (
+                            <img
+                              src={product.image_url}
+                              alt={product.libelle}
+                              className="w-12 h-12 rounded-lg object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none'
+                              }}
+                            />
+                          )}
+                          <div>
+                            <div className="font-medium text-gray-900">{product.libelle}</div>
+                            <div className="text-sm text-gray-500">{product.description?.substring(0, 50)}...</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-700">
+                        {product.restaurant_name}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-lg font-semibold text-gray-900">
+                          {parseInt(product.prix).toLocaleString()} FCFA
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {promo ? (
+                          <div className="flex items-center space-x-2">
+                            <span className="text-lg font-bold text-green-600">
+                              {parseInt(promo.promoPrice).toLocaleString()} FCFA
+                            </span>
+                            <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                              Actif
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">Aucune promo</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleSetPromo(product)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title={promo ? "Modifier la promo" : "Ajouter une promo"}
+                          >
+                            <Edit size={18} />
+                          </button>
+                          {promo && (
+                            <button
+                              onClick={() => handleRemovePromo(product.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Supprimer la promo"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {/* Modal */}
-      {showModal && (
+      {showModal && editingProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              {editingPromo ? 'Modifier la Promo' : 'Nouvelle Promo'}
+              {productPromos[editingProduct.id] ? 'Modifier' : 'Ajouter'} le Prix Promo
             </h2>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Titre
-                </label>
-                <input
-                  type="text"
-                  value={formData.titre}
-                  onChange={(e) => setFormData({ ...formData, titre: e.target.value })}
-                  className="input-field"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="input-field"
-                  rows="3"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Réduction (%)
-                </label>
-                <input
-                  type="number"
-                  value={formData.reduction}
-                  onChange={(e) => setFormData({ ...formData, reduction: e.target.value })}
-                  className="input-field"
-                  min="0"
-                  max="100"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date début
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.date_debut}
-                    onChange={(e) => setFormData({ ...formData, date_debut: e.target.value })}
-                    className="input-field"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date fin
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.date_fin}
-                    onChange={(e) => setFormData({ ...formData, date_fin: e.target.value })}
-                    className="input-field"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Statut
-                </label>
-                <select
-                  value={formData.statut}
-                  onChange={(e) => setFormData({ ...formData, statut: e.target.value })}
-                  className="input-field"
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-              <div className="flex items-center space-x-3 pt-4">
-                <button type="submit" className="flex-1 btn-primary">
-                  {editingPromo ? 'Modifier' : 'Créer'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowModal(false)
-                    setEditingPromo(null)
-                  }}
-                  className="flex-1 btn-secondary"
-                >
-                  Annuler
-                </button>
-              </div>
-            </form>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">Produit</p>
+              <p className="font-semibold text-gray-900">{editingProduct.libelle}</p>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">Prix Normal</p>
+              <p className="text-lg font-bold text-gray-900">
+                {parseInt(editingProduct.prix).toLocaleString()} FCFA
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Prix Promotionnel (FCFA)
+              </label>
+              <input
+                type="number"
+                value={promoPrice}
+                onChange={(e) => setPromoPrice(e.target.value)}
+                className="input-field"
+                placeholder="Ex: 1200"
+                min="0"
+                max={editingProduct.prix}
+                required
+              />
+              {promoPrice && parseInt(promoPrice) < parseInt(editingProduct.prix) && (
+                <p className="mt-2 text-sm text-green-600">
+                  Réduction: {(((parseInt(editingProduct.prix) - parseInt(promoPrice)) / parseInt(editingProduct.prix)) * 100).toFixed(0)}%
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleSavePromo}
+                className="flex-1 btn-primary"
+                disabled={!promoPrice || parseInt(promoPrice) >= parseInt(editingProduct.prix)}
+              >
+                Enregistrer
+              </button>
+              <button
+                onClick={() => {
+                  setShowModal(false)
+                  setEditingProduct(null)
+                  setPromoPrice('')
+                }}
+                className="flex-1 btn-secondary"
+              >
+                Annuler
+              </button>
+            </div>
           </div>
         </div>
       )}
