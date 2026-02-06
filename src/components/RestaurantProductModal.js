@@ -38,11 +38,12 @@ const RestaurantProductModal = ({
   }, [visible, product]);
 
   const handleAddToCart = async () => {
-    // Calculer le prix de base avec majoration
-    const basePrice = typeof product.price === 'string' 
-      ? parseFloat(product.price.replace(/[^\d.-]/g, ''))
-      : product.price;
-    const priceWithMarkup = applyMarkup(basePrice);
+    // Calculer le prix de base avec majoration (utiliser promoPrice si dispo)
+    const basePriceToUse = product.hasPromo && product.promoPrice ? product.promoPrice : product.price;
+    const basePriceNumeric = typeof basePriceToUse === 'string' 
+      ? parseFloat(basePriceToUse.replace(/[^\d.-]/g, ''))
+      : basePriceToUse;
+    const priceWithMarkup = applyMarkup(basePriceNumeric);
     
     // Calculer le prix des compléments avec majoration
     const complementsWithMarkup = selectedComplements.map(comp => ({
@@ -81,12 +82,13 @@ const RestaurantProductModal = ({
   };
 
   const calculateTotalPrice = () => {
-    const basePrice = typeof product.price === 'string' 
-      ? parseFloat(product.price.replace(/[^\d.-]/g, ''))
-      : product.price;
+    const basePriceToUse = product.hasPromo && product.promoPrice ? product.promoPrice : product.price;
+    const basePriceNumeric = typeof basePriceToUse === 'string' 
+      ? parseFloat(basePriceToUse.replace(/[^\d.-]/g, ''))
+      : basePriceToUse;
     
     // Appliquer la majoration de 7% au prix de base
-    const priceWithMarkup = applyMarkup(basePrice);
+    const priceWithMarkup = applyMarkup(basePriceNumeric);
     
     // Appliquer la majoration aux compléments
     const complementsPrice = selectedComplements.reduce((sum, comp) => 
@@ -125,7 +127,14 @@ const RestaurantProductModal = ({
 
             <View style={styles.productInfo}>
               <Text style={styles.productName}>{product.name}</Text>
-              <Text style={styles.productPrice}>{formatPriceWithMarkup(product.price)}</Text>
+              {product.hasPromo ? (
+                <View style={styles.promoPriceContainer}>
+                  <Text style={styles.productPricePromo}>{formatPriceWithMarkup(product.promoPrice)}</Text>
+                  <Text style={styles.productPriceOriginal}>{formatPriceWithMarkup(product.price)}</Text>
+                </View>
+              ) : (
+                <Text style={styles.productPrice}>{formatPriceWithMarkup(product.price)}</Text>
+              )}
               <Text style={styles.description}>{product.description}</Text>
             </View>
 
@@ -241,9 +250,26 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontSize: 20,
-    color: '#51A905',
+    color: '#FF9800',
     marginBottom: 12,
     fontFamily: 'Montserrat-SemiBold',
+  },
+  promoPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 12,
+  },
+  productPricePromo: {
+    fontSize: 22,
+    color: '#51A905',
+    marginRight: 10,
+    fontFamily: 'Montserrat-Bold',
+  },
+  productPriceOriginal: {
+    fontSize: 16,
+    color: '#999',
+    textDecorationLine: 'line-through',
+    fontFamily: 'Montserrat',
   },
   description: {
     fontSize: 16,

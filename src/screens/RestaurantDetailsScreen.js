@@ -20,6 +20,7 @@ import UniformHeader from '../components/UniformHeader';
 import AnimatedProductCount from '../components/AnimatedProductCount';
 import { RestaurantDetailsSkeleton } from '../components/Skeletons';
 import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
+import promoService from '../services/promoService';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -40,6 +41,7 @@ const RestaurantDetails = ({ route, navigation }) => {
   const [distance, setDistance] = useState(null);
   const [validDates, setValidDates] = useState({ debut: null, fin: null });
   const [isScreenFocused, setIsScreenFocused] = useState(true);
+  const [productPromos, setProductPromos] = useState({});
 
   // Utiliser useFocusEffect pour éviter les appels API quand l'écran n'est pas actif
   useFocusEffect(
@@ -201,6 +203,12 @@ const RestaurantDetails = ({ route, navigation }) => {
       setLoading(true);
       setError(null);
 
+      console.log('🔄 Récupération des promos et des menus...');
+      
+      // Récupérer les promos en parallèle
+      const promosData = await promoService.getAllProductPromos();
+      setProductPromos(promosData);
+
       console.log('🔄 Récupération dynamique de tous les menus disponibles...');
       
       // Essayer plusieurs approches pour récupérer tous les produits
@@ -253,11 +261,16 @@ const RestaurantDetails = ({ route, navigation }) => {
                   : null;
                 console.log('URL image menu:', imageUrl);
                 
+                const promoInfo = promosData[menu.id];
+                const hasPromo = promoInfo && promoInfo.active;
+                
                 return {
                   id: menu.id,
                   name: menu.name || menu.libelle || "Sans nom",
                   description: menu.description || "Aucune description",
                   price: menu.prix || menu.price || "0",
+                  promoPrice: hasPromo ? promoInfo.promoPrice : null,
+                  hasPromo: hasPromo,
                   image: imageUrl
                     ? { uri: imageUrl }
                     : require('../../assets/images/2.jpg'),
@@ -268,9 +281,9 @@ const RestaurantDetails = ({ route, navigation }) => {
                   created_at: menu.created_at,
                   updated_at: menu.updated_at,
                   quantity: 1,
-                  unitPrice: applyMarkup(parseFloat(menu.prix || menu.price || 0)),
-                  total: applyMarkup(parseFloat(menu.prix || menu.price || 0)),
-                  rawPrice: menu.prix || menu.price || "0", // Conserver le prix original
+                  unitPrice: applyMarkup(parseFloat(hasPromo ? promoInfo.promoPrice : (menu.prix || menu.price || 0))),
+                  total: applyMarkup(parseFloat(hasPromo ? promoInfo.promoPrice : (menu.prix || menu.price || 0))),
+                  rawPrice: menu.prix || menu.price || "0", 
                   productKey: `${menu.id}-${Date.now()}`,
                   type: 'menu',
                   subMenuName: selectedSubMenu.name || selectedSubMenu.libelle
@@ -480,7 +493,14 @@ const RestaurantDetails = ({ route, navigation }) => {
       activeOpacity={0.7}
       onPress={() => handleProductPress(item)}
     >
-      <Image source={item.image} style={styles.productImage} />
+      <View style={styles.productImageContainer}>
+        <Image source={item.image} style={styles.productImage} />
+        {item.hasPromo && (
+          <View style={styles.promoBadge}>
+            <Text style={styles.promoBadgeText}>PROMO</Text>
+          </View>
+        )}
+      </View>
       <View style={styles.productContent}>
         <View>
           <Text style={styles.productName} numberOfLines={1}>
@@ -496,9 +516,22 @@ const RestaurantDetails = ({ route, navigation }) => {
           </Text>
         </View>
         <View style={styles.productFooter}>
-          <Text style={styles.productPrice}>
-            {formatPriceWithMarkup(item.rawPrice || item.price || 0)}
-          </Text>
+          <View style={styles.priceContainer}>
+            {item.hasPromo ? (
+              <>
+                <Text style={styles.productPricePromo}>
+                  {formatPriceWithMarkup(item.promoPrice)}
+                </Text>
+                <Text style={styles.productPriceOriginal}>
+                  {formatPriceWithMarkup(item.rawPrice || item.price || 0)}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.productPrice}>
+                {formatPriceWithMarkup(item.rawPrice || item.price || 0)}
+              </Text>
+            )}
+          </View>
           <TouchableOpacity 
             style={styles.addButton}
             onPress={(e) => {
@@ -798,6 +831,42 @@ const styles = StyleSheet.create({
   activeSubMenuTabText: {
     color: '#FF9800',
     fontFamily: 'Montserrat-Bold',
+  },
+  productImageContainer: {
+    width: 130,
+    height: '100%',
+    position: 'relative',
+  },
+  promoBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#51A905',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    zIndex: 1,
+  },
+  promoBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontFamily: 'Montserrat-Bold',
+  },
+  priceContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  productPricePromo: {
+    fontSize: 13,
+    fontFamily: 'Montserrat-Bold',
+    color: '#51A905',
+  },
+  productPriceOriginal: {
+    fontSize: 10,
+    fontFamily: 'Montserrat',
+    color: '#999',
+    textDecorationLine: 'line-through',
+    marginTop: -2,
   },
   animatedMenuCount: {
     marginTop: 8,
