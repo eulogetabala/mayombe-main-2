@@ -21,6 +21,8 @@ import AnimatedProductCount from '../components/AnimatedProductCount';
 import { RestaurantDetailsSkeleton } from '../components/Skeletons';
 import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
 import promoService from '../services/promoService';
+import restaurantStatusService from '../services/restaurantStatusService';
+import StatusBadge from '../components/StatusBadge';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -127,6 +129,25 @@ const RestaurantDetails = ({ route, navigation }) => {
     }
   }, [userLocation, restaurant]);
 
+  // Récupérer le statut du restaurant en temps réel
+  useEffect(() => {
+    if (!restaurant?.id) return;
+    
+    console.log(`📡 Mise en place de l'écoute du statut pour le restaurant ${restaurant.id}`);
+    const unsubscribe = restaurantStatusService.subscribeToRestaurantStatus(
+      restaurant.id.toString(),
+      (status) => {
+        console.log(`🔔 Nouveau statut reçu pour ${restaurant.name}:`, status);
+        setRestaurant(prev => ({
+          ...prev,
+          isOpen: status.isOpen
+        }));
+      }
+    );
+    
+    return () => unsubscribe();
+  }, [restaurant?.id]);
+
   // Nouvelle récupération des détails du restaurant
   useEffect(() => {
     const fetchRestaurantDetails = async () => {
@@ -137,12 +158,11 @@ const RestaurantDetails = ({ route, navigation }) => {
         if (Array.isArray(data)) {
           const found = data.find(r => r.id === initialRestaurant.id);
           if (found) {
-            setRestaurant({ ...found, ...initialRestaurant }); // merge pour garder image custom si besoin
+            setRestaurant(prev => ({ ...found, ...prev })); // merge en gardant le statut Firebase (isOpen)
           }
         }
       } catch (e) {
         // fallback : garder l'initial
-        setRestaurant(initialRestaurant);
       }
     };
     fetchRestaurantDetails();
@@ -360,7 +380,10 @@ const RestaurantDetails = ({ route, navigation }) => {
         style={styles.uniformHeader}
       />
       <View style={styles.headerContent}>
-        <Text style={styles.headerName}>{restaurant.name}</Text>
+        <View style={styles.headerTopRow}>
+          <Text style={styles.headerName}>{restaurant.name}</Text>
+          <StatusBadge isOpen={restaurant.isOpen !== false} />
+        </View>
         {menus.length > 0 && (
           <AnimatedProductCount 
             count={menus.length} 
@@ -483,6 +506,14 @@ const RestaurantDetails = ({ route, navigation }) => {
   };
 
   const handleProductPress = (product) => {
+    if (restaurant.isOpen === false) {
+      Alert.alert(
+        "Restaurant fermé",
+        "Désolé, ce restaurant est actuellement fermé et ne prend pas de commandes.",
+        [{ text: "OK" }]
+      );
+      return;
+    }
     setSelectedProduct(product);
     setModalVisible(true);
   };
@@ -609,6 +640,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: 'Montserrat-Bold',
     color: '#FFF',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 4,
   },
   headerCuisine: {

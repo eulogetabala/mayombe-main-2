@@ -31,17 +31,21 @@ class RestaurantStatusService {
    */
   async getRestaurantStatus(restaurantId) {
     try {
+      console.log(`🔍 [RestaurantStatusService] Récupération statut pour ${restaurantId}...`);
       const statusRef = ref(database, `restaurant_status/${restaurantId}`);
       const snapshot = await get(statusRef);
       
       if (snapshot.exists()) {
-        return snapshot.val();
+        const data = snapshot.val();
+        console.log(`✅ [RestaurantStatusService] Statut trouvé pour ${restaurantId}:`, data);
+        return data;
       }
       
+      console.log(`⚠️ [RestaurantStatusService] Aucun statut trouvé pour ${restaurantId}, défaut: Ouvert`);
       // Par défaut, le restaurant est ouvert
       return { isOpen: true };
     } catch (error) {
-      console.error('❌ Erreur lors de la récupération du statut:', error);
+      console.error(`❌ [RestaurantStatusService] Erreur récupération ${restaurantId}:`, error);
       return { isOpen: true };
     }
   }
