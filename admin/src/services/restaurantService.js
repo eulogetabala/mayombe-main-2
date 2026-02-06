@@ -45,6 +45,8 @@ class RestaurantService {
           }
 
           const normalizedRestaurant = {
+            // Garder toutes les propriétés originales en premier
+            ...restaurant,
             id: restaurant.id,
             name: restaurant.name || restaurant.libelle,
             libelle: restaurant.libelle,
@@ -57,16 +59,14 @@ class RestaurantService {
             cover: buildImageUrl(restaurant.cover),
             cover_url: buildImageUrl(restaurant.cover),
             cover_original: restaurant.cover, // Garder le chemin original pour les mises à jour
-            // Logo (peut ne pas exister encore, mais on le gère)
-            logo: buildImageUrl(restaurant.logo),
-            logo_url: buildImageUrl(restaurant.logo),
+            // Logo (utiliser le logo si présent, sinon fallback sur la photo de couverture)
+            logo: buildImageUrl(restaurant.logo) || buildImageUrl(restaurant.cover),
+            logo_url: buildImageUrl(restaurant.logo) || buildImageUrl(restaurant.cover),
             logo_original: restaurant.logo, // Garder le chemin original
             ville_id: restaurant.ville_id,
             altitude: restaurant.altitude,
             longitude: restaurant.longitude,
             website: restaurant.website,
-            // Garder toutes les propriétés originales
-            ...restaurant,
           }
 
           return normalizedRestaurant
