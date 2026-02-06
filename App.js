@@ -57,6 +57,7 @@ import ListeLivreursScreen from './src/screens/ListeLivreursScreen';
 import AllRestaurants from './src/screens/AllRestaurants';
 import SharedCartScreen from './src/screens/SharedCartScreen';
 import CommanderLivreurScreen from './src/screens/CommanderLivreurScreen';
+import PaymentLivreurScreen from './src/screens/PaymentLivreurScreen';
 import PaymentScreen from './src/screens/PaymentScreen';
 import ProcessPayment from './src/screens/ProcessPayment';
 import DeliveryCompleteScreen from './src/screens/DeliveryCompleteScreen';
@@ -110,17 +111,6 @@ const  AppNavigator = ({ initialRoute }) => {
         }}
       />
       <Stack.Screen 
-        name="OrderSuccess" 
-        component={OrderSuccess} 
-        options={{ headerShown: false }}
-      />
-
-      <Stack.Screen 
-        name="ListeLivreurs" 
-        component={ListeLivreursScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
         name="AllRestaurants" 
         component={AllRestaurants}
         options={{ headerShown: false }}
@@ -131,43 +121,8 @@ const  AppNavigator = ({ initialRoute }) => {
         options={{ headerShown: false }}
       />
       <Stack.Screen 
-        name="PaymentScreen" 
-        component={PaymentScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="ProcessPayment" 
-        component={ProcessPayment}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="DeliveryComplete" 
-        component={DeliveryCompleteScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="LivreurSimulator" 
-        component={LivreurSimulatorScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="OrderTracking" 
-        component={OrderTrackingScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="DriverRating" 
-        component={DriverRatingScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
         name="StripeTest" 
         component={StripeTest}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="StripePaymentScreen" 
-        component={StripePaymentScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

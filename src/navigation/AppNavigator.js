@@ -8,7 +8,7 @@ import BottomTabNavigator from './BottomTabNavigator';
 import LanguageSelectionScreen from '../screens/LanguageSelectionScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import OtpScreen from '../screens/Auth/OtpScreen';
-import ListeLivreursScreen from '../screens/ListeLivreursScreen';
+import OtpScreen from '../screens/Auth/OtpScreen';
 
 
 const Stack = createStackNavigator();
@@ -27,18 +27,6 @@ const AppNavigator = ({ initialRoute }) => {
       <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
       <Stack.Screen name="Otp" component={OtpScreen} />
       <Stack.Screen name="MainApp" component={BottomTabNavigator} />
-      <Stack.Screen 
-        name="ListeLivreurs" 
-        component={ListeLivreursScreen}
-        options={{
-          headerShown: true,
-          title: 'Livreurs disponibles',
-          headerTitleStyle: {
-            fontFamily: 'Montserrat-Bold',
-          },
-        }}
-      />
-
     </Stack.Navigator>
   );
 };

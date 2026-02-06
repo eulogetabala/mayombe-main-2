@@ -51,25 +51,46 @@ const RestaurantList = ({ route, navigation }) => {
 
   useEffect(() => {
     // Récupérer la localisation de l'utilisateur
+    // Récupérer la localisation de l'utilisateur
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Permission de localisation refusée');
-        return;
-      }
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation(location.coords);
-    })();
-    
-    fetchRestaurants();
-  }, [city]);
+      try {
+        let { status } = await Location.getForegroundPermissionsAsync();
+        
+        if (status !== 'granted') {
+          const permission = await Location.requestForegroundPermissionsAsync();
+          status = permission.status;
+        }
 
-  // Recharger les restaurants quand la localisation change
+        if (status !== 'granted') {
+          console.log('Permission localisation refusée - RestaurantList - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }).catch(err => {
+          console.warn("Impossible d'obtenir la position précise:", err);
+          return null;
+        });
+
+        if (location) {
+          setUserLocation(location.coords);
+        } else {
+          console.log('Position technique impossible - RestaurantList - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+        }
+      } catch (error) {
+        console.error('Erreur localisation RestaurantList:', error);
+        setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+      }
+    })();
+  }, [city]);
+    
+  // Recharger les restaurants quand la localisation change OU le filtre de ville
   useEffect(() => {
-    if (userLocation) {
-      fetchRestaurants();
-    }
-  }, [userLocation]);
+    fetchRestaurants();
+  }, [city, userLocation]);
 
   // Calcul de la distance (Haversine)
   const calculateDistance = (lat1, lon1, lat2, lon2) => {

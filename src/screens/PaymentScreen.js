@@ -46,10 +46,14 @@ const PaymentScreen = ({ route, navigation }) => {
   const [addressModalVisible, setAddressModalVisible] = useState(false);
   const [countryCode, setCountryCode] = useState("CG"); // Code pays par défaut (Congo)
   const [callingCode, setCallingCode] = useState("242"); // Indicatif par défaut (Congo)
-  const [deliveryDistance, setDeliveryDistance] = useState(orderDetails.distance || null);
-  const [deliveryFee, setDeliveryFee] = useState(orderDetails.deliveryFee || 1000);
+  const [deliveryDistance, setDeliveryDistance] = useState(null);
+  const [deliveryFee, setDeliveryFee] = useState(0);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
-  const [currentOrderDetails, setCurrentOrderDetails] = useState(orderDetails);
+  const [currentOrderDetails, setCurrentOrderDetails] = useState({
+    ...orderDetails,
+    deliveryFee: 0,
+    total: orderDetails.subtotal
+  });
 
   const paymentMethods = [
     {
@@ -386,6 +390,37 @@ const PaymentScreen = ({ route, navigation }) => {
       </LinearGradient>
 
       <ScrollView contentContainerStyle={styles.scrollViewContent}>
+        {orderDetails.orderType === 'livreur' && orderDetails.deliveryDetails && (
+          <View style={styles.deliveryDetailsContainer}>
+            <View style={styles.deliveryDetailsHeader}>
+              <Ionicons name="bicycle" size={20} color="#FF9800" />
+              <Text style={styles.deliveryDetailsTitle}>Détails de votre livraison</Text>
+            </View>
+            <View style={styles.deliveryDetailsBody}>
+              <View style={styles.detailItem}>
+                <Ionicons name="location-outline" size={16} color="#666" />
+                <Text style={styles.detailLabel}>Récupération:</Text>
+                <Text style={styles.detailValue}>{orderDetails.deliveryDetails.pickupAddress}</Text>
+              </View>
+              <View style={styles.detailItem}>
+                <Ionicons name="navigate-outline" size={16} color="#666" />
+                <Text style={styles.detailLabel}>Livraison:</Text>
+                <Text style={styles.detailValue}>{orderDetails.deliveryDetails.deliveryAddress}</Text>
+              </View>
+              <View style={styles.detailItem}>
+                <Ionicons name="cube-outline" size={16} color="#666" />
+                <Text style={styles.detailLabel}>Contenu:</Text>
+                <Text style={styles.detailValue}>{orderDetails.deliveryDetails.packageNature}</Text>
+              </View>
+              <View style={styles.detailItem}>
+                <Ionicons name="person-outline" size={16} color="#666" />
+                <Text style={styles.detailLabel}>Destinataire:</Text>
+                <Text style={styles.detailValue}>{orderDetails.deliveryDetails.recipientName} ({orderDetails.deliveryDetails.recipientPhone})</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
         <View style={styles.methodsContainer}>
           {paymentMethods.map((method) => (
             <TouchableOpacity
@@ -494,30 +529,34 @@ const PaymentScreen = ({ route, navigation }) => {
             </Text>
           </View>
           
-          {isCalculatingDistance ? (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>
-                <ActivityIndicator size="small" color="#FF6B00" /> Calcul de la distance...
-              </Text>
-            </View>
-          ) : (
+          {address !== '' && (
             <>
-              {deliveryDistance !== null && (
+              {isCalculatingDistance ? (
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
-                    <Ionicons name="location" size={14} color="#666" /> Distance
-                  </Text>
-                  <Text style={styles.summaryValue}>
-                    {deliveryDistance} km
+                    <ActivityIndicator size="small" color="#FF6B00" /> Calcul de la distance...
                   </Text>
                 </View>
+              ) : (
+                <>
+                  {deliveryDistance !== null && (
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>
+                        <Ionicons name="location" size={14} color="#666" /> Distance
+                      </Text>
+                      <Text style={styles.summaryValue}>
+                        {deliveryDistance} km
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>{t.payment.deliveryFee}</Text>
+                    <Text style={styles.summaryValue}>
+                      {(deliveryFee || 0).toLocaleString()} FCFA
+                    </Text>
+                  </View>
+                </>
               )}
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>{t.payment.deliveryFee}</Text>
-                <Text style={styles.summaryValue}>
-                  {(deliveryFee || 0).toLocaleString()} FCFA
-                </Text>
-              </View>
             </>
           )}
 
@@ -857,6 +896,53 @@ const styles = StyleSheet.create({
     padding: 5,
     borderWidth: 1,
     borderColor: '#FFA500',
+  },
+  deliveryDetailsContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 15,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  deliveryDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+    paddingBottom: 8,
+  },
+  deliveryDetailsTitle: {
+    fontSize: scaleFont(16),
+    fontFamily: 'Montserrat-Bold',
+    color: '#333',
+    marginLeft: 10,
+  },
+  deliveryDetailsBody: {
+    gap: 8,
+  },
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  detailLabel: {
+    fontSize: scaleFont(13),
+    fontFamily: 'Montserrat-Bold',
+    color: '#666',
+    marginLeft: 8,
+    width: 100,
+  },
+  detailValue: {
+    fontSize: scaleFont(13),
+    fontFamily: 'Montserrat',
+    color: '#333',
+    flex: 1,
   },
 
 });

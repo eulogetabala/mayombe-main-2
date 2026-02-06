@@ -14,11 +14,7 @@ const CommanderLivreur = () => {
   const handleCommander = () => {
     console.log('Bouton Commander cliqué');
     try {
-      navigation.dispatch(
-        CommonActions.navigate({
-          name: 'ListeLivreurs'
-        })
-      );
+      navigation.navigate('ListeLivreurs');
       console.log('Navigation effectuée');
     } catch (error) {
       console.error('Erreur de navigation:', error);

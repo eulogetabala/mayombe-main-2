@@ -290,13 +290,16 @@ const StripePaymentScreen = ({ route, navigation }) => {
           <TouchableOpacity 
             style={styles.backButton}
             onPress={() => {
-              try {
-                // Toujours aller au panier, pas de goBack()
-                navigation.navigate('Cart');
-              } catch (error) {
-                console.log('Erreur navigation:', error);
-                // Fallback vers l'écran principal
-                navigation.navigate('Home');
+              if (orderDetails?.orderType === 'livreur') {
+                navigation.navigate('PaymentLivreur', { orderDetails });
+              } else {
+                try {
+                  // Pour les commandes normales, tenter de retourner au panier
+                  navigation.navigate('Cart');
+                } catch (error) {
+                  console.log('Erreur navigation Cart:', error);
+                  navigation.goBack();
+                }
               }
             }}
           >

@@ -47,13 +47,40 @@ const RestaurantsSection = () => {
 
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setUserLocation(null);
-        return;
+      try {
+        let { status } = await Location.getForegroundPermissionsAsync();
+        
+        if (status !== 'granted') {
+          const permission = await Location.requestForegroundPermissionsAsync();
+          status = permission.status;
+        }
+
+        if (status !== 'granted') {
+          console.log('Permission localisation refusée - Utilisation position par défaut');
+          // Brazzaville par défaut
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+          return;
+        }
+
+        // Essayer d'obtenir la position précise
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced, 
+        }).catch(err => {
+          console.warn("Impossible d'obtenir la position précise:", err);
+          return null;
+        });
+
+        if (location) {
+          setUserLocation(location.coords);
+        } else {
+          // Fallback en cas d'erreur technique (ex: simulateur)
+          console.log('Position technique impossible - Utilisation position par défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+        }
+      } catch (error) {
+        console.error('Erreur localisation Home:', error);
+        setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
       }
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation(location.coords);
     })();
     
     // Charger les villes
@@ -357,19 +384,16 @@ const RestaurantsSection = () => {
 
   return (
     <View style={styles.container}>
-      <FlatList
-        data={restaurants}
-        renderItem={renderRestaurantItem}
-        keyExtractor={item => item.id.toString()}
-        numColumns={2}
-        ListHeaderComponent={ListHeader}
-        contentContainerStyle={styles.listContainer}
-        columnWrapperStyle={styles.columnWrapper}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={false} onRefresh={onRefresh} />
-        }
-      />
+      <ListHeader />
+      <View style={styles.listContainer}>
+        <View style={styles.restaurantsGrid}>
+          {restaurants.map((restaurant) => (
+            <View key={restaurant.id.toString()} style={styles.cardWrapper}>
+              {renderRestaurantItem({ item: restaurant })}
+            </View>
+          ))}
+        </View>
+      </View>
     </View>
   );
 };
@@ -382,10 +406,15 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     paddingHorizontal: 10,
-    paddingBottom: 15,
+    paddingBottom: 5,
   },
-  columnWrapper: {
+  restaurantsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
+  },
+  cardWrapper: {
+    width: '48%',
     marginBottom: 15,
   },
   headerContainer: {
@@ -430,7 +459,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.16,
     shadowRadius: 12,
-    width: '48%',
+    width: '100%',
     borderWidth: 1,
     borderColor: '#e0e0e0',
   },

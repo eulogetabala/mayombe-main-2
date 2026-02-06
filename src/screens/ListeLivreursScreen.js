@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Dimensions, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Animatable from 'react-native-animatable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import FastImage from 'react-native-fast-image';
 import CustomHeader from '../components/common/CustomHeader';
-import { getDistanceToRestaurant, formatDistance } from '../services/LocationService';
+import { getCurrentLocation, formatDistance } from '../services/LocationService';
 
 const { width } = Dimensions.get('window');
 const scaleFont = (size) => Math.round(size * (width / 375));
 
 const ListeLivreursScreen = () => {
   const navigation = useNavigation();
-  const [selectedLivreur, setSelectedLivreur] = useState(null);
+  const route = useRoute();
+  
   const [livreurs, setLivreurs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -51,16 +52,17 @@ const ListeLivreursScreen = () => {
     const getLocationAndCalculateFee = async () => {
       setIsLoadingLocation(true);
       try {
-        const distance = await getDistanceToRestaurant();
-        setDeliveryDistance(distance);
-        console.log('📍 Distance obtenue:', distance, 'km');
+        console.log('📍 Tentative de récupération position utilisateur...');
+        const location = await getCurrentLocation();
+        
+        // Pour la liste des livreurs, on utilise une distance par défaut 
+        // ou on pourrait la calculer par rapport à un point central si nécessaire
+        // Ici on garde 5km comme base de référence si on n'a pas d'adresse cible
+        setDeliveryDistance(5); 
+        console.log('📍 Position obtenue, distance de référence fixée à 5km');
       } catch (error) {
-        console.log('⚠️ Erreur géolocalisation:', error.message);
-        Alert.alert(
-          'Localisation non disponible',
-          'Impossible d\'obtenir votre position. Les frais de livraison seront calculés avec une distance par défaut.',
-          [{ text: 'OK' }]
-        );
+        console.log('⚠️ Erreur géolocalisation dans la récupération côté livreur:', error.message);
+        setDeliveryDistance(5); // Fallback distance
       } finally {
         setIsLoadingLocation(false);
       }
@@ -86,7 +88,6 @@ const ListeLivreursScreen = () => {
       
       console.log('Récupération des livreurs disponibles...');
       
-      // Essayer d'abord l'endpoint principal
       let response = await fetch('https://www.api-mayombe.mayombe-app.com/public/api/get-livreurs-dispo', {
         method: 'GET',
         headers: {
@@ -95,238 +96,45 @@ const ListeLivreursScreen = () => {
         },
       });
 
-      console.log('Statut de la réponse:', response.status);
-
-      // Si 404, essayer l'endpoint alternatif
-      if (response.status === 404) {
-        console.log('Endpoint principal non trouvé, essai de l\'endpoint alternatif...');
-        response = await fetch('https://www.api-mayombe.mayombe-app.com/public/api/admin/get-livreurs-dispo', {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-        });
-        console.log('Statut de la réponse alternative:', response.status);
-      }
-
       if (!response.ok) {
         if (response.status === 404) {
-          console.log('Aucun endpoint de livreurs disponible, utilisation des données de démonstration');
-          // Utiliser des données de démonstration
-          const demoLivreurs = [
-            {
-              id: 1,
-              name: 'Jean Livreur',
-              phone: '+242061234567',
-              avatar: null,
-              status: 'Disponible',
-              rating: 4.8,
-              experience: '3 ans',
-              deliveries: 1247,
-              vehicle: 'Moto',
-              distance: '2.3 km',
-              zone: 'Zone centrale',
-              specialite: 'Tous types'
-            },
-            {
-              id: 2,
-              name: 'Marie Express',
-              phone: '+242061234568',
-              avatar: null,
-              status: 'Disponible',
-              rating: 4.9,
-              experience: '5 ans',
-              deliveries: 2156,
-              vehicle: 'Moto',
-              distance: '1.8 km',
-              zone: 'Zone nord',
-              specialite: 'Livraison rapide'
-            },
-            {
-              id: 3,
-              name: 'Paul Rapide',
-              phone: '+242061234569',
-              avatar: null,
-              status: 'Disponible',
-              rating: 4.7,
-              experience: '2 ans',
-              deliveries: 892,
-              vehicle: 'Moto',
-              distance: '3.1 km',
-              zone: 'Zone sud',
-              specialite: 'Gros colis'
-            },
-            {
-              id: 4,
-              name: 'Sophie Flash',
-              phone: '+242061234570',
-              avatar: null,
-              status: 'Disponible',
-              rating: 4.6,
-              experience: '4 ans',
-              deliveries: 1634,
-              vehicle: 'Moto',
-              distance: '2.7 km',
-              zone: 'Zone est',
-              specialite: 'Livraison express'
-            },
-          ];
-          
-          setLivreurs(demoLivreurs);
+          // Fallback to demo data
+          setLivreurs([
+            { id: 1, name: 'Jean Livreur', vehicle: 'Moto', distance: '2.3 km', rating: 4.8, status: 'Disponible', specialite: 'Tous types' },
+            { id: 2, name: 'Marie Express', vehicle: 'Moto', distance: '1.8 km', rating: 4.9, status: 'Disponible', specialite: 'Express' },
+          ]);
           return;
-        } else {
-          throw new Error(`Erreur HTTP: ${response.status} - ${response.statusText}`);
         }
+        throw new Error(`Error: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('Données des livreurs reçues:', data);
-      console.log('Nombre de livreurs:', Array.isArray(data) ? data.length : 'Non-array');
-
       if (Array.isArray(data)) {
-        const mappedLivreurs = data.map((livreur, index) => {
-          // Construction de l'URL de l'image si disponible
-          let avatarUrl = null;
-          if (livreur.avatar || livreur.image || livreur.photo) {
-            avatarUrl = `https://www.mayombe-app.com/uploads_admin/${livreur.avatar || livreur.image || livreur.photo}`;
-          }
-
-          return {
-            id: livreur.id || index + 1,
-            name: livreur.name || livreur.nom || livreur.nom_complet || livreur.prenom || `Livreur ${index + 1}`,
-            phone: livreur.phone || livreur.telephone || livreur.tel || '+242000000000',
-            avatar: avatarUrl,
-            status: livreur.status || livreur.disponibilite || 'Disponible',
-            rating: livreur.rating || livreur.note || (4.5 + Math.random() * 0.5).toFixed(1),
-            experience: livreur.experience || livreur.annees_experience || `${Math.floor(Math.random() * 5) + 1} ans`,
-            deliveries: livreur.deliveries || livreur.livraisons || livreur.nombre_livraisons || Math.floor(Math.random() * 2000) + 500,
-            vehicle: livreur.vehicle || livreur.vehicule || livreur.type_vehicule || 'Moto',
-            distance: livreur.distance || livreur.distance_actuelle || `${(Math.random() * 3 + 1).toFixed(1)} km`,
-            zone: livreur.zone || livreur.zone_livraison || 'Zone centrale',
-            specialite: livreur.specialite || livreur.type_livraison || 'Tous types'
-          };
-        });
-
-        console.log(`${mappedLivreurs.length} livreurs mappés avec succès`);
-        console.log('Exemple de livreur mappé:', mappedLivreurs[0]);
-        
-        setLivreurs(mappedLivreurs);
-        
-        if (mappedLivreurs.length === 0) {
-          setError('Aucun livreur disponible pour le moment. Veuillez réessayer plus tard.');
-        }
-      } else {
-        console.error('Format de données invalide - attendu un tableau, reçu:', typeof data);
-        throw new Error('Le serveur a retourné un format de données inattendu.');
+        setLivreurs(data.map((l, i) => ({
+          id: l.id || i + 1,
+          name: l.name || `Livreur ${i + 1}`,
+          phone: l.phone || '+242000000000',
+          avatar: l.avatar ? `https://www.mayombe-app.com/uploads_admin/${l.avatar}` : null,
+          status: l.status || 'Disponible',
+          rating: l.rating || 4.5,
+          vehicle: l.vehicle || 'Moto',
+          distance: l.distance || `${(Math.random() * 3 + 1).toFixed(1)} km`,
+          specialite: l.specialite || 'Tous types'
+        })));
       }
-    } catch (error) {
-      console.error('Erreur lors de la récupération des livreurs:', error);
-      console.error('Message d\'erreur:', error.message);
-      
-      let errorMessage = 'Impossible de charger les livreurs pour le moment.';
-      
-      if (error.message.includes('Service de livreurs temporairement indisponible')) {
-        errorMessage = error.message;
-      } else if (error.message.includes('Network')) {
-        errorMessage = 'Problème de connexion internet. Vérifiez votre connexion et réessayez.';
-      } else if (error.message.includes('HTTP: 404')) {
-        errorMessage = 'Service de livreurs temporairement indisponible. Veuillez réessayer plus tard.';
-      } else if (error.message.includes('HTTP: 500')) {
-        errorMessage = 'Erreur du serveur. Nos équipes ont été notifiées.';
-      } else if (error.message.includes('HTTP')) {
-        errorMessage = 'Erreur de communication avec le serveur.';
-      } else if (error.message.includes('Format')) {
-        errorMessage = 'Erreur technique. Veuillez réessayer.';
-      }
-      
-      setError(errorMessage);
+    } catch (e) {
+      setError('Erreur lors du chargement des livreurs');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCall = (phone) => {
-    Linking.openURL(`tel:${phone}`);
-  };
-
-  const handleReserveLivreur = async (livreur) => {
-    try {
-      setReservingLivreur(livreur.id);
-      
-      const userToken = await AsyncStorage.getItem('userToken');
-      if (!userToken) {
-        Alert.alert('Erreur', 'Vous devez être connecté pour réserver un livreur');
-        return;
-      }
-
-      console.log('🔄 Réservation du livreur:', livreur.name);
-      console.log('💰 Frais de livraison:', deliveryFee, 'FCFA');
-      console.log('📍 Distance:', deliveryDistance, 'km');
-      
-      // Étape 1: Créer la commande avec l'endpoint 27
-      const response = await fetch('https://www.api-mayombe.mayombe-app.com/public/api/commander-livreur', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${userToken}`,
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          livreur_id: livreur.id,
-          delivery_price: deliveryFee
-        }),
-      });
-
-      const data = await response.json();
-      console.log('📥 Réponse endpoint 27:', data);
-
-      if (response.ok && (data.success || data.message?.includes('succès'))) {
-        console.log('✅ Commande livreur créée avec succès');
-        
-        // Étape 2: Naviguer vers la page de paiement avec l'ID de commande
-        navigation.navigate('PaymentScreen', {
-          orderDetails: {
-            orderId: data.order_id || data.id,
-            orderType: 'livreur',
-            amount: deliveryFee,
-            distance: deliveryDistance,
-            description: `Réservation livreur - ${livreur.name}`,
-            livreur: livreur,
-            deliveryFee: deliveryFee,
-            items: [
-              {
-                name: `Réservation livreur - ${livreur.name}`,
-                price: deliveryFee,
-                quantity: 1
-              }
-            ],
-            total: deliveryFee
-          },
-          onPaymentSuccess: () => {
-            Alert.alert(
-              'Succès',
-              `Livreur ${livreur.name} réservé avec succès ! Il vous contactera bientôt.`,
-              [
-                {
-                  text: 'Retour à l\'accueil',
-                  onPress: () => navigation.navigate('Home'),
-                },
-              ]
-            );
-          }
-        });
-      } else {
-        console.error('❌ Erreur lors de la création de la commande:', data);
-        Alert.alert('Erreur', data.message || 'Impossible de créer la commande du livreur');
-      }
-
-    } catch (error) {
-      console.error('❌ Erreur lors de la réservation:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue lors de la réservation');
-    } finally {
-      setReservingLivreur(null);
-    }
+  const handleReserveLivreur = (livreur) => {
+    navigation.navigate('CommanderLivreur', {
+      livreur: livreur,
+      distance: deliveryDistance,
+      fee: deliveryFee
+    });
   };
 
   const handleImageError = (livreurId) => {

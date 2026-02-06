@@ -9,474 +9,572 @@ import {
   Alert, 
   ScrollView,
   ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
   Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import AddressModal from '../components/AddressModal';
+import CountryPicker, { 
+  CountryModalProvider,
+  DEFAULT_THEME
+} from "react-native-country-picker-modal";
 import CustomHeader from '../components/common/CustomHeader';
 import { getDistanceToRestaurant, formatDistance } from '../services/LocationService';
+import geocodingService from '../services/geocodingService';
 
 const { width, height } = Dimensions.get('window');
 const scaleFont = (size) => Math.round(size * (width / 375));
 
-const CommanderLivreurScreen = () => {
+const FormInput = ({ label, icon, placeholder, value, onChangeText, keyboardType = 'default' }) => (
+  <View style={styles.inputWrapper}>
+    <Text style={styles.inputLabel}>{label}</Text>
+    <View style={styles.inputContainer}>
+      <Ionicons name={icon} size={20} color="#FF9800" style={styles.inputIcon} />
+      <TextInput
+        style={styles.input}
+        placeholder={placeholder}
+        placeholderTextColor="#999"
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+      />
+    </View>
+  </View>
+);
+
+const CommanderLivreurContent = () => {
   const navigation = useNavigation();
-  const [deliveryDistance, setDeliveryDistance] = useState(5); // Distance par défaut en km
-  const [deliveryFee, setDeliveryFee] = useState(1000); // Prix initial
+  const route = useRoute();
+  const { livreur, distance, fee } = route.params || {};
+  
+  // États du formulaire
+  const [formData, setFormData] = useState({
+    pickupAddress: '',
+    deliveryAddress: '',
+    packageNature: '',
+    recipientName: '',
+    recipientPhone: '',
+    deliveryDate: new Date().toLocaleDateString(),
+    deliveryTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  });
+
+  const [deliveryDistance, setDeliveryDistance] = useState(distance || 5);
+  const [deliveryFee, setDeliveryFee] = useState(fee || 1000);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Calculer les frais de livraison selon la distance
-  const calculateDeliveryFee = (distance) => {
-    if (distance <= 3) {
-      return 1000; // Prix de base
-    } else if (distance <= 7) {
-      return 1500; // Prix intermédiaire
-    } else {
-      return 2000; // Prix élevé
-    }
-  };
+  // Address Modals state
+  const [activeAddressField, setActiveAddressField] = useState(null); // 'pickupAddress' or 'deliveryAddress'
+  const [addressModalVisible, setAddressModalVisible] = useState(false);
 
-  // Obtenir la description des frais
-  const getDeliveryFeeDescription = (distance) => {
-    if (distance <= 3) {
-      return '📍 Livraison proche';
-    } else if (distance <= 7) {
-      return '📍 Livraison moyenne';
-    } else {
-      return '📍 Livraison éloignée';
-    }
-  };
-
-  // Obtenir la géolocalisation au chargement
+  // Calcul dynamique de la distance et des frais
   useEffect(() => {
-    const getLocationAndCalculateFee = async () => {
-      setIsLoadingLocation(true);
-      try {
-        const distance = await getDistanceToRestaurant();
-        setDeliveryDistance(distance);
-        console.log('📍 Distance obtenue:', distance, 'km');
-      } catch (error) {
-        console.log('⚠️ Erreur géolocalisation:', error.message);
-        Alert.alert(
-          'Localisation non disponible',
-          'Impossible d\'obtenir votre position. Les frais de livraison seront calculés avec une distance par défaut.',
-          [{ text: 'OK' }]
-        );
-      } finally {
-        setIsLoadingLocation(false);
+    const updateDistanceAndFee = async () => {
+      if (formData.pickupAddress && formData.deliveryAddress) {
+        setIsLoadingLocation(true);
+        try {
+          console.log('🔄 [CommanderLivreur] Calcul de la distance entre:', formData.pickupAddress, 'et', formData.deliveryAddress);
+          
+          // 1. Géocoder les deux adresses
+          const pickupCoords = await geocodingService.geocodeAddress(formData.pickupAddress);
+          const deliveryCoords = await geocodingService.geocodeAddress(formData.deliveryAddress);
+
+          if (pickupCoords && deliveryCoords) {
+            console.log('📍 [CommanderLivreur] Coordonnées obtenues:', { pickupCoords, deliveryCoords });
+            
+            // 2. Tenter de calculer l'itinéraire pour avoir la distance réelle
+            const route = await geocodingService.getRoute(pickupCoords, deliveryCoords);
+            
+            let distanceKm = 0;
+            if (route && route.distanceValue) {
+              distanceKm = route.distanceValue / 1000;
+              console.log('🛣️ [CommanderLivreur] Distance par la route:', distanceKm);
+            } else {
+              // Fallback: Haversine distance
+              distanceKm = geocodingService.calculateDistance(
+                pickupCoords.latitude, pickupCoords.longitude,
+                deliveryCoords.latitude, deliveryCoords.longitude
+              );
+              console.log('📏 [CommanderLivreur] Fallback Haversine distance:', distanceKm);
+            }
+
+            if (distanceKm > 0) {
+              setDeliveryDistance(distanceKm);
+              
+              // 3. Calculer les nouveaux frais
+              let newFee = 1000;
+              if (distanceKm > 3 && distanceKm <= 7) newFee = 1500;
+              else if (distanceKm > 7) newFee = 2000;
+              
+              setDeliveryFee(newFee);
+              console.log(`✅ [CommanderLivreur] Résultat final: ${distanceKm.toFixed(2)}km -> ${newFee} FCFA`);
+            }
+          } else {
+            console.log('⚠️ [CommanderLivreur] Géocodage échoué pour l\'une des adresses');
+          }
+        } catch (error) {
+          console.error('❌ [CommanderLivreur] Erreur lors du calcul dynamique:', error);
+        } finally {
+          setIsLoadingLocation(false);
+        }
       }
     };
 
-    getLocationAndCalculateFee();
-  }, []);
+    updateDistanceAndFee();
+  }, [formData.pickupAddress, formData.deliveryAddress]);
 
-  // Calculer les frais quand la distance change
-  useEffect(() => {
-    const calculatedFee = calculateDeliveryFee(deliveryDistance);
-    setDeliveryFee(calculatedFee);
-  }, [deliveryDistance]);
+  // Phone input state
+  const [countryCode, setCountryCode] = useState("CG");
+  const [callingCode, setCallingCode] = useState("242");
 
-  const handleCommanderLivreur = async () => {
-    setIsSubmitting(true);
+  const handleAddressSelect = (address) => {
+    if (activeAddressField) {
+      setFormData(prev => ({ ...prev, [activeAddressField]: address }));
+    }
+  };
+
+  const openAddressModal = (field) => {
+    setActiveAddressField(field);
+    setAddressModalVisible(true);
+  };
+
+  const handleInputChange = (name, value) => {
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const validateForm = () => {
+    const { pickupAddress, deliveryAddress, packageNature, recipientName, recipientPhone } = formData;
+    if (!pickupAddress || !deliveryAddress || !packageNature || !recipientName || !recipientPhone) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires.');
+      return false;
+    }
+    return true;
+  };
+
+  const handleFinalBooking = async () => {
+    if (!validateForm()) return;
     
+    setIsSubmitting(true);
     try {
-      // Ici on peut ajouter la logique pour réserver un livreur
-      console.log('Réservation livreur:', {
-        distance: deliveryDistance,
-        fee: deliveryFee,
-        total: deliveryFee
+      const userToken = await AsyncStorage.getItem('userToken');
+      if (!userToken) {
+        Alert.alert('Erreur', 'Vous devez être connecté pour réserver');
+        setIsSubmitting(false);
+        return;
+      }
+
+      const response = await fetch('https://www.api-mayombe.mayombe-app.com/public/api/commander-livreur', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          livreur_id: livreur?.id,
+          delivery_price: deliveryFee,
+          pickup_address: formData.pickupAddress,
+          delivery_address: formData.deliveryAddress,
+          package_nature: formData.packageNature,
+          recipient_name: formData.recipientName,
+          recipient_phone: formData.recipientPhone,
+          delivery_date: formData.deliveryDate,
+          delivery_time: formData.deliveryTime,
+        }),
       });
 
-      // Simuler une réservation réussie
-      setTimeout(() => {
-        setIsSubmitting(false);
-        // Naviguer vers la page de paiement
-        navigation.navigate('PaymentScreen', {
+      const data = await response.json();
+      console.log('📥 Réponse booking:', data);
+
+      if (response.ok && (data.success || data.message?.includes('succès'))) {
+        navigation.navigate('PaymentLivreur', {
           orderDetails: {
+            orderId: data.order_id || data.id,
             orderType: 'livreur',
             subtotal: deliveryFee,
             deliveryFee: 0,
             total: deliveryFee,
             distance: deliveryDistance,
-            description: 'Réservation livreur',
+            description: `Réservation livreur - ${livreur?.name || 'Livreur'}`,
+            livreur: livreur,
+            deliveryDetails: formData,
             items: [
               {
-                name: 'Service de livraison',
+                name: `Livraison: ${formData.packageNature}`,
                 price: deliveryFee,
                 quantity: 1
               }
             ]
+          },
+          onPaymentSuccess: () => {
+            Alert.alert('Succès', 'Votre livraison a été enregistrée.');
+            navigation.navigate('Home');
           }
         });
-      }, 1000);
-
+      } else {
+        Alert.alert('Erreur', data.message || 'Impossible de créer la commande');
+      }
     } catch (error) {
+      console.error('Error in handleFinalBooking:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue lors de la réservation');
+    } finally {
       setIsSubmitting(false);
-      Alert.alert('Erreur', 'Impossible de réserver le livreur. Veuillez réessayer.');
     }
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <CustomHeader 
-        title="Commander un livreur"
+        title="Détails de livraison"
         backgroundColor="#FF9800"
       />
       
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Section principale */}
-        <View style={styles.mainSection}>
-          <ImageBackground
-            source={require('../../assets/images/m-3.jpg')}
-            style={styles.banner}
-            resizeMode="cover"
-            imageStyle={styles.bannerImage}
+      <ScrollView 
+        style={styles.scrollView} 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.headerInfo}>
+          <Text style={styles.headerTitle}>Informations de livraison</Text>
+          <Text style={styles.headerSubtitle}>
+            {livreur ? `Réservation avec ${livreur.name}` : 'Remplissez les détails pour commander votre livreur'}
+          </Text>
+        </View>
+
+        <View style={styles.inputWrapper}>
+          <Text style={styles.inputLabel}>Adresse de récupération</Text>
+          <TouchableOpacity 
+            style={styles.addressInputTrigger}
+            onPress={() => openAddressModal('pickupAddress')}
           >
-            <View style={styles.overlay} />
-            
-            <View style={styles.bannerContent}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="bicycle" size={scaleFont(32)} color="#FF9800" />
-              </View>
-              <Text style={styles.bannerTitle}>Livraison Express</Text>
-              <Text style={styles.bannerSubtitle}>Commandez et faites-vous livrer en 30 minutes</Text>
-            </View>
-          </ImageBackground>
+            <Ionicons name="location-outline" size={20} color="#FF9800" style={styles.inputIcon} />
+            <Text style={[styles.addressTextOutput, !formData.pickupAddress && styles.placeholderText]} numberOfLines={1}>
+              {formData.pickupAddress || "Ex: Marché de Poto-Poto"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Section des fonctionnalités */}
-        <View style={styles.featuresSection}>
-          <View style={styles.featureItem}>
-            <Ionicons name="time-outline" size={scaleFont(24)} color="#FF9800" />
-            <Text style={styles.featureTitle}>30 min</Text>
-            <Text style={styles.featureDesc}>Livraison rapide</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Ionicons name="location-outline" size={scaleFont(24)} color="#FF9800" />
-            <Text style={styles.featureTitle}>Partout</Text>
-            <Text style={styles.featureDesc}>Zone de livraison</Text>
-          </View>
-          <View style={styles.featureItem}>
-            <Ionicons name="shield-checkmark-outline" size={scaleFont(24)} color="#FF9800" />
-            <Text style={styles.featureTitle}>Sécurisé</Text>
-            <Text style={styles.featureDesc}>Livraison sécurisée</Text>
-          </View>
+        <View style={styles.inputWrapper}>
+          <Text style={styles.inputLabel}>Adresse de livraison</Text>
+          <TouchableOpacity 
+            style={styles.addressInputTrigger}
+            onPress={() => openAddressModal('deliveryAddress')}
+          >
+            <Ionicons name="navigate-outline" size={20} color="#FF9800" style={styles.inputIcon} />
+            <Text style={[styles.addressTextOutput, !formData.deliveryAddress && styles.placeholderText]} numberOfLines={1}>
+              {formData.deliveryAddress || "Ex: Rue 12, Moungali"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Section des prix */}
-        <View style={styles.pricingSection}>
-          <Text style={styles.sectionTitle}>Tarifs de livraison</Text>
-          
-          <View style={styles.pricingCard}>
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>Distance</Text>
-              <Text style={styles.priceValue}>
-                {isLoadingLocation ? (
-                  <ActivityIndicator size="small" color="#FF9800" />
-                ) : (
-                  formatDistance(deliveryDistance)
-                )}
-              </Text>
-            </View>
-            
-            <View style={styles.priceRow}>
-              <Text style={styles.priceLabel}>
-                {isLoadingLocation 
-                  ? '📍 Calcul de la distance...'
-                  : getDeliveryFeeDescription(deliveryDistance)
-                }
-              </Text>
-              <Text style={styles.priceValue}>
-                {isLoadingLocation ? (
-                  <ActivityIndicator size="small" color="#FF9800" />
-                ) : (
-                  `${deliveryFee} FCFA`
-                )}
-              </Text>
-            </View>
+        <FormInput 
+          label="Nature du colis"
+          icon="cube-outline"
+          placeholder="Ex: Document, Vêtements, Nourriture..."
+          value={formData.packageNature}
+          onChangeText={(v) => handleInputChange('packageNature', v)}
+        />
 
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>{deliveryFee} FCFA</Text>
-            </View>
+        <View style={styles.row}>
+          <View style={{ flex: 1, marginRight: 10 }}>
+            <FormInput 
+              label="Nom destinataire"
+              icon="person-outline"
+              placeholder="Jean Dupont"
+              value={formData.recipientName}
+              onChangeText={(v) => handleInputChange('recipientName', v)}
+            />
           </View>
-        </View>
-
-        {/* Section des informations */}
-        <View style={styles.infoSection}>
-          <Text style={styles.sectionTitle}>Informations importantes</Text>
-          
-          <View style={styles.infoCard}>
-            <View style={styles.infoItem}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="time-outline" size={20} color="#FF9800" />
+          <View style={{ flex: 1 }}>
+            <View style={styles.inputWrapper}>
+              <Text style={styles.inputLabel}>Téléphone</Text>
+              <View style={styles.phoneInputContainer}>
+                <View style={styles.countryPickerWrapper}>
+                  <CountryPicker
+                    containerButtonStyle={styles.countryButton}
+                    countryCode={countryCode}
+                    withFilter
+                    withFlag
+                    withCallingCode
+                    withCallingCodeButton
+                    onSelect={(country) => {
+                      setCountryCode(country.cca2);
+                      setCallingCode(country.callingCode[0]);
+                    }}
+                    theme={DEFAULT_THEME}
+                  />
+                </View>
+                <TextInput
+                  style={styles.phoneNumberInput}
+                  placeholder="06 123 45 67"
+                  placeholderTextColor="#999"
+                  keyboardType="phone-pad"
+                  value={formData.recipientPhone}
+                  onChangeText={(v) => handleInputChange('recipientPhone', v)}
+                />
               </View>
-              <Text style={styles.infoText}>Le livreur sera disponible dans les 30 minutes</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="card-outline" size={20} color="#FF9800" />
-              </View>
-              <Text style={styles.infoText}>Paiement sécurisé à la livraison</Text>
-            </View>
-            <View style={styles.infoItem}>
-              <View style={styles.iconContainer}>
-                <Ionicons name="location-outline" size={20} color="#FF9800" />
-              </View>
-              <Text style={styles.infoText}>Suivi en temps réel de votre livreur</Text>
             </View>
           </View>
         </View>
-      </ScrollView>
 
-      {/* Bouton de commande */}
-      <View style={styles.footer}>
+        <View style={styles.row}>
+          <View style={{ flex: 1, marginRight: 10 }}>
+            <FormInput 
+              label="Date"
+              icon="calendar-outline"
+              placeholder="JJ/MM/AAAA"
+              value={formData.deliveryDate}
+              onChangeText={(v) => handleInputChange('deliveryDate', v)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <FormInput 
+              label="Heure"
+              icon="time-outline"
+              placeholder="14:30"
+              value={formData.deliveryTime}
+              onChangeText={(v) => handleInputChange('deliveryTime', v)}
+            />
+          </View>
+        </View>
+
+        {/* Estimation des frais */}
+        <View style={styles.pricingSummary}>
+          <View style={styles.pricingHeader}>
+            <Ionicons name="information-circle-outline" size={18} color="#666" />
+            <Text style={styles.pricingTitle}>Estimation des frais</Text>
+          </View>
+          <View style={styles.priceItem}>
+            <Text style={styles.priceLabel}>Distance estimée</Text>
+            <Text style={styles.priceValue}>
+              {isLoadingLocation ? <ActivityIndicator size="small" color="#FF9800" /> : formatDistance(deliveryDistance)}
+            </Text>
+          </View>
+          <View style={styles.priceItem}>
+            <Text style={styles.priceLabel}>Frais de livraison</Text>
+            <Text style={[styles.priceValue, { color: '#FF9800' }]}>{deliveryFee} FCFA</Text>
+          </View>
+        </View>
+
+        {/* Bouton de confirmation déplacé ici pour être scrollable */}
         <TouchableOpacity 
-          style={[styles.commandButton, isSubmitting && styles.disabledButton]}
-          onPress={handleCommanderLivreur}
+          style={[styles.nextButton, isSubmitting && { opacity: 0.7 }, { marginTop: 30 }]}
+          onPress={handleFinalBooking}
           disabled={isSubmitting}
         >
           {isSubmitting ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <>
-              <Ionicons name="send" size={scaleFont(20)} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.commandButtonText}>Réserver ce livreur</Text>
-              <Ionicons name="arrow-forward" size={scaleFont(18)} color="#fff" style={{ marginLeft: 8 }} />
+              <Text style={styles.nextButtonText}>Passer au paiement</Text>
+              <Ionicons name="arrow-forward-circle" size={22} color="#fff" style={{ marginLeft: 10 }} />
             </>
           )}
         </TouchableOpacity>
-      </View>
-    </View>
+
+      </ScrollView>
+
+      <AddressModal
+        visible={addressModalVisible}
+        onClose={() => setAddressModalVisible(false)}
+        onSelectAddress={handleAddressSelect}
+      />
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F8F9FA',
   },
   scrollView: {
     flex: 1,
   },
-  mainSection: {
-    marginBottom: 20,
-  },
-  banner: {
-    height: scaleFont(200),
-    marginHorizontal: 15,
-    borderRadius: 15,
-    overflow: 'hidden',
-  },
-  bannerImage: {
-    width: '100%',
-    height: '100%',
-  },
-  overlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  bannerContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  scrollContent: {
     padding: 20,
+    paddingBottom: 50,
   },
-  iconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 15,
+  headerInfo: {
+    marginBottom: 25,
   },
-  bannerTitle: {
-    color: '#fff',
-    fontSize: scaleFont(24),
-    fontWeight: 'bold',
+  headerTitle: {
+    fontSize: scaleFont(22),
     fontFamily: 'Montserrat-Bold',
-    textAlign: 'center',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    color: '#333',
+    marginBottom: 5,
   },
-  bannerSubtitle: {
-    color: '#fff',
+  headerSubtitle: {
     fontSize: scaleFont(14),
     fontFamily: 'Montserrat',
-    textAlign: 'center',
-    opacity: 0.9,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  featuresSection: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingHorizontal: 20,
-    marginBottom: 30,
-  },
-  featureItem: {
-    alignItems: 'center',
-    flex: 1,
-    paddingHorizontal: 10,
-  },
-  featureTitle: {
-    fontSize: scaleFont(16),
-    fontWeight: 'bold',
-    color: '#333',
-    fontFamily: 'Montserrat-Bold',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  featureDesc: {
-    fontSize: scaleFont(12),
     color: '#666',
-    fontFamily: 'Montserrat',
-    marginTop: 4,
-    textAlign: 'center',
   },
-  pricingSection: {
-    paddingHorizontal: 20,
-    marginBottom: 30,
+  inputWrapper: {
+    marginBottom: 18,
   },
-  sectionTitle: {
-    fontSize: scaleFont(18),
-    fontWeight: 'bold',
-    color: '#333',
+  inputLabel: {
+    fontSize: scaleFont(14),
     fontFamily: 'Montserrat-Bold',
-    marginBottom: 15,
+    color: '#444',
+    marginBottom: 8,
+    marginLeft: 4,
   },
-  pricingCard: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 20,
-    elevation: 4,
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 15,
+    height: 55,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
   },
-  priceRow: {
+  inputIcon: {
+    marginRight: 12,
+  },
+  row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  pricingSummary: {
+    backgroundColor: '#FFF',
+    borderRadius: 15,
+    padding: 20,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
+  },
+  pricingHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+    paddingBottom: 10,
+  },
+  pricingTitle: {
+    fontSize: scaleFont(16),
+    fontFamily: 'Montserrat-Bold',
+    color: '#444',
+    marginLeft: 8,
+  },
+  priceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   priceLabel: {
     fontSize: scaleFont(14),
-    color: '#666',
     fontFamily: 'Montserrat',
+    color: '#666',
   },
   priceValue: {
     fontSize: scaleFont(14),
-    fontWeight: 'bold',
+    fontFamily: 'Montserrat-Bold',
     color: '#333',
-    fontFamily: 'Montserrat-Bold',
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 12,
-    marginTop: 8,
-  },
-  totalLabel: {
-    fontSize: scaleFont(16),
-    fontWeight: 'bold',
-    color: '#333',
-    fontFamily: 'Montserrat-Bold',
-  },
-  totalValue: {
-    fontSize: scaleFont(18),
-    fontWeight: 'bold',
-    color: '#FF9800',
-    fontFamily: 'Montserrat-Bold',
-  },
-  infoSection: {
-    paddingHorizontal: 20,
-    marginBottom: 100,
-  },
-  infoCard: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 20,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-    paddingVertical: 4,
-  },
-  infoText: {
-    fontSize: scaleFont(14),
-    color: '#666',
-    fontFamily: 'Montserrat',
-    marginLeft: 12,
-    flex: 1,
-    lineHeight: 20,
-  },
-  iconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFF5E6',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 2,
   },
   footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
+    padding: 20,
+    backgroundColor: '#FFF',
     borderTopWidth: 1,
-    borderTopColor: '#eee',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderTopColor: '#EEE',
+    paddingBottom: Platform.OS === 'ios' ? 35 : 20, // Plus d'espace sur iOS
   },
-  commandButton: {
+  nextButton: {
     backgroundColor: '#FF9800',
-    borderRadius: 25,
-    paddingVertical: 15,
+    borderRadius: 15,
+    height: 60,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: 5,
+    marginBottom: 20, // Espace en bas pour le scroll
   },
-  commandButtonText: {
-    color: '#fff',
+  nextButtonText: {
+    color: '#FFF',
     fontSize: scaleFont(16),
-    fontWeight: 'bold',
     fontFamily: 'Montserrat-Bold',
   },
-  disabledButton: {
-    backgroundColor: '#ccc',
+  addressInputTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    paddingHorizontal: 15,
+    height: 55,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+  },
+  addressTextOutput: {
+    flex: 1,
+    fontSize: scaleFont(14),
+    fontFamily: 'Montserrat',
+    color: '#333',
+  },
+  placeholderText: {
+    color: '#999',
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    height: 55,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    overflow: 'hidden',
+  },
+  countryPickerWrapper: {
+    height: '100%',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#F0F0F0',
+    paddingHorizontal: 10,
+  },
+  countryButton: {
+    height: '100%',
+    justifyContent: 'center',
+  },
+  phoneNumberInput: {
+    flex: 1,
+    height: '100%',
+    paddingHorizontal: 15,
+    fontSize: scaleFont(14),
+    fontFamily: 'Montserrat',
+    color: '#333',
   },
 });
+
+const CommanderLivreurScreen = () => (
+  <CountryModalProvider>
+    <CommanderLivreurContent />
+  </CountryModalProvider>
+);
 
 export default CommanderLivreurScreen;

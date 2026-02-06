@@ -39,14 +39,39 @@ const TopRatedRestaurants = ({ navigation }) => {
     });
     
     // Récupérer la localisation de l'utilisateur
+    // Récupérer la localisation de l'utilisateur
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Permission de localisation refusée');
-        return;
+      try {
+        let { status } = await Location.getForegroundPermissionsAsync();
+        
+        if (status !== 'granted') {
+          const permission = await Location.requestForegroundPermissionsAsync();
+          status = permission.status;
+        }
+
+        if (status !== 'granted') {
+          console.log('Permission localisation refusée - TopRated - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }).catch(err => {
+          console.warn("Impossible d'obtenir la position précise:", err);
+          return null;
+        });
+
+        if (location) {
+          setUserLocation(location.coords);
+        } else {
+          console.log('Position technique impossible - TopRated - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+        }
+      } catch (error) {
+        console.error('Erreur localisation TopRated:', error);
+        setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
       }
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation(location.coords);
     })();
     
     fetchRestaurants();

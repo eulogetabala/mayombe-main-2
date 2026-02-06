@@ -1265,6 +1265,8 @@ class FCMService {
           try {
             const currentToken = await messagingInstance.getToken();
             diagnosis.currentTokenFromFirebase = currentToken;
+            diagnosis.token = currentToken;
+            diagnosis.hasToken = true;
             diagnosis.tokenMatch = currentToken === this.fcmToken;
             console.log('   ✅ Token obtenu depuis Firebase:', currentToken.substring(0, 30) + '...');
             if (!diagnosis.tokenMatch) {

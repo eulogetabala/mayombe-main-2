@@ -34,26 +34,46 @@ export const getDistanceToRestaurant = (userLocation, restaurantLocation) => {
   );
 };
 
-// Obtenir la position actuelle de l'utilisateur
+// Obtenir la position actuelle de l'utilisateur avec gestion d'erreur robuste
 export const getCurrentLocation = async () => {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      throw new Error('Permission de localisation refusée');
+      console.log('⚠️ Permission de localisation refusée');
+      return { latitude: -4.2634, longitude: 15.2832 }; // Fallback Brazzaville
     }
 
-    const location = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
+    try {
+      // Tentative avec haute précision et timeout
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+        timeout: 5000,
+      });
 
-    return {
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      accuracy: location.coords.accuracy,
-    };
+      return {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+        accuracy: location.coords.accuracy,
+      };
+    } catch (innerError) {
+      console.log('⚠️ Échec getCurrentPositionAsync haute précision, tentative simplifiée...', innerError.message);
+      
+      // Tentative avec précision moindre ou last known location
+      const lastKnown = await Location.getLastKnownPositionAsync();
+      if (lastKnown) {
+        return {
+          latitude: lastKnown.coords.latitude,
+          longitude: lastKnown.coords.longitude,
+          accuracy: lastKnown.coords.accuracy,
+        };
+      }
+      
+      // Ultime recours: Brazzaville
+      return { latitude: -4.2634, longitude: 15.2832 };
+    }
   } catch (error) {
     console.error('Erreur lors de l\'obtention de la position:', error);
-    throw error;
+    return { latitude: -4.2634, longitude: 15.2832 }; // Fallback Brazzaville
   }
 };
 

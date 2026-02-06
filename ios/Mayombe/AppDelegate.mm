@@ -17,6 +17,9 @@
   // Initialiser Firebase avant tout le reste
   if ([FIRApp defaultApp] == nil) {
     [FIRApp configure];
+    NSLog(@"🔥 Firebase configured in AppDelegate");
+  } else {
+    NSLog(@"🔥 Firebase already configured");
   }
 // @generated begin react-native-maps-init - expo prebuild (DO NOT MODIFY) sync-7abff63cc174e760cb62eb5bb1e9a77763531ca5
 #if __has_include(<GoogleMaps/GoogleMaps.h>)

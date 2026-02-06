@@ -26,6 +26,8 @@ import MapScreen from '../screens/MapScreen';
 import ProcessPayment from '../screens/ProcessPayment';
 import StripePaymentScreen from '../screens/StripePaymentScreen';
 import ListeLivreursScreen from '../screens/ListeLivreursScreen';
+import CommanderLivreurScreen from '../screens/CommanderLivreurScreen';
+import PaymentLivreurScreen from '../screens/PaymentLivreurScreen';
 import FCMTokenScreen from '../screens/FCMTokenScreen';
 
 
@@ -152,6 +154,50 @@ function HomeStackScreen() {
             fontFamily: 'Montserrat-Bold',
           },
         }}
+      />
+      <Stack.Screen 
+        name="CommanderLivreur" 
+        component={CommanderLivreurScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="PaymentLivreur" 
+        component={PaymentLivreurScreen}
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen 
+        name="ListeLivreurs" 
+        component={ListeLivreursScreen}
+        options={{
+          title: "Livreurs disponibles",
+          headerTitleStyle: {
+            fontFamily: 'Montserrat-Bold',
+          },
+        }}
+      />
+      <Stack.Screen 
+        name="ProcessPayment" 
+        component={ProcessPayment}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="StripePaymentScreen" 
+        component={StripePaymentScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="OrderSuccess" 
+        component={OrderSuccess}
+        options={{ headerShown: false }}
+      />
+       <Stack.Screen 
+        name="OrderTracking" 
+        component={OrderTrackingScreen}
+        options={{ headerShown: false }}
       />
 
     </Stack.Navigator>

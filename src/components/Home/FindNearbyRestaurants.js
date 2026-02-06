@@ -33,20 +33,39 @@ const FindNearbyRestaurants = () => {
   const getUserLocation = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setError('Permission de localisation refusée');
-        return null;
+      
+      // Essayer d'obtenir la position, fallback à null si ça échoue (simulateur)
+      let location = null;
+      if (status === 'granted') {
+        location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }).catch(err => {
+          console.warn("Impossible d'obtenir la position précise:", err);
+          return null;
+        });
       }
 
-      const location = await Location.getCurrentPositionAsync({});
-      return {
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude
-      };
+      if (location) {
+        return {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+        };
+      } else {
+        // Fallback pour le simulateur ou si permission refusée
+        // Brazzaville par défaut pour permettre de tester
+        console.log("📍 FindNearbyRestaurants - Utilisation Position Par Défaut (Brazzaville)");
+        return {
+          latitude: -4.2634,
+          longitude: 15.2429
+        };
+      }
     } catch (error) {
-      console.error('Erreur localisation:', error);
-      setError('Impossible de récupérer votre position');
-      return null;
+      console.error('Erreur localisation Catch:', error);
+      // Fallback de dernier recours
+      return {
+        latitude: -4.2634,
+        longitude: 15.2429
+      };
     }
   };
 

@@ -13,6 +13,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import * as Animatable from 'react-native-animatable';
 import * as Location from 'expo-location';
+import { getCurrentLocation } from '../../services/LocationService';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRatings } from '../../context/RatingsContext';
 import { translations } from '../../translations';
@@ -41,24 +42,49 @@ const TrouverRestaurant = ({ navigation }) => {
 
   useEffect(() => {
     // Récupérer la localisation de l'utilisateur
+    // Récupérer la localisation de l'utilisateur
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('Permission de localisation refusée');
-        return;
+      try {
+        let { status } = await Location.getForegroundPermissionsAsync();
+        
+        if (status !== 'granted') {
+          const permission = await Location.requestForegroundPermissionsAsync();
+          status = permission.status;
+        }
+
+        if (status !== 'granted') {
+          console.log('Permission localisation refusée - TrouverRestaurant - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }).catch(err => {
+          console.warn("Impossible d'obtenir la position précise:", err);
+          return null;
+        });
+
+        if (location) {
+          setUserLocation(location.coords);
+        } else {
+          console.log('Position technique impossible - TrouverRestaurant - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+        }
+      } catch (error) {
+        console.error('Erreur localisation TrouverRestaurant:', error);
+        setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
       }
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation(location.coords);
     })();
     
     fetchCities();
   }, []);
 
   useEffect(() => {
-    if (selectedCity) {
+    if (selectedCity && userLocation) {
       fetchRestaurantsByCity(selectedCity);
     }
-  }, [selectedCity]);
+  }, [selectedCity, userLocation]);
 
   // Recharger les restaurants quand on revient sur l'écran d'accueil
   useFocusEffect(
@@ -385,59 +411,59 @@ const TrouverRestaurant = ({ navigation }) => {
         </Text>
       </View>
 
-      <FlatList
-        ListHeaderComponent={() => (
-          <>
-            <FlatList
-              horizontal
-              data={cities}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.tabContainer}
-              keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.cityTab,
-                    selectedCity === (item.libelle || item.name) && styles.selectedTab,
-                  ]}
-                  onPress={() => setSelectedCity(item.libelle || item.name)}
-                >
-                  <Ionicons 
-                    name="location-sharp" 
-                    size={16} 
-                    color={selectedCity === (item.libelle || item.name) ? "#FFF" : "#FF9800"} 
-                  />
-                  <Text style={[
-                    styles.cityTabText, 
-                    selectedCity === (item.libelle || item.name) && styles.selectedTabText
-                  ]}>
-                    {item.libelle || item.name}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-          </>
-        )}
-        data={(restaurants[selectedCity] || []).slice(0, 4)}
-        renderItem={renderRestaurantCard}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        ListFooterComponent={() => (
-          <TouchableOpacity 
-            style={styles.button} 
-            onPress={() => handleCitySelect(selectedCity)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.buttonText}>
-              {t.home.findRestaurant.buttonText} {selectedCity}
-            </Text>
-            <Ionicons name="arrow-forward" size={20} color="#FFF" />
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={() => loading ? (
+      <View style={styles.tabsWrapper}>
+        <FlatList
+          horizontal
+          data={cities}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabContainer}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[
+                styles.cityTab,
+                selectedCity === (item.libelle || item.name) && styles.selectedTab,
+              ]}
+              onPress={() => setSelectedCity(item.libelle || item.name)}
+            >
+              <Ionicons 
+                name="location-sharp" 
+                size={16} 
+                color={selectedCity === (item.libelle || item.name) ? "#FFF" : "#FF9800"} 
+              />
+              <Text style={[
+                styles.cityTabText, 
+                selectedCity === (item.libelle || item.name) && styles.selectedTabText
+              ]}>
+                {item.libelle || item.name}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+      </View>
+
+      <View style={styles.listContainer}>
+        {loading ? (
           <TrouverRestaurantSkeleton />
-        ) : null}
-      />
+        ) : (
+          (restaurants[selectedCity] || []).slice(0, 4).map((item) => (
+            <View key={item.id.toString()}>
+              {renderRestaurantCard({ item })}
+            </View>
+          ))
+        )}
+      </View>
+
+      <TouchableOpacity 
+        style={styles.button} 
+        onPress={() => handleCitySelect(selectedCity)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.buttonText}>
+          {t.home.findRestaurant.buttonText} {selectedCity}
+        </Text>
+        <Ionicons name="arrow-forward" size={20} color="#FFF" />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -462,6 +488,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     fontFamily: 'Montserrat',
+  },
+  tabsWrapper: {
+    marginBottom: 5,
   },
   tabContainer: {
     paddingHorizontal: 15,

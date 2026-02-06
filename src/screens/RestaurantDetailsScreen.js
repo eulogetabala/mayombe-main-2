@@ -66,21 +66,41 @@ const RestaurantDetails = ({ route, navigation }) => {
 
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setUserLocation(null);
-        return;
+      try {
+        let { status } = await Location.getForegroundPermissionsAsync();
+        
+        if (status !== 'granted') {
+          const permission = await Location.requestForegroundPermissionsAsync();
+          status = permission.status;
+        }
+
+        if (status !== 'granted') {
+          console.log('Permission localisation refusée - RestaurantDetails - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced, 
+        }).catch(err => {
+          console.warn("Impossible d'obtenir la position précise:", err);
+          return null;
+        });
+
+        if (location) {
+          setUserLocation(location.coords);
+        } else {
+          console.log('Position technique impossible - RestaurantDetails - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+        }
+      } catch (error) {
+        console.error('Erreur localisation RestaurantDetails:', error);
+        setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
       }
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation(location.coords);
     })();
   }, []);
 
   useEffect(() => {
-    const logDebug = () => {
-      console.log('[DEBUG DISTANCE] altitude:', restaurant.altitude, 'longitude:', restaurant.longitude, 'userLocation:', userLocation);
-    };
-    logDebug();
     if (
       userLocation &&
       restaurant &&
@@ -91,21 +111,16 @@ const RestaurantDetails = ({ route, navigation }) => {
     ) {
       const lat = parseFloat(restaurant.altitude);
       const lon = parseFloat(restaurant.longitude);
-      // Vérifier que les coordonnées sont plausibles
-      const plausible = lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
-      console.log('[DEBUG DISTANCE] lat:', lat, 'lon:', lon, 'plausible:', plausible);
-      if (plausible) {
-        const dist = calculateDistance(
-          parseFloat(userLocation.latitude),
-          parseFloat(userLocation.longitude),
-          lat,
-          lon
-        );
-        setDistance(dist);
-      } else {
-        setDistance(null);
-      }
-    } else {
+      
+      const dist = calculateDistance(
+        parseFloat(userLocation.latitude),
+        parseFloat(userLocation.longitude),
+        lat,
+        lon
+      );
+      setDistance(dist);
+    } else if (userLocation && restaurant) {
+      // Si on a la position de l'utilisateur mais pas celle du resto (erreur data API)
       setDistance(null);
     }
   }, [userLocation, restaurant]);
@@ -328,6 +343,7 @@ const RestaurantDetails = ({ route, navigation }) => {
       <UniformHeader
         onBack={() => navigation.goBack()}
         title={restaurant.name}
+        showTitle={false}
         style={styles.uniformHeader}
       />
       <View style={styles.headerContent}>
@@ -363,12 +379,17 @@ const RestaurantDetails = ({ route, navigation }) => {
         <Ionicons name="call-outline" size={16} color="#666" />
         <Text style={styles.address}>{restaurant.phone || 'Téléphone non disponible'}</Text>
       </View>
-      {distance && (
+      {distance ? (
         <View style={styles.addressContainer}>
           <Ionicons name="walk-outline" size={16} color="#666" />
           <Text style={styles.address}>Distance : {distance} km</Text>
         </View>
-      )}
+      ) : userLocation ? (
+        <View style={styles.addressContainer}>
+          <Ionicons name="walk-outline" size={16} color="#666" />
+          <Text style={styles.address}>Distance : calcul en cours...</Text>
+        </View>
+      ) : null}
     </View>
   );
 
@@ -492,50 +513,36 @@ const RestaurantDetails = ({ route, navigation }) => {
     </TouchableOpacity>
   );
 
-  const renderContent = () => {
-    if (loading) {
-      return <RestaurantDetailsSkeleton />;
-    }
+  // renderContent a été fusionné dans le FlatList principal du return
 
-    if (error) {
-      return (
-        <View style={styles.centerContent}>
-          <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={fetchMenusByResto}
-          >
-            <Text style={styles.retryText}>Réessayer</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
 
-    return (
+  return (
+    <SafeAreaView style={styles.container}>
       <FlatList
         data={menus}
         renderItem={renderProductCard}
         keyExtractor={item => item.id.toString()}
-        contentContainerStyle={styles.productsContainer}
-        ListEmptyComponent={
-          <View style={styles.comingSoonContainer}>
-            <Text style={styles.comingSoonText}>
-              Aucun menu disponible
-            </Text>
+        ListHeaderComponent={
+          <View>
+            {renderHeader()}
+            {renderInfo()}
+            {renderSubMenuTabs()}
           </View>
         }
+        contentContainerStyle={styles.productsContainer}
+        ListEmptyComponent={
+          !loading && !error && (
+            <View style={styles.comingSoonContainer}>
+              <Text style={styles.comingSoonText}>
+                Aucun menu disponible
+              </Text>
+            </View>
+          )
+        }
+        ListFooterComponent={<View style={{ height: 20 }} />}
+        refreshing={loading}
+        onRefresh={fetchSubMenus}
       />
-    );
-  };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView>
-        {renderHeader()}
-        {renderInfo()}
-        {renderSubMenuTabs()}
-        {renderContent()}
-      </ScrollView>
       <RestaurantProductModal
         visible={modalVisible}
         product={selectedProduct}

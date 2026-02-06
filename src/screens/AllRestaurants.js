@@ -41,24 +41,44 @@ const AllRestaurants = ({ route, navigation }) => {
     
     // Obtenir la localisation de l'utilisateur
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setUserLocation(null);
-        return;
+      try {
+        let { status } = await Location.getForegroundPermissionsAsync();
+        
+        if (status !== 'granted') {
+          const permission = await Location.requestForegroundPermissionsAsync();
+          status = permission.status;
+        }
+
+        if (status !== 'granted') {
+          console.log('Permission localisation refusée - AllRestaurants - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+          return;
+        }
+
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced, 
+        }).catch(err => {
+          console.warn("Impossible d'obtenir la position précise:", err);
+          return null;
+        });
+
+        if (location) {
+          setUserLocation(location.coords);
+        } else {
+          console.log('Position technique impossible - AllRestaurants - Utilisation défaut');
+          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+        }
+      } catch (error) {
+        console.error('Erreur localisation AllRestaurants:', error);
+        setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
       }
-      let location = await Location.getCurrentPositionAsync({});
-      setUserLocation(location.coords);
     })();
-    
-    fetchRestaurants();
   }, []);
   
-  // Recharger les restaurants quand la localisation change
+  // Recharger les restaurants quand la localisation change OU le filtre de ville
   useEffect(() => {
-    if (userLocation) {
-      fetchRestaurants();
-    }
-  }, [userLocation]);
+    fetchRestaurants();
+  }, [userLocation, cityId]);
 
   // Calcul de la distance (Haversine)
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
