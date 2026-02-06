@@ -198,6 +198,26 @@ const AllRestaurants = ({ route, navigation }) => {
     }
   };
 
+  // 📡 Écouter les changements de statut Firebase en temps réel pour tous les restaurants
+  useEffect(() => {
+    const unsubscribe = restaurantStatusService.subscribeToAllRestaurantStatuses((allStatuses) => {
+      setRestaurants(prevRestaurants => {
+        return prevRestaurants.map(restaurant => {
+          const restaurantIdStr = restaurant.id.toString();
+          if (allStatuses[restaurantIdStr]) {
+            return {
+              ...restaurant,
+              isOpen: allStatuses[restaurantIdStr].isOpen
+            };
+          }
+          return restaurant;
+        });
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const renderRestaurantItem = ({ item }) => (
     <TouchableOpacity
       style={styles.restaurantCard}

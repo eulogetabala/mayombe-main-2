@@ -269,6 +269,26 @@ const RestaurantsSection = () => {
     }
   };
 
+  // 📡 Écouter les changements de statut Firebase en temps réel
+  useEffect(() => {
+    const unsubscribe = restaurantStatusService.subscribeToAllRestaurantStatuses((allStatuses) => {
+      setRestaurants(prevRestaurants => {
+        return prevRestaurants.map(restaurant => {
+          const restaurantIdStr = restaurant.id.toString();
+          if (allStatuses[restaurantIdStr]) {
+            return {
+              ...restaurant,
+              isOpen: allStatuses[restaurantIdStr].isOpen
+            };
+          }
+          return restaurant;
+        });
+      });
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   const handleAddToCart = async (item) => {
     const productToAdd = {
       id: item.id,

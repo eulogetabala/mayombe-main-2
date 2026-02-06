@@ -88,6 +88,25 @@ class RestaurantStatusService {
   }
 
   /**
+   * S'abonner aux changements de tous les statuts
+   */
+  subscribeToAllRestaurantStatuses(callback) {
+    const statusRef = ref(database, 'restaurant_status');
+    
+    onValue(statusRef, (snapshot) => {
+      if (snapshot.exists()) {
+        callback(snapshot.val());
+      } else {
+        callback({});
+      }
+    });
+    
+    return () => {
+      off(statusRef);
+    };
+  }
+
+  /**
    * Récupérer les statuts de plusieurs restaurants (batch)
    */
   async getBatchRestaurantStatuses(restaurantIds) {
