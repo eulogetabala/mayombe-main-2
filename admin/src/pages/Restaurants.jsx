@@ -50,17 +50,29 @@ const Restaurants = () => {
   const handleToggleStatus = async (restaurant) => {
     try {
       const newStatus = restaurant.statut === 'actif' || restaurant.statut === 'ouvert' ? 'fermé' : 'actif'
-      await restaurantService.updateStatus(restaurant.id, newStatus)
       
-      // Mettre à jour localement
+      console.log(`Changement de statut du restaurant ${restaurant.id} vers "${newStatus}"`)
+      
+      // Importer firebaseService
+      const { default: firebaseService } = await import('../services/firebaseService')
+      
+      // Mettre à jour le statut dans Firebase pour la synchronisation en temps réel
+      await firebaseService.updateRestaurant(restaurant.id.toString(), {
+        statut: newStatus,
+        name: restaurant.name || restaurant.libelle,
+        adresse: restaurant.adresse || restaurant.address,
+        phone: restaurant.phone || restaurant.telephone,
+      })
+      
+      // Mettre à jour localement pour un feedback immédiat
       setRestaurants(restaurants.map(r => 
         r.id === restaurant.id ? { ...r, statut: newStatus } : r
       ))
       
-      alert(`Restaurant ${newStatus === 'actif' ? 'ouvert' : 'fermé'} avec succès`)
+      alert(`Restaurant ${newStatus === 'actif' ? 'ouvert' : 'fermé'} avec succès!\n\nLe changement est visible dans l'application mobile.`)
     } catch (error) {
       console.error('Erreur lors du changement de statut:', error)
-      alert('Erreur lors du changement de statut du restaurant')
+      alert(`Erreur: ${error.message || 'Impossible de changer le statut du restaurant'}`)
     }
   }
 

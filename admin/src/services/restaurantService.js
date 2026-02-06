@@ -110,34 +110,30 @@ class RestaurantService {
    */
   async updateStatus(id, status) {
     try {
-      // Essayer d'abord avec PATCH /resto/{id}/status
-      let response = await fetch(`${API_BASE_URL}/resto/${id}/status`, {
-        method: 'PATCH',
+      // Récupérer d'abord le restaurant complet
+      const restaurant = await this.getById(id)
+      
+      // Mettre à jour avec PUT en incluant toutes les données
+      const response = await fetch(`${API_BASE_URL}/resto/${id}`, {
+        method: 'PUT',
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ statut: status }),
+        body: JSON.stringify({
+          name: restaurant.name,
+          adresse: restaurant.adresse,
+          phone: restaurant.phone,
+          altitude: restaurant.altitude,
+          longitude: restaurant.longitude,
+          ville_id: restaurant.ville_id,
+          statut: status,
+        }),
       })
 
-      // Si ça ne fonctionne pas, essayer PUT /resto/{id}
       if (!response.ok) {
-        const restaurant = await this.getById(id)
-        response = await fetch(`${API_BASE_URL}/resto/${id}`, {
-          method: 'PUT',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            ...restaurant,
-            statut: status,
-          }),
-        })
-      }
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`)
+        const errorText = await response.text()
+        throw new Error(`Erreur HTTP ${response.status}: ${errorText}`)
       }
 
       const data = await response.json()

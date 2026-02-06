@@ -4,7 +4,6 @@ import {
   Tag, 
   TrendingUp, 
   Users,
-  Clock,
   Loader2
 } from 'lucide-react'
 import firebaseService from '../services/firebaseService'
@@ -115,17 +114,19 @@ const Dashboard = () => {
         <div className="card">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Actions Rapides</h2>
           <div className="space-y-3">
-            <button className="w-full btn-primary text-left flex items-center space-x-3">
+            <button 
+              onClick={() => window.location.href = '/promos'}
+              className="w-full btn-primary text-left flex items-center space-x-3"
+            >
               <Tag size={20} />
-              <span>Créer une nouvelle promo</span>
+              <span>Gérer les prix produits</span>
             </button>
-            <button className="w-full btn-secondary text-left flex items-center space-x-3">
+            <button 
+              onClick={() => window.location.href = '/restaurants'}
+              className="w-full btn-secondary text-left flex items-center space-x-3"
+            >
               <Store size={20} />
               <span>Gérer les restaurants</span>
-            </button>
-            <button className="w-full btn-secondary text-left flex items-center space-x-3">
-              <Clock size={20} />
-              <span>Voir les horaires</span>
             </button>
           </div>
         </div>
