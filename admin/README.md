@@ -1,65 +1,42 @@
 # Mayombe Admin Dashboard
 
-Dashboard d'administration pour gérer la plateforme Mayombe.
+Dashboard d'administration pour la gestion des restaurants Mayombe.
 
-## Technologies
+## Fonctionnalités
 
-- React 18
-- Vite
-- Firebase (Firestore + Realtime Database)
+- 📊 **Dashboard** : Vue d'ensemble avec statistiques
+- 🏷️ **Gestion des Promos** : Création et gestion des promotions
+- 🏪 **Gestion des Restaurants** : 
+  - Ouverture/Fermeture des restaurants
+  - Modification de la photo de couverture
+  - Modification du logo du restaurant
+  - Gestion des informations du restaurant
 
 ## Installation
 
 ```bash
-cd admin
 npm install
 ```
 
-## Démarrage
+## Développement
 
 ```bash
 npm run dev
 ```
 
-L'application sera accessible sur `http://localhost:3000`
+Le dashboard sera accessible sur `http://localhost:3000`
 
-## Build pour production
+## Build
 
 ```bash
 npm run build
 ```
 
-Les fichiers seront générés dans le dossier `dist/`
+## Technologies
 
-## Fonctionnalités
-
-### 🎯 Gestion des Promotions
-- Créer des promotions pour les produits
-- Définir prix promotionnel et pourcentage de réduction
-- Définir dates de début et fin
-- Supprimer des promotions
-
-### 🍽️ Gestion des Statuts Restaurants
-- Voir tous les restaurants (Brazzaville et Pointe-Noire)
-- Basculer le statut Ouvert/Fermé en temps réel
-- Rechercher des restaurants
-
-### ⭐ Visualisation des Annotations
-- Voir les notes moyennes des produits et restaurants
-- Filtrer par type (Produits / Restaurants)
-- Rechercher par nom
-- Trier par note moyenne décroissante
-
-## Configuration Firebase
-
-Le dashboard utilise la même configuration Firebase que l'application mobile :
-- **Firestore** : Promos, Ratings, Métadonnées
-- **Realtime Database** : Statuts restaurants
-
-## Déploiement
-
-Le dashboard peut être déployé sur :
-- Vercel
-- Netlify
-- Firebase Hosting
-- Tout hébergeur web statique
+- React 18
+- Vite
+- Tailwind CSS
+- React Router
+- Lucide React (icônes)
+- Axios (API)

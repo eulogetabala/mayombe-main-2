@@ -490,7 +490,7 @@ const PaymentScreen = ({ route, navigation }) => {
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>{t.payment.subtotal}</Text>
             <Text style={styles.summaryValue}>
-              {currentOrderDetails.subtotal.toLocaleString()} FCFA
+              {(currentOrderDetails?.subtotal || 0).toLocaleString()} FCFA
             </Text>
           </View>
           
@@ -515,7 +515,7 @@ const PaymentScreen = ({ route, navigation }) => {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.payment.deliveryFee}</Text>
                 <Text style={styles.summaryValue}>
-                  {deliveryFee.toLocaleString()} FCFA
+                  {(deliveryFee || 0).toLocaleString()} FCFA
                 </Text>
               </View>
             </>
@@ -524,7 +524,7 @@ const PaymentScreen = ({ route, navigation }) => {
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>{t.payment.total}</Text>
             <Text style={styles.totalValue}>
-              {currentOrderDetails.total.toLocaleString()} FCFA
+              {(currentOrderDetails?.total || 0).toLocaleString()} FCFA
             </Text>
           </View>
         </View>
@@ -541,7 +541,7 @@ const PaymentScreen = ({ route, navigation }) => {
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <Text style={styles.payButtonText}>
-              {t.payment.proceedToPayment.replace('{amount}', currentOrderDetails.total.toLocaleString())}
+              {t.payment.proceedToPayment.replace('{amount}', (currentOrderDetails?.total || 0).toLocaleString())}
             </Text>
           )}
         </TouchableOpacity>

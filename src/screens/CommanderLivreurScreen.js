@@ -93,10 +93,21 @@ const CommanderLivreurScreen = () => {
         setIsSubmitting(false);
         // Naviguer vers la page de paiement
         navigation.navigate('PaymentScreen', {
-          orderType: 'livreur',
-          amount: deliveryFee,
-          distance: deliveryDistance,
-          description: 'Réservation livreur'
+          orderDetails: {
+            orderType: 'livreur',
+            subtotal: deliveryFee,
+            deliveryFee: 0,
+            total: deliveryFee,
+            distance: deliveryDistance,
+            description: 'Réservation livreur',
+            items: [
+              {
+                name: 'Service de livraison',
+                price: deliveryFee,
+                quantity: 1
+              }
+            ]
+          }
         });
       }, 1000);
 

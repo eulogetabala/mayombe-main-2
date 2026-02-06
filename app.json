@@ -2,7 +2,7 @@
   "expo": {
     "name": "mayombeclient",
     "slug": "mayombeclient",
-    "version": "1.2.2",
+    "version": "1.2.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -17,7 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.thprojet.mayombeclient",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "buildNumber": "18",
+      "buildNumber": "19",
       "userInterfaceStyle": "light",
       "config": {
         "googleMapsApiKey": "AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI"
