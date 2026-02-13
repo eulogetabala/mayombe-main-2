@@ -68,6 +68,7 @@ import StripeTest from './src/components/StripeTest';
 import StripePaymentScreen from './src/screens/StripePaymentScreen';
 import NoConnectionScreen from './src/components/common/NoConnectionScreen';
 import ConnectivityBanner from './src/components/common/ConnectivityBanner';
+import { ConnectivityProvider, useConnectivity } from './src/context/ConnectivityContext';
 
 SplashScreen.preventAutoHideAsync();
 const Stack = createNativeStackNavigator();
@@ -132,49 +133,6 @@ const  AppNavigator = ({ initialRoute }) => {
 export default function App() {
   const [isAppReady, setIsAppReady] = useState(false);
   const [initialRoute, setInitialRoute] = useState("LanguageSelection");
-  const [isConnected, setIsConnected] = useState(true);
-  
-  // Détecter l'état de la connexion réseau (si NetInfo est disponible)
-  useEffect(() => {
-    if (!NetInfo) {
-      setIsConnected(true);
-      return;
-    }
-
-    const checkApiReachability = async () => {
-      try {
-        // En plus de NetInfo, on vérifie si on peut atteindre le serveur (Heartbeat)
-        const response = await fetch("https://www.api-mayombe.mayombe-app.com/public/api/categories", {
-          method: 'HEAD', // Léger
-        });
-        return response.ok;
-      } catch (error) {
-        return false;
-      }
-    };
-
-    const updateConnectionState = async (state) => {
-      const isInternetReachable = state.isInternetReachable !== false;
-      const isConnectedToNetwork = state.isConnected;
-      
-      if (isConnectedToNetwork && isInternetReachable) {
-        // Optionnel: Double check avec un ping API si on veut être ultra-sûr
-        setIsConnected(true);
-      } else {
-        setIsConnected(false);
-      }
-    };
-
-    // Vérifier l'état initial
-    NetInfo.fetch().then(updateConnectionState);
-
-    // Écouter les changements de connexion
-    const unsubscribe = NetInfo.addEventListener(updateConnectionState);
-
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     const prepareApp = async () => {
@@ -212,8 +170,7 @@ export default function App() {
 
         await initializeImageCache();
         
-        // Initialiser le service FCM (listeners) MÊME si on a déjà un token
-        // C'est crucial pour recevoir les notifications quand l'app est ouverte
+        // Initialiser le service FCM
         const fcmService = require('./src/services/fcmService').default;
         await fcmService.initialize();
         
@@ -243,43 +200,42 @@ export default function App() {
     );
   }
 
-  // Si pas de connexion au DÉMARRAGE de l'app, afficher l'écran bloquant
-  // Sinon, on utilisera la bannière discrète (ConnectivityBanner)
-  if (!isConnected && !isAppReady) {
-    return (
-      <NoConnectionScreen
-        onRetry={async () => {
-          if (NetInfo) {
-            const netInfoState = await NetInfo.fetch();
-            setIsConnected(netInfoState.isConnected ?? false);
-          }
-        }}
-      />
-    );
-  }
-
   return (
     <StripeProvider publishableKey={getStripePublishableKey()}>
-      <LanguageProvider>
-        <AuthProvider>
-          <RefreshProvider>
-            <CartProvider>
-              <FavoritesProvider>
-                <RatingsProvider>
-                  <ConnectivityBanner isConnected={isConnected} />
-                  <NavigationContainer>
-                    <AppNavigator initialRoute={initialRoute} />
-                  </NavigationContainer>
-                  <Toast />
-                </RatingsProvider>
-              </FavoritesProvider>
-            </CartProvider>
-          </RefreshProvider>
-        </AuthProvider>
-      </LanguageProvider>
+      <ConnectivityProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <RefreshProvider>
+              <CartProvider>
+                <FavoritesProvider>
+                  <RatingsProvider>
+                    <MainAppContent initialRoute={initialRoute} />
+                    <Toast />
+                  </RatingsProvider>
+                </FavoritesProvider>
+              </CartProvider>
+            </RefreshProvider>
+          </AuthProvider>
+        </LanguageProvider>
+      </ConnectivityProvider>
     </StripeProvider>
   );
 }
+
+// Composant séparé pour pouvoir utiliser useConnectivity
+const MainAppContent = ({ initialRoute }) => {
+  const { isConnected, checkConnection } = useConnectivity();
+
+  if (!isConnected) {
+    return <NoConnectionScreen onRetry={checkConnection} />;
+  }
+
+  return (
+    <NavigationContainer>
+      <AppNavigator initialRoute={initialRoute} />
+    </NavigationContainer>
+  );
+};
 
 const styles = StyleSheet.create({
   splashContainer: {

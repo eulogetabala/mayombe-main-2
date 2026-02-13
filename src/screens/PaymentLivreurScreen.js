@@ -87,10 +87,16 @@ const PaymentLivreurScreen = ({ route, navigation }) => {
 
       if (response.ok) {
         // 2. Naviguer vers l'écran de traitement final
+        // Pour les livreurs, les adresses sont dans deliveryDetails
+        // On les passe aussi dans address et phone pour ProcessPayment
         navigation.navigate('ProcessPayment', {
           orderDetails: {
             ...orderDetails,
             paymentMethod: selectedMethod,
+            // Passer l'adresse de livraison dans le format attendu par ProcessPayment
+            address: orderDetails.deliveryDetails?.deliveryAddress || orderDetails.deliveryDetails?.pickupAddress || '',
+            // Passer le téléphone du destinataire
+            phone: orderDetails.deliveryDetails?.recipientPhone || '',
           },
           onPaymentSuccess: onPaymentSuccess,
         });

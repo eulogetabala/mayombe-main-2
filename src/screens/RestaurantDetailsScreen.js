@@ -23,6 +23,7 @@ import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
 import promoService from '../services/promoService';
 import restaurantStatusService from '../services/restaurantStatusService';
 import StatusBadge from '../components/StatusBadge';
+import { resolveImageUrl } from '../Utils/imageUtils';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -129,6 +130,51 @@ const RestaurantDetails = ({ route, navigation }) => {
     }
   }, [userLocation, restaurant]);
 
+  // Récupérer les images Firebase au chargement initial
+  useEffect(() => {
+    const fetchFirebaseImages = async () => {
+      if (!restaurant?.id) return;
+      
+      try {
+        console.log(`🖼️ Récupération des images Firebase pour le restaurant ${restaurant.id}`);
+        const images = await restaurantStatusService.getRestaurantImages(restaurant.id.toString());
+        
+        setRestaurant(prev => {
+          const newState = { ...prev };
+          
+          // Résoudre les URLs d'images avec priorité Firebase > API > défaut
+          if (images.cover) {
+            newState.image = resolveImageUrl(
+              images.cover,
+              prev.cover || initialRestaurant?.cover,
+              require("../../assets/images/2.jpg")
+            );
+          } else if (prev.cover || initialRestaurant?.cover) {
+            // Si pas d'image Firebase, utiliser l'API
+            newState.image = resolveImageUrl(
+              null,
+              prev.cover || initialRestaurant?.cover,
+              require("../../assets/images/2.jpg")
+            );
+          }
+          
+          if (images.logo) {
+            newState.logo = resolveImageUrl(images.logo, null, null);
+          } else if (prev.logo || initialRestaurant?.logo) {
+            // Si pas de logo Firebase, utiliser l'API
+            newState.logo = resolveImageUrl(null, prev.logo || initialRestaurant?.logo, null);
+          }
+          
+          return newState;
+        });
+      } catch (error) {
+        console.error('❌ Erreur lors de la récupération des images Firebase:', error);
+      }
+    };
+    
+    fetchFirebaseImages();
+  }, [restaurant?.id, initialRestaurant]);
+
   // Récupérer le statut du restaurant en temps réel
   useEffect(() => {
     if (!restaurant?.id) return;
@@ -143,19 +189,15 @@ const RestaurantDetails = ({ route, navigation }) => {
           const newState = { ...prev, isOpen: status.isOpen };
           
           // Si Firebase contient de nouvelles images, on les utilise
-          const resolveImageUrl = (p) => {
-            if (!p) return null;
-            if (typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://'))) {
-              return { uri: p };
-            }
-            return { uri: `https://www.mayombe-app.com/uploads_admin/${p}` };
-          };
-
           if (status.cover) {
-            newState.image = resolveImageUrl(status.cover);
+            newState.image = resolveImageUrl(
+              status.cover,
+              prev.cover || initialRestaurant?.cover,
+              require("../../assets/images/2.jpg")
+            );
           }
           if (status.logo) {
-            newState.logo = resolveImageUrl(status.logo);
+            newState.logo = resolveImageUrl(status.logo, null, null);
           }
           
           return newState;
@@ -164,7 +206,7 @@ const RestaurantDetails = ({ route, navigation }) => {
     );
     
     return () => unsubscribe();
-  }, [restaurant?.id]);
+  }, [restaurant?.id, initialRestaurant]);
 
   // Nouvelle récupération des détails du restaurant
   useEffect(() => {
@@ -411,7 +453,7 @@ const RestaurantDetails = ({ route, navigation }) => {
         showTitle={false}
         style={styles.uniformHeader}
       />
-      <View style={styles.headerContent}>
+      <View style={[styles.headerContent, restaurant.logo && styles.headerContentWithLogo]}>
         <View style={styles.headerTopRow}>
           <Text style={styles.headerName}>{restaurant.name}</Text>
           <StatusBadge isOpen={restaurant.isOpen !== false} />
@@ -491,38 +533,18 @@ const RestaurantDetails = ({ route, navigation }) => {
 
   const handleAddToCart = async (product) => {
     try {
-      console.log('Produit à ajouter avec compléments:', product);
-      console.log('ID du produit:', product.id);
-      console.log('Type de l\'ID:', typeof product.id);
-      
-      // NE PAS appliquer la majoration ici - elle sera appliquée dans RestaurantProductModal
-      // Passer le prix brut au produit
-      const basePrice = typeof product.price === 'string' 
-        ? parseFloat(product.price.replace(/[^\d.-]/g, ''))
-        : product.price || 0;
-
+      // Le produit vient déjà de RestaurantProductModal avec tous les calculs faits
+      // On doit juste ajouter les informations du restaurant et s'assurer que tout est conservé
       const productToAdd = {
-        id: product.id,
-        name: product.name,
-        price: basePrice, // Prix brut sans majoration
-        image: product.image,
-        quantity: product.quantity || 1,
-        complements: product.complements || [], // Compléments avec prix bruts
+        ...product, // Conserver TOUTES les propriétés du produit (y compris unitPrice, hasPromo, promoPrice, etc.)
         restaurant: restaurant, // Passer l'objet restaurant complet (avec altitude/longitude)
-        productKey: `${product.id}-${product.complements?.map(c => c.id).join('-') || ''}`,
+        // S'assurer que productKey est correct
+        productKey: product.productKey || `${product.id}-${product.complements?.map(c => c.id).join('-') || ''}`,
         isMenu: true,
         menu_id: product.id,
         product_id: null,
         type: 'menu'
       };
-
-      console.log('🛒 [RestaurantDetailsScreen] Tentative ajout au panier:', productToAdd.name);
-      console.log('🏢 [RestaurantDetailsScreen] Restaurant transmis:', {
-        id: restaurant.id,
-        name: restaurant.name,
-        lat: restaurant.altitude || restaurant.latitude,
-        lng: restaurant.longitude
-      });
       
       const success = await addToCart(productToAdd);
       if (success) {
@@ -660,8 +682,8 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     position: 'absolute',
-    top: 60,
-    alignSelf: 'center',
+    bottom: 16,
+    left: 16,
     width: 80,
     height: 80,
     borderRadius: 40,
@@ -689,6 +711,9 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 16,
     right: 16,
+  },
+  headerContentWithLogo: {
+    left: 110,
   },
   headerName: {
     fontSize: 28,

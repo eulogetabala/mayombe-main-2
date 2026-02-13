@@ -16,6 +16,7 @@ import FirebaseTrackingService from '../services/firebase';
 import sharedCartService from '../services/sharedCartService';
 import * as ExpoLocation from 'expo-location';
 import { CartSkeleton } from '../components/Skeletons';
+import { applyMarkup } from '../Utils/priceUtils';
 
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -672,9 +673,25 @@ const CartScreen = ({ navigation, route }) => {
         ) : null}
 
         <View style={styles.priceContainer}>
-          <Text style={styles.itemPrice}>
-            Prix unitaire: {formatPrice(item.unitPrice)} FCFA
-          </Text>
+          {item.hasPromo && item.originalPrice ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={styles.itemPrice}>
+                Prix unitaire: {formatPrice(item.unitPrice)} FCFA
+              </Text>
+              <Text style={{ 
+                fontSize: 12, 
+                color: '#999', 
+                textDecorationLine: 'line-through', 
+                marginLeft: 8 
+              }}>
+                {formatPrice(applyMarkup(parseFloat(item.originalPrice)))} FCFA
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.itemPrice}>
+              Prix unitaire: {formatPrice(item.unitPrice)} FCFA
+            </Text>
+          )}
           
           <Text style={styles.itemTotalPrice}>
             Total: {formatPrice(item.total)} FCFA

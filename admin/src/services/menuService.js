@@ -1,4 +1,6 @@
-import { API_BASE_URL, UPLOADS_BASE_URL } from '../config/constants'
+import api from './api'
+import { UPLOADS_BASE_URL } from '../config/constants'
+import restaurantService from './restaurantService'
 
 /**
  * Service pour gérer les menus (produits) via l'API externe
@@ -6,68 +8,86 @@ import { API_BASE_URL, UPLOADS_BASE_URL } from '../config/constants'
 class MenuService {
   /**
    * Récupérer tous les menus de tous les restaurants
+   * Récupère les produits de TOUS les sous-menus (déjeuner, repas, dîner, boisson, etc.)
    */
   async getAllMenus() {
     try {
-      // Récupérer tous les restaurants
-      const restaurantsResponse = await fetch(`${API_BASE_URL}/resto`, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!restaurantsResponse.ok) {
-        throw new Error(`Erreur HTTP: ${restaurantsResponse.status}`)
-      }
-
-      const restaurants = await restaurantsResponse.json()
+      console.log('📋 [MenuService] Chargement de tous les menus...')
       
-      // Pour chaque restaurant, récupérer ses menus
+      // 1. Récupérer tous les sous-menus disponibles
+      let subMenus = []
+      try {
+        const subMenusResponse = await api.get('/submenu-list')
+        subMenus = Array.isArray(subMenusResponse.data) ? subMenusResponse.data : []
+        console.log(`📋 [MenuService] ${subMenus.length} sous-menus trouvés:`, subMenus.map(sm => sm.libelle || sm.name).join(', '))
+      } catch (error) {
+        console.warn('⚠️ [MenuService] Impossible de récupérer la liste des sous-menus, utilisation des IDs par défaut:', error)
+        // Fallback: utiliser des IDs de sous-menus communs si l'API ne répond pas
+        subMenus = [
+          { id: 1, libelle: 'Déjeuner' },
+          { id: 2, libelle: 'Repas' },
+          { id: 3, libelle: 'Boissons' },
+          { id: 4, libelle: 'Dîner' },
+          { id: 5, libelle: 'Desserts' },
+        ]
+      }
+      
+      // 2. Récupérer tous les restaurants
+      const restaurants = await restaurantService.getAll()
+      console.log(`📋 [MenuService] ${restaurants.length} restaurants trouvés`)
+      
+      // 3. Pour chaque restaurant, récupérer les menus de TOUS les sous-menus
       const allMenus = []
+      const menuMap = new Map() // Pour éviter les doublons
       
       for (const restaurant of restaurants) {
-        try {
-          // Utiliser une plage de dates large pour récupérer tous les menus
-          const menusResponse = await fetch(
-            `${API_BASE_URL}/get-menu-by-resto?debut=2025-01-01&fin=2026-12-31&sub_menu_id=4&resto_id=${restaurant.id}`,
-            {
-              method: 'GET',
-              headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json',
-              },
-            }
-          )
-
-          if (menusResponse.ok) {
-            const menus = await menusResponse.json()
+        for (const subMenu of subMenus) {
+          try {
+            const subMenuId = subMenu.id || subMenu.sub_menu_id
+            if (!subMenuId) continue
             
-            if (Array.isArray(menus)) {
-              // Enrichir chaque menu avec les infos du restaurant
-              const enrichedMenus = menus.map(menu => ({
-                ...menu,
-                restaurant_name: restaurant.name,
-                restaurant_id: restaurant.id,
-                // Construire l'URL complète de l'image
-                image_url: menu.cover 
-                  ? `${UPLOADS_BASE_URL}/${menu.cover}`
-                  : null,
-              }))
-              
-              allMenus.push(...enrichedMenus)
+            // Utiliser le service api qui gère automatiquement le proxy
+            const menusResponse = await api.get(
+              `/get-menu-by-resto?debut=2025-01-01&fin=2026-12-31&sub_menu_id=${subMenuId}&resto_id=${restaurant.id}`
+            )
+
+            const menus = menusResponse.data
+            
+            if (Array.isArray(menus) && menus.length > 0) {
+              // Enrichir chaque menu avec les infos du restaurant et du sous-menu
+              menus.forEach(menu => {
+                // Créer une clé unique pour éviter les doublons
+                const uniqueKey = `${restaurant.id}_${menu.id || menu.libelle}_${menu.prix}`
+                
+                if (!menuMap.has(uniqueKey)) {
+                  const enrichedMenu = {
+                    ...menu,
+                    restaurant_name: restaurant.name || restaurant.libelle,
+                    restaurant_id: restaurant.id,
+                    sub_menu_id: subMenuId,
+                    sub_menu_name: subMenu.libelle || subMenu.name || `Sous-menu ${subMenuId}`,
+                    // Construire l'URL complète de l'image
+                    image_url: menu.cover 
+                      ? `${UPLOADS_BASE_URL}/${menu.cover}`
+                      : null,
+                  }
+                  
+                  menuMap.set(uniqueKey, enrichedMenu)
+                  allMenus.push(enrichedMenu)
+                }
+              })
             }
+          } catch (error) {
+            console.warn(`⚠️ [MenuService] Erreur pour restaurant ${restaurant.id}, sous-menu ${subMenu.id}:`, error.message)
+            // Continuer avec les autres sous-menus même en cas d'erreur
           }
-        } catch (error) {
-          console.error(`Erreur lors de la récupération des menus du restaurant ${restaurant.id}:`, error)
-          // Continuer avec les autres restaurants même en cas d'erreur
         }
       }
 
+      console.log(`✅ [MenuService] Total: ${allMenus.length} produits chargés de tous les sous-menus`)
       return allMenus
     } catch (error) {
-      console.error('Erreur lors de la récupération de tous les menus:', error)
+      console.error('❌ [MenuService] Erreur lors de la récupération de tous les menus:', error)
       throw error
     }
   }
@@ -77,22 +97,12 @@ class MenuService {
    */
   async getMenusByRestaurant(restaurantId) {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/get-menu-by-resto?debut=2025-01-01&fin=2026-12-31&sub_menu_id=4&resto_id=${restaurantId}`,
-        {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-          },
-        }
+      // Utiliser le service api qui gère automatiquement le proxy
+      const response = await api.get(
+        `/get-menu-by-resto?debut=2025-01-01&fin=2026-12-31&sub_menu_id=4&resto_id=${restaurantId}`
       )
 
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`)
-      }
-
-      const menus = await response.json()
+      const menus = response.data
       
       // Enrichir avec les URLs d'images
       return menus.map(menu => ({
@@ -102,7 +112,7 @@ class MenuService {
           : null,
       }))
     } catch (error) {
-      console.error('Erreur lors de la récupération des menus du restaurant:', error)
+      console.error('❌ [MenuService] Erreur lors de la récupération des menus du restaurant:', error)
       throw error
     }
   }

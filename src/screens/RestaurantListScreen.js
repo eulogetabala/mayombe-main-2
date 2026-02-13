@@ -16,6 +16,8 @@ import { useRatings } from '../context/RatingsContext';
 import restaurantStatusService from '../services/restaurantStatusService';
 import InteractiveRating from '../components/InteractiveRating';
 import StatusBadge from '../components/StatusBadge';
+import { resolveImageUrl } from '../Utils/imageUtils';
+import ConnectionError from '../components/ConnectionError';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -119,13 +121,16 @@ const RestaurantListScreen = ({ route, navigation }) => {
       const data = await response.json();
 
       if (Array.isArray(data)) {
-        // Filtrer uniquement Brazzaville et Pointe-Noire
-        const filteredData = data.filter(restaurant => {
-          const cityName = restaurant.ville?.libelle || restaurant.ville?.name || "";
-          return cityName.toLowerCase().includes("brazzaville") || 
-                 cityName.toLowerCase().includes("pointe-noire") ||
-                 cityName.toLowerCase().includes("pointe noire");
-        });
+        // Si un city est fourni, on fait confiance à l'API et on ne filtre pas par nom de ville
+        // Sinon, on filtre par nom de ville (Brazzaville ou Pointe-Noire)
+        const filteredData = city 
+          ? data // Si city est fourni, on prend tous les restaurants retournés par l'API
+          : data.filter(restaurant => {
+              const cityName = restaurant.ville?.libelle || restaurant.ville?.name || "";
+              return cityName.toLowerCase().includes("brazzaville") || 
+                     cityName.toLowerCase().includes("pointe-noire") ||
+                     cityName.toLowerCase().includes("pointe noire");
+            });
 
         const mappedRestaurants = filteredData.map(restaurant => {
           // Calcul distance si possible
@@ -159,9 +164,8 @@ const RestaurantListScreen = ({ route, navigation }) => {
             address: restaurant.adresse,
             ville_id: restaurant.ville_id,
             ville: restaurant.ville?.libelle || "Ville inconnue",
-            image: restaurant.cover && typeof restaurant.cover === 'string'
-              ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
-              : require("../../assets/images/2.jpg"),
+            cover: restaurant.cover, // Garder le chemin original pour fallback
+            logo: restaurant.logo, // Garder le chemin original pour fallback
             cuisine: "Cuisine africaine",
             deliveryTime: deliveryTime,
             distance: distance,
@@ -169,28 +173,44 @@ const RestaurantListScreen = ({ route, navigation }) => {
           };
         });
 
-        // Récupérer les ratings et statuts depuis Firebase
+        // Récupérer les ratings, statuts et images depuis Firebase
         const restaurantIds = mappedRestaurants.map(r => r.id.toString());
         let ratingsMap = {};
         let statusesMap = {};
+        let imagesMap = {};
         
         try {
           if (getBatchRatings && typeof getBatchRatings === 'function') {
             ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
           }
           statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+          imagesMap = await restaurantStatusService.getBatchRestaurantImages(restaurantIds);
         } catch (error) {
-          console.error('❌ Erreur lors de la récupération des ratings ou statuts:', error);
+          console.error('❌ Erreur lors de la récupération des ratings, statuts ou images:', error);
         }
 
-        // Enrichir les restaurants avec ratings et statuts
+        // Enrichir les restaurants avec ratings, statuts et images
         const enrichedRestaurants = mappedRestaurants.map(restaurant => {
           const restaurantIdStr = restaurant.id.toString();
           const rating = ratingsMap[restaurantIdStr] || { averageRating: 0, totalRatings: 0 };
           const status = statusesMap[restaurantIdStr] || { isOpen: true };
+          const images = imagesMap[restaurantIdStr] || { cover: null, logo: null };
+          
+          // Résoudre les URLs d'images avec priorité Firebase > API > défaut
+          const coverImage = resolveImageUrl(
+            images.cover,
+            restaurant.cover || data.find(r => r.id === restaurant.id)?.cover,
+            require("../../assets/images/2.jpg")
+          );
+          
+          const logoImage = images.logo 
+            ? resolveImageUrl(images.logo, null, null)
+            : (restaurant.logo ? resolveImageUrl(null, restaurant.logo, null) : null);
           
           return {
             ...restaurant,
+            image: coverImage,
+            logo: logoImage,
             averageRating: rating.averageRating,
             totalRatings: rating.totalRatings,
             isOpen: status.isOpen,
@@ -253,6 +273,13 @@ const RestaurantListScreen = ({ route, navigation }) => {
       >
         <View style={styles.imageContainer}>
           <Image source={restaurant.image} style={styles.restaurantImage} />
+          
+          {/* Logo du restaurant */}
+          {restaurant.logo && (
+            <View style={styles.logoContainer}>
+              <Image source={restaurant.logo} style={styles.logoImage} />
+            </View>
+          )}
           
           {/* Bouton favoris en haut à gauche */}
           <TouchableOpacity
@@ -328,12 +355,20 @@ const RestaurantListScreen = ({ route, navigation }) => {
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchRestaurants}>
-          <Text style={styles.retryText}>Réessayer</Text>
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {cityName ? `Restaurants à ${cityName}` : 'Tous les restaurants'}
+          </Text>
+        </View>
+        <ConnectionError onRetry={fetchRestaurants} />
+      </SafeAreaView>
     );
   }
 
@@ -408,6 +443,28 @@ const styles = StyleSheet.create({
   restaurantImage: {
     width: '100%',
     height: 120,
+    resizeMode: 'cover',
+  },
+  logoContainer: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#fff',
+    padding: 2,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 2,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 25,
     resizeMode: 'cover',
   },
   deliveryBadge: {

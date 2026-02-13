@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "mayombe-ba11b"
+  },
+  "targets": {
+    "mayombe-ba11b": {
+      "hosting": {
+        "default": [
+          "mayombe-ba11b"
+        ],
+        "admin-mayombe": [
+          "admin-mayombe"
+        ]
+      }
+    }
+  }
+}

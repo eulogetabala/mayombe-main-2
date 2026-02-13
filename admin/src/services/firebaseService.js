@@ -94,12 +94,149 @@ class FirebaseService {
    */
   async uploadImage(file, path) {
     try {
+      // Vérification du fichier
+      if (!file) {
+        throw new Error("Fichier manquant")
+      }
+      
+      // Vérifier la taille du fichier (max 10MB)
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      if (file.size > maxSize) {
+        throw new Error(`Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum: 10MB`)
+      }
+
+      console.log(`📤 Début upload: ${path}`, {
+        name: file.name,
+        type: file.type,
+        size: `${(file.size / 1024).toFixed(2)}KB`
+      })
+      
+      // S'assurer qu'on est authentifié (anonymement au minimum)
+      const { auth } = await import('../config/firebase')
+      const { signInAnonymously } = await import('firebase/auth')
+      
+      if (!auth.currentUser) {
+          console.log("🔐 Authentification anonyme avant upload...")
+          try {
+            await signInAnonymously(auth)
+            console.log("✅ Authentification anonyme réussie")
+          } catch (authError) {
+            console.warn("⚠️ Echec auth anonyme:", authError.message)
+            // On continue quand même, peut-être que les règles sont ouvertes
+          }
+      } else {
+        console.log("✅ Utilisateur déjà authentifié:", auth.currentUser.uid)
+      }
+      
       const storageReference = storageRef(storage, path)
-      const snapshot = await uploadBytes(storageReference, file)
-      const downloadURL = await getDownloadURL(snapshot.ref)
-      return downloadURL
+      let snapshot;
+
+      try {
+        // Méthode 1: Standard uploadBytes (recommandé)
+        console.log("📤 Tentative upload via SDK Firebase...")
+        snapshot = await uploadBytes(storageReference, file)
+        const downloadURL = await getDownloadURL(snapshot.ref)
+        console.log(`✅ Upload réussi (SDK): ${downloadURL}`)
+        return downloadURL
+      } catch (uploadError) {
+        console.warn("⚠️ Echec uploadBytes standard:", {
+          code: uploadError.code,
+          message: uploadError.message,
+          stack: uploadError.stack
+        })
+        
+        // Analyser l'erreur pour donner des conseils
+        if (uploadError.code === 'storage/unauthorized') {
+          throw new Error("❌ Permission refusée. Vérifiez les règles Firebase Storage dans la console Firebase (Storage > Rules).")
+        } else if (uploadError.code === 'storage/canceled') {
+          throw new Error("❌ Upload annulé. Vérifiez votre connexion internet.")
+        } else if (uploadError.code === 'storage/unknown') {
+          // Vérifier si c'est lié au plan Firebase
+          if (uploadError.message && (
+            uploadError.message.includes('billing') || 
+            uploadError.message.includes('plan') ||
+            uploadError.message.includes('upgrade') ||
+            uploadError.message.includes('forfait')
+          )) {
+            throw new Error("❌ Firebase Storage nécessite le plan Blaze. Allez dans Firebase Console > Paramètres du projet > Utilisation et facturation > Passer au plan Blaze (gratuit dans les limites : 5 GB stockage, 1 GB/jour téléchargement).")
+          }
+          throw new Error("❌ Erreur inconnue. Vérifiez que Firebase Storage est activé et que les règles sont correctes.")
+        } else if (uploadError.message && (
+          uploadError.message.includes('billing') || 
+          uploadError.message.includes('plan') ||
+          uploadError.message.includes('upgrade') ||
+          uploadError.message.includes('forfait') ||
+          uploadError.message.includes('Storage') && uploadError.message.includes('supérieur')
+        )) {
+          throw new Error("❌ Firebase Storage nécessite le plan Blaze. Allez dans Firebase Console > Paramètres du projet > Utilisation et facturation > Passer au plan Blaze (gratuit dans les limites : 5 GB stockage, 1 GB/jour téléchargement).")
+        }
+        
+        console.warn("⚠️ Tentative alternative via REST API...")
+        
+        // Méthode 2: API REST Directe (Bypass SDK)
+        try {
+            const bucketName = "mayombe-ba11b.firebasestorage.app"
+            const encodedPath = encodeURIComponent(path)
+            const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o?name=${encodedPath}`
+            
+            console.log("📤 Tentative upload via REST API...")
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': file.type
+                },
+                body: file
+            })
+            
+            if (!response.ok) {
+                const errorText = await response.text()
+                console.error("❌ Erreur REST API:", {
+                  status: response.status,
+                  statusText: response.statusText,
+                  body: errorText
+                })
+                throw new Error(`REST API Error (${response.status}): ${errorText}`)
+            }
+            
+            const data = await response.json()
+            // Construire l'URL de téléchargement publique
+            const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${data.downloadTokens}`
+            console.log(`✅ Upload réussi (REST): ${publicUrl}`)
+            return publicUrl
+
+        } catch (restError) {
+             console.error("❌ Echec upload REST:", restError.message)
+             
+             // Méthode 3: Fallback conversion arrayBuffer (Dernier recours)
+             try {
+                console.warn("⚠️ Tentative fallback arrayBuffer...")
+                const arrayBuffer = await file.arrayBuffer()
+                snapshot = await uploadBytes(storageReference, arrayBuffer, {
+                    contentType: file.type
+                })
+                const downloadURL = await getDownloadURL(snapshot.ref)
+                console.log(`✅ Upload réussi (arrayBuffer): ${downloadURL}`)
+                return downloadURL
+             } catch (bufferError) {
+                 console.error("❌ Echec upload arrayBuffer:", bufferError.message)
+                 // Lancer l'erreur la plus informative
+                 const finalError = new Error(
+                   `Échec de l'upload après 3 tentatives. ` +
+                   `Erreur SDK: ${uploadError.message}. ` +
+                   `Erreur REST: ${restError.message}. ` +
+                   `Vérifiez les règles Firebase Storage et votre connexion.`
+                 )
+                 finalError.originalError = uploadError
+                 throw finalError
+             }
+        }
+      }
     } catch (error) {
-      console.error(`Erreur lors du téléchargement de l'image (${path}):`, error)
+      console.error(`❌ Erreur finale lors du téléchargement de l'image (${path}):`, {
+        message: error.message,
+        code: error.code,
+        stack: error.stack
+      })
       throw error
     }
   }
@@ -116,11 +253,63 @@ class FirebaseService {
       
       if (Object.keys(updates).length > 0) {
         await update(restaurantRef, updates)
+        console.log(`✅ Images synchronisées dans Firebase pour restaurant ${restaurantId}:`, updates)
       }
       return true
     } catch (error) {
       console.error('Erreur lors de la synchronisation des images:', error)
       throw error
+    }
+  }
+
+  /**
+   * Récupérer les images d'un restaurant depuis Firebase Realtime Database
+   */
+  async getRestaurantImages(restaurantId) {
+    try {
+      const restaurantRef = ref(database, `restaurant_status/${restaurantId}`)
+      const snapshot = await get(restaurantRef)
+      
+      if (snapshot.exists()) {
+        const data = snapshot.val()
+        return {
+          cover: data.cover || null,
+          logo: data.logo || null
+        }
+      }
+      return { cover: null, logo: null }
+    } catch (error) {
+      console.error(`Erreur lors de la récupération des images pour ${restaurantId}:`, error)
+      return { cover: null, logo: null }
+    }
+  }
+
+  /**
+   * Récupérer les images de tous les restaurants depuis Firebase
+   */
+  async getAllRestaurantImages() {
+    try {
+      const statusRef = ref(database, 'restaurant_status')
+      const snapshot = await get(statusRef)
+      
+      if (snapshot.exists()) {
+        const data = snapshot.val()
+        const imagesMap = {}
+        
+        Object.keys(data).forEach(restaurantId => {
+          const status = data[restaurantId]
+          imagesMap[restaurantId] = {
+            cover: status.cover || null,
+            logo: status.logo || null
+          }
+        })
+        
+        return imagesMap
+      }
+      return {}
+    } catch (error) {
+      console.error('Erreur lors de la récupération de toutes les images:', error)
+      return {}
     }
   }
 
@@ -353,6 +542,122 @@ class FirebaseService {
       return []
     } catch (error) {
       console.error('Erreur lors de la récupération des commandes:', error)
+      return []
+    }
+  }
+
+  /**
+   * Récupérer les activités récentes pour le dashboard
+   */
+  async getRecentActivities(limit = 5) {
+    try {
+      const activities = []
+
+      // 1. Récupérer les restaurants récemment modifiés (via restaurant_status)
+      try {
+        const statusRef = ref(database, 'restaurant_status')
+        const statusSnapshot = await get(statusRef)
+        
+        if (statusSnapshot.exists()) {
+          const statusData = statusSnapshot.val()
+          Object.keys(statusData).forEach(restaurantId => {
+            const status = statusData[restaurantId]
+            if (status.updatedAt) {
+              activities.push({
+                type: status.isOpen ? 'restaurant_opened' : 'restaurant_closed',
+                title: status.isOpen ? 'Restaurant ouvert' : 'Restaurant fermé',
+                description: `Restaurant ID: ${restaurantId}`,
+                timestamp: status.updatedAt,
+                color: status.isOpen ? 'yellow' : 'red',
+                icon: 'store'
+              })
+            }
+          })
+        }
+      } catch (error) {
+        console.error('Erreur récupération statuts restaurants:', error)
+      }
+
+      // 2. Récupérer les promos récentes (promotions générales)
+      try {
+        const promos = await this.getPromos()
+        promos.forEach(promo => {
+          if (promo.createdAt || promo.updatedAt) {
+            const timestamp = promo.createdAt || promo.updatedAt
+            // Ne prendre que les promos créées récemment (pas les mises à jour)
+            if (promo.createdAt) {
+              activities.push({
+                type: 'promo_created',
+                title: 'Promo créée',
+                description: `Promotion créée`,
+                timestamp: timestamp,
+                color: 'blue',
+                icon: 'tag'
+              })
+            }
+          }
+        })
+      } catch (error) {
+        console.error('Erreur récupération promos:', error)
+      }
+
+      // 3. Récupérer les prix promotionnels des produits récents
+      try {
+        const productPromosRef = ref(database, 'product_promos')
+        const productPromosSnapshot = await get(productPromosRef)
+        
+        if (productPromosSnapshot.exists()) {
+          const productPromosData = productPromosSnapshot.val()
+          Object.keys(productPromosData).forEach(productId => {
+            const promo = productPromosData[productId]
+            if (promo.createdAt) {
+              activities.push({
+                type: 'product_promo_created',
+                title: 'Prix promo défini',
+                description: `Produit ID: ${productId}`,
+                timestamp: promo.createdAt,
+                color: 'blue',
+                icon: 'tag'
+              })
+            }
+          })
+        }
+      } catch (error) {
+        console.error('Erreur récupération prix promos produits:', error)
+      }
+
+      // 4. Récupérer les commandes récentes
+      try {
+        const orders = await this.getOrders()
+        orders.forEach(order => {
+          if (order.createdAt) {
+            activities.push({
+              type: 'order_created',
+              title: 'Nouvelle commande',
+              description: `Commande #${order.id || order.clientOrderId || 'N/A'}`,
+              timestamp: order.createdAt,
+              color: 'green',
+              icon: 'shopping-cart'
+            })
+          }
+        })
+      } catch (error) {
+        console.error('Erreur récupération commandes:', error)
+      }
+
+      // Trier par date (plus récent en premier) et limiter
+      const sortedActivities = activities
+        .filter(activity => activity.timestamp)
+        .sort((a, b) => {
+          const dateA = new Date(a.timestamp)
+          const dateB = new Date(b.timestamp)
+          return dateB - dateA
+        })
+        .slice(0, limit)
+
+      return sortedActivities
+    } catch (error) {
+      console.error('Erreur lors de la récupération des activités récentes:', error)
       return []
     }
   }

@@ -21,6 +21,8 @@ import { TrouverRestaurantSkeleton } from '../Skeletons';
 import restaurantStatusService from '../../services/restaurantStatusService';
 import InteractiveRating from '../InteractiveRating';
 import StatusBadge from '../StatusBadge';
+import { resolveImageUrl } from '../../Utils/imageUtils';
+import ConnectionError from '../ConnectionError';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const BASE_URL = "https://www.api-mayombe.mayombe-app.com/public";
@@ -221,36 +223,51 @@ const TrouverRestaurant = ({ navigation }) => {
             name: restaurant.name || "Nom non disponible",
             address: restaurant.adresse || "Adresse non disponible",
             phone: restaurant.phone || "Téléphone non disponible",
-            image: restaurant.cover && typeof restaurant.cover === 'string'
-              ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
-              : require("../../../assets/images/2.jpg"),
+            cover: restaurant.cover, // Garder le chemin original pour fallback
+            logo: restaurant.logo, // Garder le chemin original pour fallback
             distance: distance,
             deliveryTime: deliveryTime,
           };
         });
 
-        // Récupérer les ratings et statuts depuis Firebase
+        // Récupérer les ratings, statuts et images depuis Firebase
         const restaurantIds = mappedRestaurants.map(r => r.id.toString());
         let ratingsMap = {};
         let statusesMap = {};
+        let imagesMap = {};
         
         try {
           if (getBatchRatings && typeof getBatchRatings === 'function') {
             ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
           }
           statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+          imagesMap = await restaurantStatusService.getBatchRestaurantImages(restaurantIds);
         } catch (error) {
-          console.error('❌ Erreur lors de la récupération des ratings ou statuts:', error);
+          console.error('❌ Erreur lors de la récupération des ratings, statuts ou images:', error);
         }
 
-        // Enrichir les restaurants avec ratings et statuts
+        // Enrichir les restaurants avec ratings, statuts et images
         const enrichedRestaurants = mappedRestaurants.map(restaurant => {
           const restaurantIdStr = restaurant.id.toString();
           const rating = ratingsMap[restaurantIdStr] || { averageRating: 0, totalRatings: 0 };
           const status = statusesMap[restaurantIdStr] || { isOpen: true };
+          const images = imagesMap[restaurantIdStr] || { cover: null, logo: null };
+          
+          // Résoudre les URLs d'images avec priorité Firebase > API > défaut
+          const coverImage = resolveImageUrl(
+            images.cover,
+            restaurant.cover,
+            require("../../../assets/images/2.jpg")
+          );
+          
+          const logoImage = images.logo 
+            ? resolveImageUrl(images.logo, null, null)
+            : (restaurant.logo ? resolveImageUrl(null, restaurant.logo, null) : null);
           
           return {
             ...restaurant,
+            image: coverImage,
+            logo: logoImage,
             averageRating: rating.averageRating,
             totalRatings: rating.totalRatings,
             isOpen: status.isOpen,
@@ -336,6 +353,12 @@ const TrouverRestaurant = ({ navigation }) => {
       <View style={styles.cardHeader}>
         <Image source={item.image} style={styles.image} />
         <View style={styles.overlay} />
+        {/* Logo overlay */}
+        {item.logo && (
+          <View style={styles.logoContainer}>
+            <Image source={item.logo} style={styles.logoImage} />
+          </View>
+        )}
       </View>
 
       <View style={styles.cardContent}>
@@ -391,11 +414,8 @@ const TrouverRestaurant = ({ navigation }) => {
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchCities}>
-          <Text style={styles.retryButtonText}>Réessayer</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <ConnectionError onRetry={fetchCities} />
       </View>
     );
   }
@@ -549,6 +569,7 @@ const styles = StyleSheet.create({
 
   cardContent: {
     padding: 12,
+    paddingTop: 18, // Espace pour le logo qui dépasse
   },
   mainInfo: {
     flexDirection: 'row',
@@ -646,6 +667,28 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: '#FFF',
     fontFamily: 'Montserrat-Bold',
+  },
+  logoContainer: {
+    position: 'absolute',
+    bottom: -10,
+    left: 12,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#fff',
+    padding: 2,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    zIndex: 5,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 25,
+    resizeMode: 'cover',
   },
 });
 

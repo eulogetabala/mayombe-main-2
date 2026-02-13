@@ -31,15 +31,70 @@ const Restaurants = () => {
   })
 
   useEffect(() => {
-    // Charger les restaurants depuis l'API externe
+    // Charger les restaurants depuis l'API externe et fusionner avec les images Firebase
     const loadRestaurants = async () => {
       try {
         setLoading(true)
-        const data = await restaurantService.getAll()
-        setRestaurants(data)
+        
+        // 1. Charger les restaurants depuis l'API
+        // restaurantService.getAll() retourne déjà un tableau normalisé (pas une réponse axios)
+        const apiRestaurants = await restaurantService.getAll()
+        console.log('📡 Restaurants chargés depuis l\'API:', apiRestaurants.length)
+        console.log('📡 [DEBUG] Premier restaurant:', apiRestaurants[0])
+        
+        // 2. Charger les images depuis Firebase Realtime Database
+        const firebaseImages = await firebaseService.getAllRestaurantImages()
+        console.log('🖼️ Images chargées depuis Firebase:', Object.keys(firebaseImages).length, 'restaurants')
+        
+        // 3. Fusionner les données : priorité aux images Firebase
+        const mergedRestaurants = apiRestaurants.map(restaurant => {
+          const firebaseImage = firebaseImages[restaurant.id] || firebaseImages[restaurant.id.toString()]
+          
+          if (firebaseImage) {
+            // Si on a des images Firebase, les utiliser en priorité
+            return {
+              ...restaurant,
+              cover: firebaseImage.cover || restaurant.cover || restaurant.cover_url,
+              cover_url: firebaseImage.cover || restaurant.cover || restaurant.cover_url,
+              logo: firebaseImage.logo || restaurant.logo || restaurant.logo_url,
+              logo_url: firebaseImage.logo || restaurant.logo || restaurant.logo_url,
+              // Garder les originaux pour les mises à jour
+              cover_original: firebaseImage.cover || restaurant.cover_original,
+              logo_original: firebaseImage.logo || restaurant.logo_original
+            }
+          }
+          
+          // Sinon, utiliser les images de l'API
+          return restaurant
+        })
+        
+        console.log('✅ Restaurants fusionnés avec images Firebase')
+        setRestaurants(mergedRestaurants)
       } catch (error) {
-        console.error('Erreur lors du chargement des restaurants:', error)
-        alert('Erreur lors du chargement des restaurants')
+        console.error('❌ Erreur lors du chargement des restaurants:', error)
+        console.error('Détails:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          config: error.config
+        })
+        
+        // Message d'erreur plus détaillé
+        let errorMessage = 'Erreur lors du chargement des restaurants\n\n'
+        if (error.response) {
+          errorMessage += `Status: ${error.response.status}\n`
+          errorMessage += `URL: ${error.config?.url}\n`
+          if (error.response.data) {
+            errorMessage += `Détails: ${JSON.stringify(error.response.data)}\n`
+          }
+        } else if (error.request) {
+          errorMessage += `Erreur réseau: Impossible de contacter le serveur\n`
+          errorMessage += `Vérifiez que la fonction proxy est déployée\n`
+        } else {
+          errorMessage += `Erreur: ${error.message}\n`
+        }
+        
+        alert(errorMessage)
       } finally {
         setLoading(false)
       }
@@ -55,10 +110,8 @@ const Restaurants = () => {
       
       console.log(`Changement de statut du restaurant ${restaurant.id} vers "${newStatus}" (isOpen: ${isOpen})`)
       
-      // Mettre à jour dans l'API REST
-      await restaurantService.updateStatus(restaurant.id, newStatus)
-      
-      // Mettre à jour dans Firebase via le service
+      // Note: L'API ne supporte pas la mise à jour du statut (404)
+      // On met à jour uniquement Firebase qui est la source de vérité pour le statut
       await firebaseService.updateRestaurantStatus(restaurant.id, newStatus)
       
       console.log(`✅ Statut mis à jour dans Firebase pour ${restaurant.id}`)
@@ -99,95 +152,184 @@ const Restaurants = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // Protection contre les doubles soumissions
+    if (uploading) return
+    
     setUploading(true)
+
+    // Créer un timeout de sécurité pour débloquer l'interface quoi qu'il arrive
+    const safetyTimeout = setTimeout(() => {
+        if (uploading) {
+            console.error("⚠️ Timeout de sécurité déclenché - Forçage de la fin de l'upload")
+            setUploading(false)
+            alert("L'opération prend trop de temps. Veuillez vérifier votre connexion.")
+        }
+    }, 30000) // 30 secondes max
 
     try {
       if (editingRestaurant) {
         console.log('📤 Tentative de mise à jour...')
         
         let result = null
-        let apiError = null
         let firebaseCoverUrl = null
         let firebaseLogoUrl = null
 
-        // 1. Upload vers Firebase Storage en parallèle (Si de nouveaux fichiers sont sélectionnés)
+        // 1. Upload vers Firebase Storage avec Timeout
         try {
           const uploadPromises = []
+          
+          // Fonction helper pour ajouter un timeout à une promesse
+          const withTimeout = (promise, ms = 15000) => {
+              return Promise.race([
+                  promise,
+                  new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout upload image")), ms))
+              ])
+          }
+
           if (formData.cover instanceof File) {
-            console.log('☁️ Upload cover vers Firebase Storage...')
+            console.log('☁️ Upload cover vers Firebase Storage...', {
+                name: formData.cover.name,
+                type: formData.cover.type,
+                size: formData.cover.size
+            })
             uploadPromises.push(
-              firebaseService.uploadImage(formData.cover, `restaurants/${editingRestaurant.id}/cover_${Date.now()}`)
+              withTimeout(firebaseService.uploadImage(formData.cover, `restaurants/${editingRestaurant.id}/cover_${Date.now()}`))
                 .then(url => { firebaseCoverUrl = url })
             )
           }
           if (formData.logo instanceof File) {
             console.log('☁️ Upload logo vers Firebase Storage...')
             uploadPromises.push(
-              firebaseService.uploadImage(formData.logo, `restaurants/${editingRestaurant.id}/logo_${Date.now()}`)
+              withTimeout(firebaseService.uploadImage(formData.logo, `restaurants/${editingRestaurant.id}/logo_${Date.now()}`))
                 .then(url => { firebaseLogoUrl = url })
             )
           }
-          await Promise.all(uploadPromises)
+          
+          if (uploadPromises.length > 0) {
+              await Promise.all(uploadPromises)
+          }
         } catch (storageErr) {
-          console.error('❌ Erreur Firebase Storage:', storageErr)
-          // On continue, peut-être que l'API fonctionnera ou on utilisera les anciennes images
+          console.error('❌ Erreur Firebase Storage critique:', storageErr)
+          
+          // Message d'erreur plus détaillé
+          let errorMessage = `L'upload des images a échoué.\n\n`
+          errorMessage += `Erreur: ${storageErr.message}\n\n`
+          
+          // Conseils selon le type d'erreur
+          if (storageErr.message.includes('plan Blaze') || storageErr.message.includes('forfait supérieur') || storageErr.message.includes('billing')) {
+            errorMessage += `💡 ACTION REQUISE: Passer au plan Blaze\n\n`
+            errorMessage += `1. Allez sur https://console.firebase.google.com/\n`
+            errorMessage += `2. Sélectionnez votre projet mayombe-ba11b\n`
+            errorMessage += `3. Cliquez sur "Paramètres du projet" (icône ⚙️)\n`
+            errorMessage += `4. Allez dans "Utilisation et facturation"\n`
+            errorMessage += `5. Cliquez sur "Passer au plan Blaze"\n`
+            errorMessage += `6. Ajoutez une carte de crédit (requis mais gratuit dans les limites)\n\n`
+            errorMessage += `📊 Quotas gratuits Blaze:\n`
+            errorMessage += `   - 5 GB de stockage gratuit\n`
+            errorMessage += `   - 1 GB/jour de téléchargement gratuit\n`
+            errorMessage += `   - 0€ si vous restez dans ces limites\n\n`
+          } else if (storageErr.message.includes('Permission') || storageErr.message.includes('unauthorized')) {
+            errorMessage += `💡 Solution: Vérifiez les règles Firebase Storage.\n`
+            errorMessage += `   Firebase Console > Storage > Rules > allow read, write: if true;\n\n`
+          } else if (storageErr.message.includes('Timeout')) {
+            errorMessage += `💡 Solution: Vérifiez votre connexion internet et réessayez.\n\n`
+          } else {
+            errorMessage += `💡 Vérifiez:\n`
+            errorMessage += `   - Que Firebase Storage est activé (Storage > Get Started)\n`
+            errorMessage += `   - Que vous êtes sur le plan Blaze (nécessaire pour Storage)\n`
+            errorMessage += `   - Les règles de sécurité (Storage > Rules)\n`
+            errorMessage += `   - Votre connexion internet\n\n`
+          }
+          
+          errorMessage += `Les autres modifications (nom, adresse, etc.) seront enregistrées.`
+          
+          alert(errorMessage)
         }
 
-        // 2. Tentative de mise à jour via l'API (Multipart si possible, sinon JSON)
+        // 2. Mise à jour via l'API (OPTIONNEL)
         try {
-          const updateData = new FormData()
-          updateData.append('name', formData.name)
-          updateData.append('libelle', formData.name)
-          updateData.append('adresse', formData.adresse)
-          updateData.append('phone', formData.phone)
-          updateData.append('statut', formData.statut)
-          
-          if (formData.cover) updateData.append('cover', formData.cover)
-          if (formData.logo) updateData.append('logo', formData.logo)
-
-          console.log('📡 Envoi Multipart à l\'API...')
-          result = await restaurantService.update(editingRestaurant.id, updateData)
-          console.log('✅ API Multipart réussie')
-        } catch (err) {
-          console.warn('⚠️ Échec Multipart API. Tentative JSON uniquement...', err)
-          apiError = err
-          try {
-            result = await restaurantService.update(editingRestaurant.id, {
-              name: formData.name,
-              libelle: formData.name,
-              adresse: formData.adresse,
-              phone: formData.phone,
-              statut: formData.statut
-            })
-            console.log('✅ API JSON réussie')
-          } catch (jsonErr) {
-            console.error('❌ Échec total API:', jsonErr)
+          const updateVariables = {
+            name: formData.name,
+            libelle: formData.name,
+            adresse: formData.adresse,
+            phone: formData.phone,
+            statut: formData.statut,
+            cover: firebaseCoverUrl || editingRestaurant.cover_original,
+            logo: firebaseLogoUrl || editingRestaurant.logo_original
           }
+
+          console.log('📡 Tentative de mise à jour via l\'API (optionnel)...')
+          
+          const updateData = new FormData()
+          Object.keys(updateVariables).forEach(key => {
+            if (updateVariables[key] !== undefined && updateVariables[key] !== null) {
+              updateData.append(key, updateVariables[key])
+            }
+          })
+
+          // Timeout court pour l'API
+          const apiPromise = restaurantService.update(editingRestaurant.id, updateData)
+          // On n'attend pas indéfiniment l'API
+          result = await Promise.race([
+              apiPromise,
+              new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 5000))
+          ])
+          
+          if (result && result.timeout) {
+              console.warn("⚠️ API timeout - continuation avec Firebase")
+          } else {
+              console.log('✅ Synchronisation API terminée ou échouée non-bloquante')
+          }
+          
+        } catch (apiErr) {
+          console.warn('⚠️ Erreur API ignorée:', apiErr)
         }
 
         // 3. Synchronisation Firebase (Database temps réel)
         try {
           console.log('📡 Synchronisation Database Firebase...')
           
-          // La source de vérité pour les images est maintenant : 
-          // URL Firebase > Réponse API > Image existante
-          const coverToSync = firebaseCoverUrl || result?.cover || result?.data?.cover || editingRestaurant.cover_original
-          const logoToSync = firebaseLogoUrl || result?.logo || result?.data?.logo || editingRestaurant.logo_original
+          const coverToSync = firebaseCoverUrl || editingRestaurant.cover_original
+          const logoToSync = firebaseLogoUrl || editingRestaurant.logo_original
 
           await firebaseService.syncRestaurantImages(editingRestaurant.id, coverToSync, logoToSync)
           await firebaseService.updateRestaurantStatus(editingRestaurant.id, formData.statut)
           
-          console.log('✅ Synchronisation Firebase terminée')
+          // Mise à jour locale avec timestamp pour forcer le re-render
+          const updateTimestamp = Date.now()
+          setRestaurants(prev => prev.map(r => {
+             if (r.id === editingRestaurant.id) {
+               return {
+                 ...r,
+                 name: formData.name,
+                 libelle: formData.name,
+                 adresse: formData.adresse,
+                 phone: formData.phone,
+                 statut: formData.statut,
+                 cover: coverToSync,
+                 cover_url: coverToSync,
+                 logo: logoToSync,
+                 logo_url: logoToSync,
+                 _lastUpdate: updateTimestamp // Timestamp pour forcer le re-render
+               }
+             }
+             return r
+          }))
+
         } catch (firebaseError) {
           console.error('❌ Erreur synchronisation Firebase:', firebaseError)
+          throw new Error(`Erreur synchro Firebase: ${firebaseError.message}`)
         }
-
-        const updatedRestaurants = await restaurantService.getAll()
-        setRestaurants(updatedRestaurants)
       }
 
+      // SUCCÈS - Fermeture propre
+      clearTimeout(safetyTimeout)
+      setUploading(false) // IMPORTANT: Reset avant de fermer
       setShowModal(false)
       setEditingRestaurant(null)
+      
+      // Reset form
       setFormData({
         name: '',
         adresse: '',
@@ -198,11 +340,47 @@ const Restaurants = () => {
         coverPreview: null,
         logoPreview: null,
       })
+      
+      // Feedback utilisateur
+      setTimeout(() => alert('✅ Modifications enregistrées !'), 100)
+
+      // Rechargement avec fusion des images Firebase
+      try {
+        // restaurantService.getAll() retourne déjà un tableau normalisé
+        const apiRestaurants = await restaurantService.getAll()
+        const firebaseImages = await firebaseService.getAllRestaurantImages()
+        
+        const mergedRestaurants = apiRestaurants.map(restaurant => {
+          const firebaseImage = firebaseImages[restaurant.id] || firebaseImages[restaurant.id.toString()]
+          
+          if (firebaseImage) {
+            return {
+              ...restaurant,
+              cover: firebaseImage.cover || restaurant.cover || restaurant.cover_url,
+              cover_url: firebaseImage.cover || restaurant.cover || restaurant.cover_url,
+              logo: firebaseImage.logo || restaurant.logo || restaurant.logo_url,
+              logo_url: firebaseImage.logo || restaurant.logo || restaurant.logo_url,
+              cover_original: firebaseImage.cover || restaurant.cover_original,
+              logo_original: firebaseImage.logo || restaurant.logo_original,
+              _lastUpdate: Date.now() // Force le re-render
+            }
+          }
+          return restaurant
+        })
+        
+        setRestaurants(mergedRestaurants)
+        console.log('✅ Restaurants rechargés avec nouvelles images Firebase')
+      } catch (err) {
+        console.error("Erreur rechargement:", err)
+        // Fallback simple si la fusion échoue
+        restaurantService.getAll().then(setRestaurants).catch(e => console.log("Reload fallback error", e))
+      }
+
     } catch (error) {
-      console.error('Erreur lors de la mise à jour:', error)
-      alert(`Erreur: ${error.message}`)
-    } finally {
+      clearTimeout(safetyTimeout)
       setUploading(false)
+      console.error('Erreur finale handleSubmit:', error)
+      alert(`Erreur: ${error.message}`)
     }
   }
 
@@ -272,9 +450,18 @@ const Restaurants = () => {
             {/* Cover Image */}
             <div className="relative h-48 mb-4 rounded-lg overflow-hidden bg-gradient-to-br from-gray-200 to-gray-300 shadow-inner">
               <img 
-                src={restaurant.cover || restaurant.cover_url || '/src/assets/images/mayombe_1.jpg'} 
+                src={(() => {
+                  const imageUrl = restaurant.cover || restaurant.cover_url || '/src/assets/images/mayombe_1.jpg'
+                  // Ajouter un paramètre de cache-busting si c'est une URL Firebase
+                  if (imageUrl.includes('firebasestorage.googleapis.com')) {
+                    const timestamp = restaurant._lastUpdate || Date.now()
+                    return `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}t=${timestamp}`
+                  }
+                  return imageUrl
+                })()}
                 alt={restaurant.name || restaurant.libelle}
                 className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                key={`cover-${restaurant.id}-${restaurant.cover || restaurant.cover_url || ''}-${restaurant._lastUpdate || ''}`}
                 onError={(e) => {
                   // Si l'image ne charge pas, utiliser une image par défaut
                   if (!e.target.src.includes('mayombe_1.jpg')) {
@@ -297,9 +484,18 @@ const Restaurants = () => {
             <div className="flex items-center space-x-4 mb-4">
               <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200 bg-white flex items-center justify-center">
                 <img 
-                  src={restaurant.logo || restaurant.logo_url || '/src/assets/images/logo_mayombe.jpg'} 
+                  src={(() => {
+                    const imageUrl = restaurant.logo || restaurant.logo_url || '/src/assets/images/logo_mayombe.jpg'
+                    // Ajouter un paramètre de cache-busting si c'est une URL Firebase
+                    if (imageUrl.includes('firebasestorage.googleapis.com')) {
+                      const timestamp = restaurant._lastUpdate || Date.now()
+                      return `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}t=${timestamp}`
+                    }
+                    return imageUrl
+                  })()}
                   alt={`${restaurant.name || restaurant.libelle} logo`}
                   className="w-full h-full object-cover"
+                  key={`logo-${restaurant.id}-${restaurant.logo || restaurant.logo_url || ''}-${restaurant._lastUpdate || ''}`}
                   onError={(e) => {
                     // Si le logo ne charge pas, utiliser le logo par défaut
                     if (!e.target.src.includes('logo_mayombe.jpg')) {
@@ -459,12 +655,28 @@ const Restaurants = () => {
                   </label>
                 )}
                 {!formData.coverPreview && (
-                  <input
-                    type="file"
-                    className="input-field"
-                    accept="image/*"
-                    onChange={handleCoverChange}
-                  />
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      className="input-field"
+                      accept="image/*"
+                      onChange={handleCoverChange}
+                    />
+                    <div className="text-center text-sm text-gray-500">- OU -</div>
+                    <input
+                      type="text"
+                      placeholder="Coller une URL d'image (https://...)"
+                      className="input-field"
+                      value={typeof formData.cover === 'string' ? formData.cover : ''}
+                      onChange={(e) => {
+                          setFormData({
+                              ...formData,
+                              cover: e.target.value,
+                              coverPreview: e.target.value
+                          })
+                      }}
+                    />
+                  </div>
                 )}
               </div>
 
@@ -517,12 +729,28 @@ const Restaurants = () => {
                   </label>
                 )}
                 {!formData.logoPreview && (
-                  <input
-                    type="file"
-                    className="input-field"
-                    accept="image/*"
-                    onChange={handleLogoChange}
-                  />
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      className="input-field"
+                      accept="image/*"
+                      onChange={handleLogoChange}
+                    />
+                    <div className="text-center text-sm text-gray-500">- OU -</div>
+                    <input
+                      type="text"
+                      placeholder="Coller une URL de logo (https://...)"
+                      className="input-field"
+                      value={typeof formData.logo === 'string' ? formData.logo : ''}
+                      onChange={(e) => {
+                          setFormData({
+                              ...formData,
+                              logo: e.target.value,
+                              logoPreview: e.target.value
+                          })
+                      }}
+                    />
+                  </div>
                 )}
               </div>
 
@@ -538,6 +766,7 @@ const Restaurants = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    setUploading(false) // IMPORTANT: Reset forcé
                     setShowModal(false)
                     setEditingRestaurant(null)
                     setFormData({
@@ -551,10 +780,11 @@ const Restaurants = () => {
                       logoPreview: null,
                     })
                   }}
-                  className="flex-1 btn-secondary"
-                  disabled={uploading}
+                  className={`flex-1 btn-secondary ${uploading ? 'opacity-50 cursor-not-allowed hover:bg-gray-100' : ''}`}
+                  // On ne désactive JAMAIS le bouton annuler pour éviter que l'utilisateur soit bloqué
+                  disabled={false} 
                 >
-                  Annuler
+                  {uploading ? 'Fermer (force)' : 'Annuler'}
                 </button>
               </div>
             </form>

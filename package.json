@@ -1,6 +1,6 @@
 {
   "name": "mayombe",
-  "version": "1.2.2",
+  "version": "1.2.8",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -11,6 +11,7 @@
     "prebuild": "npx expo prebuild",
     "clean": "cd android && ./gradlew clean && cd ..",
     "bundle": "npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle",
+    "deploy:admin": "cd admin && npm run build && cd .. && firebase deploy --only hosting",
     "postinstall": "npm install --legacy-peer-deps || true && node ./scripts/fix-lightningcss.js || true",
     "prepare": "node ./scripts/fix-lightningcss.js || true"
   },

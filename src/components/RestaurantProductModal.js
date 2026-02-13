@@ -31,18 +31,22 @@ const RestaurantProductModal = ({
   }, [visible]);
 
   useEffect(() => {
-    if (visible && product) {
-      console.log('Modal ouvert avec produit:', product);
-      console.log('Compléments du produit:', product.complements);
+    if (!visible) {
+      setSelectedComplements([]);
+      setQuantity(1);
     }
-  }, [visible, product]);
+  }, [visible]);
 
   const handleAddToCart = async () => {
     // Calculer le prix de base avec majoration (utiliser promoPrice si dispo)
-    const basePriceToUse = product.hasPromo && product.promoPrice ? product.promoPrice : product.price;
+    const hasPromo = product?.hasPromo === true || product?.hasPromo === 'true';
+    const promoPrice = product?.promoPrice;
+    const basePriceToUse = hasPromo && promoPrice ? promoPrice : product.price;
+    
     const basePriceNumeric = typeof basePriceToUse === 'string' 
-      ? parseFloat(basePriceToUse.replace(/[^\d.-]/g, ''))
-      : basePriceToUse;
+      ? parseFloat(basePriceToUse.toString().replace(/[^\d.-]/g, ''))
+      : (typeof basePriceToUse === 'number' ? basePriceToUse : parseFloat(basePriceToUse) || 0);
+    
     const priceWithMarkup = applyMarkup(basePriceNumeric);
     
     // Calculer le prix des compléments avec majoration
@@ -57,21 +61,30 @@ const RestaurantProductModal = ({
     // Prix unitaire total (déjà avec majoration)
     const unitPrice = priceWithMarkup + complementsPrice;
     
+    // Extraire le prix original (sans formatage)
+    const originalPriceNumeric = typeof product.price === 'string' 
+      ? parseFloat(product.price.toString().replace(/[^\d.-]/g, ''))
+      : (typeof product.price === 'number' ? product.price : parseFloat(product.price) || 0);
+    
     const productWithComplements = {
       ...product,
       quantity,
       complements: complementsWithMarkup, // Compléments avec prix déjà majorés
       unitPrice, // Prix unitaire pré-calculé avec majoration
       totalPrice: unitPrice * quantity,
+      // Conserver les informations de promo pour le panier
+      hasPromo: hasPromo,
+      promoPrice: promoPrice ? (typeof promoPrice === 'string' ? parseFloat(promoPrice.toString().replace(/[^\d.-]/g, '')) : promoPrice) : null,
+      // Conserver le prix original pour référence (numérique)
+      originalPrice: originalPriceNumeric,
+      price: originalPriceNumeric, // S'assurer que price est numérique
     };
     
-    console.log('Produit à ajouter:', productWithComplements);
     await onAddToCart(productWithComplements);
     onClose();
   };
 
   const toggleComplement = (complement) => {
-    console.log('Complément sélectionné:', complement);
     setSelectedComplements((prev) => {
       if (prev.find(c => c.id === complement.id)) {
         return prev.filter(c => c.id !== complement.id);
@@ -161,7 +174,6 @@ const RestaurantProductModal = ({
               <View style={styles.complementsSection}>
                 <Text style={styles.sectionTitle}>Compléments</Text>
                 {product.complements.map((complement) => {
-                  console.log('Rendu du complément:', complement);
                   return (
                     <TouchableOpacity
                       key={complement.id}

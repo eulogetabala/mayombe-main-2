@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../../context/CartContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { translations } from '../../translations';
+import ConnectionError from '../ConnectionError';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -194,11 +195,8 @@ const NouveauxProduits = () => {
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{t.home.newMarket.error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchProducts}>
-          <Text style={styles.retryText}>{t.home.newMarket.retry}</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <ConnectionError onRetry={fetchProducts} />
       </View>
     );
   }

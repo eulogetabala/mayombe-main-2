@@ -24,6 +24,8 @@ import { translations } from '../../translations';
 import restaurantStatusService from '../../services/restaurantStatusService';
 import InteractiveRating from '../InteractiveRating';
 import StatusBadge from '../StatusBadge';
+import { resolveImageUrl } from '../../Utils/imageUtils';
+import ConnectionError from '../ConnectionError';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const BASE_URL = "https://www.api-mayombe.mayombe-app.com/public";
@@ -207,13 +209,8 @@ const RestaurantsSection = () => {
             website: restaurant.website,
             ville_id: restaurant.ville_id,
             ville: cities[restaurant.ville_id] || "Ville inconnue",
-            image: (() => {
-              if (!restaurant.cover) return require("../../../assets/images/2.jpg");
-              if (typeof restaurant.cover === 'string' && (restaurant.cover.startsWith('http://') || restaurant.cover.startsWith('https://'))) {
-                return { uri: restaurant.cover };
-              }
-              return { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` };
-            })(),
+            cover: restaurant.cover, // Garder le chemin original pour fallback
+            logo: restaurant.logo, // Garder le chemin original pour fallback
             deliveryTime: deliveryTime,
             minOrder: "2000",
             isOpen: true,
@@ -221,28 +218,44 @@ const RestaurantsSection = () => {
           };
         });
 
-        // Récupérer les ratings et statuts depuis Firebase
+        // Récupérer les ratings, statuts et images depuis Firebase
         const restaurantIds = mappedRestaurants.map(r => r.id.toString());
         let ratingsMap = {};
         let statusesMap = {};
+        let imagesMap = {};
         
         try {
           if (getBatchRatings && typeof getBatchRatings === 'function') {
             ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
           }
           statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+          imagesMap = await restaurantStatusService.getBatchRestaurantImages(restaurantIds);
         } catch (error) {
-          console.error('❌ Erreur lors de la récupération des ratings ou statuts:', error);
+          console.error('❌ Erreur lors de la récupération des ratings, statuts ou images:', error);
         }
 
-        // Enrichir les restaurants avec ratings et statuts
+        // Enrichir les restaurants avec ratings, statuts et images
         const enrichedRestaurants = mappedRestaurants.map(restaurant => {
           const restaurantIdStr = restaurant.id.toString();
           const rating = ratingsMap[restaurantIdStr] || { averageRating: 0, totalRatings: 0 };
           const status = statusesMap[restaurantIdStr] || { isOpen: true };
+          const images = imagesMap[restaurantIdStr] || { cover: null, logo: null };
+          
+          // Résoudre les URLs d'images avec priorité Firebase > API > défaut
+          const coverImage = resolveImageUrl(
+            images.cover,
+            restaurant.cover,
+            require("../../../assets/images/2.jpg")
+          );
+          
+          const logoImage = images.logo 
+            ? resolveImageUrl(images.logo, null, null)
+            : (restaurant.logo ? resolveImageUrl(null, restaurant.logo, null) : null);
           
           return {
             ...restaurant,
+            image: coverImage,
+            logo: logoImage,
             averageRating: rating.averageRating,
             totalRatings: rating.totalRatings,
             isOpen: status.isOpen,
@@ -347,7 +360,11 @@ const RestaurantsSection = () => {
       activeOpacity={0.85}
     >
       <View style={styles.imageContainer}>
-        <Image source={restaurant.image} style={styles.restaurantImage} />
+        {/* Utiliser le logo comme bannière, avec fallback sur l'image de couverture */}
+        <Image 
+          source={restaurant.logo || restaurant.image} 
+          style={styles.restaurantImage} 
+        />
         <View style={styles.overlay} />
         
         {/* Bouton favoris en haut à gauche */}
@@ -416,11 +433,8 @@ const RestaurantsSection = () => {
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchRestaurants}>
-          <Text style={styles.retryText}>Réessayer</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <ConnectionError onRetry={fetchRestaurants} />
       </View>
     );
   }
@@ -515,9 +529,10 @@ const styles = StyleSheet.create({
   restaurantImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
+    resizeMode: 'cover', // Utiliser 'cover' pour remplir toute la zone
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
+    backgroundColor: '#f5f5f5', // Fond pour les logos transparents
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

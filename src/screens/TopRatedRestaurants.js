@@ -14,6 +14,7 @@ import { useRatings } from '../context/RatingsContext';
 import restaurantStatusService from '../services/restaurantStatusService';
 import InteractiveRating from '../components/InteractiveRating';
 import StatusBadge from '../components/StatusBadge';
+import { resolveImageUrl } from '../Utils/imageUtils';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -170,36 +171,51 @@ const TopRatedRestaurants = ({ navigation }) => {
             name: restaurant.name || "Nom non disponible",
             address: restaurant.adresse || "Adresse non disponible",
             phone: restaurant.phone || "Téléphone non disponible",
-            image: restaurant.cover && typeof restaurant.cover === 'string'
-              ? { uri: `https://www.mayombe-app.com/uploads_admin/${restaurant.cover}` }
-              : require("../../assets/images/2.jpg"),
+            cover: restaurant.cover, // Garder le chemin original pour fallback
+            logo: restaurant.logo, // Garder le chemin original pour fallback
             distance: distance,
             deliveryTime: deliveryTime,
           };
         });
 
-        // Récupérer les ratings et statuts depuis Firebase
+        // Récupérer les ratings, statuts et images depuis Firebase
         const restaurantIds = mappedRestaurants.map(r => r.id.toString());
         let ratingsMap = {};
         let statusesMap = {};
+        let imagesMap = {};
         
         try {
           if (getBatchRatings && typeof getBatchRatings === 'function') {
             ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
           }
           statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+          imagesMap = await restaurantStatusService.getBatchRestaurantImages(restaurantIds);
         } catch (error) {
-          console.error('❌ Erreur lors de la récupération des ratings ou statuts:', error);
+          console.error('❌ Erreur lors de la récupération des ratings, statuts ou images:', error);
         }
 
-        // Enrichir les restaurants avec ratings et statuts
+        // Enrichir les restaurants avec ratings, statuts et images
         const enrichedRestaurants = mappedRestaurants.map(restaurant => {
           const restaurantIdStr = restaurant.id.toString();
           const rating = ratingsMap[restaurantIdStr] || { averageRating: 0, totalRatings: 0 };
           const status = statusesMap[restaurantIdStr] || { isOpen: true };
+          const images = imagesMap[restaurantIdStr] || { cover: null, logo: null };
+          
+          // Résoudre les URLs d'images avec priorité Firebase > API > défaut
+          const coverImage = resolveImageUrl(
+            images.cover,
+            restaurant.cover,
+            require("../../assets/images/2.jpg")
+          );
+          
+          const logoImage = images.logo 
+            ? resolveImageUrl(images.logo, null, null)
+            : (restaurant.logo ? resolveImageUrl(null, restaurant.logo, null) : null);
           
           return {
             ...restaurant,
+            image: coverImage,
+            logo: logoImage,
             averageRating: rating.averageRating,
             totalRatings: rating.totalRatings,
             isOpen: status.isOpen,
@@ -227,7 +243,15 @@ const TopRatedRestaurants = ({ navigation }) => {
       style={styles.restaurantCard}
       onPress={() => navigation.navigate('RestaurantDetails', { restaurant: item })}
     >
-      <Image source={item.image} style={styles.restaurantImage} />
+      <View style={styles.imageContainer}>
+        <Image source={item.image} style={styles.restaurantImage} />
+        {/* Logo du restaurant */}
+        {item.logo && (
+          <View style={styles.logoContainer}>
+            <Image source={item.logo} style={styles.logoImage} />
+          </View>
+        )}
+      </View>
       <View style={styles.restaurantInfo}>
         <View style={styles.headerRow}>
           <Text style={styles.restaurantName}>{item.name}</Text>
@@ -317,9 +341,34 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+  imageContainer: {
+    position: 'relative',
+  },
   restaurantImage: {
     width: '100%',
     height: 150,
+    resizeMode: 'cover',
+  },
+  logoContainer: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fff',
+    padding: 2,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 2,
+  },
+  logoImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
     resizeMode: 'cover',
   },
   restaurantInfo: {

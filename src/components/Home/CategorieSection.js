@@ -17,6 +17,7 @@ import { translations } from '../../translations';
 import * as Animatable from 'react-native-animatable';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CategorieSkeleton } from '../Skeletons';
+import ConnectionError from '../ConnectionError';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -163,11 +164,8 @@ const CategorieSection = () => {
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{t.home.retry}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchCategories}>
-          <Text style={styles.retryText}>{t.home.retry}</Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        <ConnectionError onRetry={fetchCategories} />
       </View>
     );
   }

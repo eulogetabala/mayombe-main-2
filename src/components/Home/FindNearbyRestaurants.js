@@ -5,6 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
+import ConnectionError from '../ConnectionError';
 
 const FindNearbyRestaurants = () => {
   const navigation = useNavigation();
@@ -298,13 +299,7 @@ const FindNearbyRestaurants = () => {
                   <Text style={styles.loadingText}>Recherche des restaurants...</Text>
                 </View>
               ) : error ? (
-                <View style={styles.errorContainer}>
-                  <Ionicons name="alert-circle" size={40} color="#FF6B6B" />
-                  <Text style={styles.errorText}>{error}</Text>
-                  <TouchableOpacity style={styles.retryButton} onPress={fetchNearbyRestaurants}>
-                    <Text style={styles.retryButtonText}>Réessayer</Text>
-                  </TouchableOpacity>
-                </View>
+                <ConnectionError onRetry={fetchNearbyRestaurants} />
               ) : (
                 <FlatList
                   data={nearbyRestaurants}

@@ -29,6 +29,8 @@ const Promos = () => {
       // Charger tous les produits
       const allProducts = await menuService.getAllMenus()
       setProducts(allProducts)
+      // Initialiser filteredProducts avec tous les produits
+      setFilteredProducts(allProducts)
       
       // Charger tous les prix promotionnels
       const promos = await firebaseService.getAllProductPromos()
@@ -46,21 +48,35 @@ const Promos = () => {
   }
 
   const filterProducts = () => {
+    if (!products || products.length === 0) {
+      setFilteredProducts([])
+      return
+    }
+    
     let filtered = [...products]
     
     // Filtre par recherche
-    if (searchTerm) {
-      filtered = filtered.filter(product =>
-        product.libelle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.restaurant_name?.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    if (searchTerm && searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase().trim()
+      filtered = filtered.filter(product => {
+        const libelle = product.libelle?.toLowerCase() || ''
+        const restaurantName = product.restaurant_name?.toLowerCase() || ''
+        const description = product.description?.toLowerCase() || ''
+        
+        return libelle.includes(searchLower) || 
+               restaurantName.includes(searchLower) ||
+               description.includes(searchLower)
+      })
     }
     
     // Filtre par restaurant
     if (selectedRestaurant !== 'all') {
-      filtered = filtered.filter(product => 
-        product.restaurant_id === parseInt(selectedRestaurant)
-      )
+      filtered = filtered.filter(product => {
+        const productRestaurantId = product.restaurant_id
+        const selectedId = parseInt(selectedRestaurant)
+        return productRestaurantId === selectedId || 
+               productRestaurantId?.toString() === selectedRestaurant
+      })
     }
     
     setFilteredProducts(filtered)
