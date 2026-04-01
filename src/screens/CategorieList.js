@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,11 +21,12 @@ import CustomHeader from '../components/common/CustomHeader';
 import { useLanguage } from '../context/LanguageContext';
 import { useRatings } from '../context/RatingsContext';
 import { translations } from '../translations';
-import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
+import { applyMarkup, formatPriceWithMarkup, getMarkupPercentageFromProduct } from '../Utils/priceUtils';
 import ApiService from '../services/apiService';
 import promosService from '../services/promosService';
 import InteractiveRating from '../components/InteractiveRating';
 import PromoBadge from '../components/PromoBadge';
+import { useProductPromosLive } from '../../contexts/ProductPromosContext';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const windowWidth = Dimensions.get('window').width;
@@ -35,8 +36,10 @@ const CategorieList = ({ route, navigation }) => {
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
   const { getBatchRatings } = useRatings();
+  const { rtdbPromoById } = useProductPromosLive();
   const { categoryId, categoryName } = route.params;
-  const [products, setProducts] = useState([]);
+  const [productsWithRatings, setProductsWithRatings] = useState([]);
+  const [fsPromoMap, setFsPromoMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -47,6 +50,29 @@ const CategorieList = ({ route, navigation }) => {
   const [imageErrors, setImageErrors] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const products = useMemo(() => {
+    if (!productsWithRatings.length) {
+      return [];
+    }
+    const withPromo = promosService.applyPromosToProductRows(
+      productsWithRatings,
+      fsPromoMap,
+      rtdbPromoById,
+      formatPriceWithMarkup
+    );
+    return withPromo.map((p) => {
+      const pct = getMarkupPercentageFromProduct(p);
+      const base = parseFloat(p.rawPrice) || 0;
+      const effective = p.hasPromo && p.promoPrice != null ? Number(p.promoPrice) : base;
+      return {
+        ...p,
+        markupPercentage: pct,
+        unitPrice: applyMarkup(effective, pct),
+        total: applyMarkup(effective, pct),
+      };
+    });
+  }, [productsWithRatings, fsPromoMap, rtdbPromoById]);
 
   const staticImages = {
     image1: require("../../assets/images/place.png"),
@@ -101,6 +127,14 @@ const CategorieList = ({ route, navigation }) => {
             hasValidImage: hasValidImage
           });
 
+          const stub = {
+            ...product,
+            id: product.id || index,
+            rawPrice: product.price,
+            restaurant_id: product.restaurant_id,
+            restaurant_name: product.restaurant_name || product.resto_name || product.restaurant?.name,
+          };
+          const pct = getMarkupPercentageFromProduct(stub);
           return {
             ...product,
             id: product.id || index,
@@ -108,9 +142,12 @@ const CategorieList = ({ route, navigation }) => {
             hasValidImage: hasValidImage,
             productKey: `${product.id || index}-${Date.now()}`,
             quantity: 1,
-            unitPrice: applyMarkup(parseFloat(product.price) || 0),
-            total: applyMarkup(parseFloat(product.price) || 0),
-            rawPrice: product.price, // Conserver le prix original
+            unitPrice: applyMarkup(parseFloat(product.price) || 0, pct),
+            total: applyMarkup(parseFloat(product.price) || 0, pct),
+            rawPrice: product.price,
+            markupPercentage: pct,
+            restaurant_id: product.restaurant_id,
+            restaurant_name: product.restaurant_name || product.resto_name,
             type: 'product'
           };
         });
@@ -124,46 +161,41 @@ const CategorieList = ({ route, navigation }) => {
           if (getBatchRatings && typeof getBatchRatings === 'function') {
             ratingsMap = await getBatchRatings(productIds, 'product');
           }
-          promosMap = await promosService.getBatchPromos(productIds);
+          promosMap = await promosService.getBatchPromosFirestoreOnly(productIds);
         } catch (error) {
           console.error('❌ Erreur lors de la récupération des ratings ou promos:', error);
         }
 
-        // Enrichir les produits avec ratings et promos
-        const enrichedProducts = mappedProducts.map(product => {
+        const withRatingsOnly = mappedProducts.map((product) => {
           const productIdStr = product.id.toString();
           const rating = ratingsMap[productIdStr] || { averageRating: 0, totalRatings: 0 };
-          const promo = promosMap[productIdStr];
-          const priceAfterPromo = promo ? promosService.calculatePromoPrice(product.rawPrice, promo) : product.rawPrice;
-
           return {
             ...product,
             averageRating: rating.averageRating,
             totalRatings: rating.totalRatings,
-            promo: promo,
-            price: formatPriceWithMarkup(priceAfterPromo), // Afficher le prix promo
-            oldPrice: promo ? formatPriceWithMarkup(product.rawPrice) : null, // Ancien prix barré
           };
         });
 
-        // Trier par note moyenne décroissante
-        const sortedProducts = enrichedProducts.sort((a, b) => {
+        const sortedProducts = withRatingsOnly.sort((a, b) => {
           if (b.averageRating !== a.averageRating) {
             return b.averageRating - a.averageRating;
           }
           return b.totalRatings - a.totalRatings;
         });
 
-        setProducts(sortedProducts);
+        setFsPromoMap(promosMap || {});
+        setProductsWithRatings(sortedProducts);
         console.log('Produits mappés avec succès:', sortedProducts.length);
       } else {
         console.log('Aucun produit trouvé ou données invalides');
-        setProducts([]);
+        setProductsWithRatings([]);
+        setFsPromoMap({});
       }
     } catch (error) {
       console.error('Erreur lors du chargement des produits:', error);
       setError(error.message);
-      setProducts([]);
+      setProductsWithRatings([]);
+      setFsPromoMap({});
     } finally {
       setLoading(false);
     }
@@ -218,8 +250,7 @@ const CategorieList = ({ route, navigation }) => {
         return;
       }
 
-      // Appliquer la majoration de 7%
-      const price = applyMarkup(basePrice);
+      const price = applyMarkup(basePrice, getMarkupPercentageFromProduct(product));
 
       const cartItems = await AsyncStorage.getItem('cartItems');
       let updatedCart = cartItems ? JSON.parse(cartItems) : [];
@@ -315,9 +346,7 @@ const CategorieList = ({ route, navigation }) => {
                     size="small" 
                   />
                 )}
-                <Text style={styles.productPrice}>
-                  {formatPriceWithMarkup(item.rawPrice || item.price || 0)}
-                </Text>
+                <Text style={styles.productPrice}>{item.price}</Text>
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={(e) => {
@@ -373,9 +402,7 @@ const CategorieList = ({ route, navigation }) => {
                       size="small" 
                     />
                   )}
-                  <Text style={styles.productPrice}>
-                    {formatPriceWithMarkup(nextItem.rawPrice || nextItem.price || 0)}
-                  </Text>
+                  <Text style={styles.productPrice}>{nextItem.price}</Text>
                   <TouchableOpacity
                     style={styles.addButton}
                     onPress={(e) => {

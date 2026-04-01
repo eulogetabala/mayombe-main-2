@@ -65,7 +65,7 @@ export const translations = {
       viewMap: 'Voir la carte',
       newOnMarket: 'Nouveau sur le marché',
       findRestaurant: {
-        title: 'Découvrez les meilleurs restaurants de votre ville',
+        title: 'Restaurants de la ville',
         subtitle: 'Trouvez facilement les restaurants près de chez vous',
         buttonText: 'Voir tous les restaurants à',
         retry: 'Réessayer',
@@ -523,7 +523,7 @@ export const translations = {
       viewMap: 'View Map',
       newOnMarket: 'New on Market',
       findRestaurant: {
-        title: 'Discover the best restaurants in your city',
+        title: 'City restaurants',
         subtitle: 'Easily find restaurants near you',
         buttonText: 'See all restaurants in',
         retry: 'Retry',

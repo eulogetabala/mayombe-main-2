@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "mayombeclient",
+    "name": "Mayombe App",
     "slug": "mayombeclient",
-    "version": "1.2.8",
+    "version": "1.3.11",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "splash": {
@@ -17,12 +17,15 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.thprojet.mayombeclient",
       "googleServicesFile": "./GoogleService-Info.plist",
-      "buildNumber": "21",
+      "buildNumber": "38",
+      "appleTeamId": "9W3MSS5RZ9",
       "userInterfaceStyle": "light",
       "config": {
         "googleMapsApiKey": "AIzaSyBH1IRNXPqsDDfIJItSb3hUJ1Q6gkqAcsI"
       },
       "infoPlist": {
+        "CFBundleDisplayName": "Mayombe App",
+        "UIBackgroundModes": ["remote-notification", "fetch"],
         "NSLocationWhenInUseUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.",
         "NSLocationAlwaysUsageDescription": "Cette application nécessite l'accès à la localisation pour trouver les restaurants à proximité.",
         "NSPhotoLibraryUsageDescription": "Cette application nécessite l'accès à votre photothèque pour vous permettre de sélectionner des images pour votre profil ou vos commandes.",
@@ -38,6 +41,9 @@
             }
           }
         }
+      },
+      "entitlements": {
+        "aps-environment": "production"
       }
     },
     "android": {
@@ -47,7 +53,7 @@
       },
       "package": "com.mayombe.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 19,
+      "versionCode": 37,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -70,11 +76,18 @@
         "projectId": "6837dea2-ee67-43e8-84ee-89c88d78277c"
       }
     },
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "owner": "thprojet",
     "plugins": [
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ]
   }
 }

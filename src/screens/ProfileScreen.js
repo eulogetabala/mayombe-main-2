@@ -6,8 +6,6 @@ import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../contexts/AuthContext';
-import fcmService from '../services/fcmService';
-
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 

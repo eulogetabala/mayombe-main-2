@@ -16,6 +16,7 @@ import * as Location from 'expo-location';
 import { getCurrentLocation } from '../../services/LocationService';
 import { useLanguage } from '../../context/LanguageContext';
 import { useRatings } from '../../context/RatingsContext';
+import { useFavorites } from '../../context/FavoritesContext';
 import { translations } from '../../translations';
 import { TrouverRestaurantSkeleton } from '../Skeletons';
 import restaurantStatusService from '../../services/restaurantStatusService';
@@ -38,6 +39,7 @@ const TrouverRestaurant = ({ navigation }) => {
   const [error, setError] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const { getBatchRatings } = useRatings();
+  const { toggleRestaurantFavorite, isRestaurantFavorite } = useFavorites();
 
   // Image statique pour les restaurants
   const staticImage = require("../../../assets/images/2.jpg");
@@ -237,11 +239,19 @@ const TrouverRestaurant = ({ navigation }) => {
         let imagesMap = {};
         
         try {
-          if (getBatchRatings && typeof getBatchRatings === 'function') {
-            ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
-          }
-          statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
-          imagesMap = await restaurantStatusService.getBatchRestaurantImages(restaurantIds);
+          const ratingsPromise =
+            getBatchRatings && typeof getBatchRatings === 'function'
+              ? getBatchRatings(restaurantIds, 'restaurant')
+              : Promise.resolve({});
+          const statusesPromise =
+            restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+          const imagesPromise =
+            restaurantStatusService.getBatchRestaurantImages(restaurantIds);
+          [ratingsMap, statusesMap, imagesMap] = await Promise.all([
+            ratingsPromise,
+            statusesPromise,
+            imagesPromise,
+          ]);
         } catch (error) {
           console.error('❌ Erreur lors de la récupération des ratings, statuts ou images:', error);
         }
@@ -353,6 +363,18 @@ const TrouverRestaurant = ({ navigation }) => {
       <View style={styles.cardHeader}>
         <Image source={item.image} style={styles.image} />
         <View style={styles.overlay} />
+        <TouchableOpacity
+          style={styles.favoriteButton}
+          onPress={() => toggleRestaurantFavorite(item)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Favori"
+        >
+          <Ionicons
+            name={isRestaurantFavorite(item.id) ? 'heart' : 'heart-outline'}
+            size={20}
+            color={isRestaurantFavorite(item.id) ? '#4CAF50' : '#FFF'}
+          />
+        </TouchableOpacity>
         {/* Logo overlay */}
         {item.logo && (
           <View style={styles.logoContainer}>
@@ -556,6 +578,18 @@ const styles = StyleSheet.create({
   cardHeader: {
     position: 'relative',
     height: 130,
+  },
+  favoriteButton: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 6,
   },
   image: {
     width: '100%',

@@ -22,11 +22,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { HomeSkeleton } from '../components/Skeletons';
 import ApiService from '../services/apiService';
 
-import RestaurantsSection from "../components/Home/RestaurantsSection";
 import HeaderSection from "../components/Home/HeaderSection";
 import CategorieSection from "../components/Home/CategorieSection";
 import ProductSection from "../components/Home/ProductSection";
-import NouveauxProduits from "../components/Home/NewMarket";
 import TrouverRestaurant from "../components/Home/TrouverRestaurant";
 import FindNearbyRestaurants from '../components/Home/FindNearbyRestaurants';
 import CommanderLivreur from '../components/Home/CommanderLivreur';
@@ -154,12 +152,16 @@ const HomeScreen = ({ navigation }) => {
     }
   };
 
-  // Restaurer la position au montage et charger les bannières
+  // Afficher l’accueil tout de suite ; bannières en arrière-plan (évite d’attendre le réseau pour tout le skeleton)
   useEffect(() => {
     const initScreen = async () => {
-      await restoreScrollPosition();
-      await fetchBanners();
+      try {
+        await restoreScrollPosition();
+      } catch (e) {
+        /* noop */
+      }
       setIsLoading(false);
+      fetchBanners();
     };
     initScreen();
   }, []);
@@ -278,43 +280,38 @@ const HomeScreen = ({ navigation }) => {
           />
         }
       >
-        <Animatable.View animation="fadeInUp" duration={800}>
+        <Animatable.View animation="fadeInUp" duration={400}>
           <HeaderSection navigation={navigation} />
         </Animatable.View>
 
-        <Animatable.View animation="fadeIn" duration={1000} delay={200}>
+        <Animatable.View animation="fadeIn" duration={400} delay={0}>
           {renderCarousel()}
         </Animatable.View>
 
-        <Animatable.View animation="fadeIn" duration={1000} delay={200}>
-          <CategorieSection navigation={navigation} />
-        </Animatable.View>
-
-        <Animatable.View animation="fadeInRight" duration={800} delay={600}>
-          <ProductSection />
-        </Animatable.View>
-
-        <Animatable.View animation="fadeInUp" duration={800} delay={800}>
-          <RestaurantsSection />
-        </Animatable.View>
-
-        <Animatable.View animation="fadeInUp" duration={800} delay={800}>
-          {/* <NouveauxProduits /> */}
-        </Animatable.View>
-
-        <Animatable.View animation="fadeInUp" duration={800} delay={800}>
+        {/* 1. Restaurants de la ville */}
+        <Animatable.View animation="fadeInUp" duration={500} delay={0}>
           <TrouverRestaurant navigation={navigation} />
         </Animatable.View>
 
-        <Animatable.View animation="fadeInUp" duration={800} delay={800}>
+        {/* 2. Restaurants à proximité */}
+        <Animatable.View animation="fadeInUp" duration={500} delay={0}>
           <FindNearbyRestaurants />
         </Animatable.View>
 
-        <Animatable.View animation="fadeInUp" duration={800} delay={800}>
-          <CommanderLivreur />
+        {/* 3. Produits populaires */}
+        <Animatable.View animation="fadeInRight" duration={500} delay={0}>
+          <ProductSection />
         </Animatable.View>
 
+        {/* 4. Catégories */}
+        <Animatable.View animation="fadeIn" duration={400} delay={0}>
+          <CategorieSection navigation={navigation} />
+        </Animatable.View>
 
+        {/* Livraison express */}
+        <Animatable.View animation="fadeInUp" duration={500} delay={0}>
+          <CommanderLivreur />
+        </Animatable.View>
 
         <View style={styles.bottomSpacer} />
       </ScrollView>

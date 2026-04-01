@@ -19,7 +19,8 @@
         "autoIncrement": "buildNumber",
         "buildConfiguration": "Release",
         "distribution": "store",
-        "scheme": "mayombeclient"
+        "scheme": "mayombeclient",
+        "buildType": "archive"
       },
       "android": {
         "buildType": "app-bundle",

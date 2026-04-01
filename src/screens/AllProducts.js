@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,10 +17,11 @@ import { useLanguage } from '../context/LanguageContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useRatings } from '../context/RatingsContext';
 import { translations } from '../translations';
-import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
+import { formatPriceWithMarkup, getMarkupPercentageFromProduct } from '../Utils/priceUtils';
 import promosService from '../services/promosService';
 import InteractiveRating from '../components/InteractiveRating';
 import PromoBadge from '../components/PromoBadge';
+import { useProductPromosLive } from '../../contexts/ProductPromosContext';
 
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -30,7 +31,9 @@ const AllProducts = ({ navigation }) => {
   const t = translations[currentLanguage];
   const { isFavorite, toggleFavorite } = useFavorites();
   const { getBatchRatings } = useRatings();
-  const [products, setProducts] = useState([]);
+  const { rtdbPromoById } = useProductPromosLive();
+  const [productsWithRatings, setProductsWithRatings] = useState([]);
+  const [fsPromoMap, setFsPromoMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -40,24 +43,36 @@ const AllProducts = ({ navigation }) => {
     fetchProducts();
   }, []);
 
+  const products = useMemo(() => {
+    if (!productsWithRatings.length) {
+      return [];
+    }
+    return promosService.applyPromosToProductRows(
+      productsWithRatings,
+      fsPromoMap,
+      rtdbPromoById,
+      formatPriceWithMarkup
+    );
+  }, [productsWithRatings, fsPromoMap, rtdbPromoById]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: false,
     });
   }, [navigation]);
 
-  const handleProductPress = (product) => {
+  const handleProductPress = useCallback((product) => {
     setSelectedProduct(product);
     setModalVisible(true);
-  };
+  }, []);
 
-  const handleAddToCart = (product) => {
+  const handleAddToCart = useCallback((product) => {
     console.log('Produit ajouté au panier:', product);
-  };
+  }, []);
 
-  const handleToggleFavorite = (product) => {
+  const handleToggleFavorite = useCallback((product) => {
     toggleFavorite(product);
-  };
+  }, [toggleFavorite]);
 
   const normalizeAndTranslateIngredient = (ingredientName) => {
     const normalized = ingredientName?.toLowerCase()
@@ -112,13 +127,21 @@ const AllProducts = ({ navigation }) => {
         });
 
         const basePrice = product.price || 0;
-        const priceWithMarkup = formatPriceWithMarkup(basePrice);
-        
+        const pct = getMarkupPercentageFromProduct({
+          rawPrice: basePrice,
+          restaurant_id: product.restaurant_id,
+          restaurant_name: product.restaurant_name || product.resto_name,
+        });
+        const priceWithMarkup = formatPriceWithMarkup(basePrice, 'FCFA', pct);
+
         return {
           id: product.id,
           name: product.name || product.libelle || "",
           price: priceWithMarkup,
-          rawPrice: basePrice, // Conserver le prix original
+          rawPrice: basePrice,
+          restaurant_id: product.restaurant_id,
+          restaurant_name: product.restaurant_name || product.resto_name,
+          markupPercentage: pct,
           description: product.description || "",
           imageUrl: imageUrl,
           hasValidImage: isValidImage,
@@ -143,37 +166,30 @@ const AllProducts = ({ navigation }) => {
         if (getBatchRatings && typeof getBatchRatings === 'function') {
           ratingsMap = await getBatchRatings(productIds, 'product');
         }
-        promosMap = await promosService.getBatchPromos(productIds);
+        promosMap = await promosService.getBatchPromosFirestoreOnly(productIds);
       } catch (error) {
         console.error('❌ Erreur lors de la récupération des ratings ou promos:', error);
       }
 
-      // Enrichir les produits avec ratings et promos
-      const enrichedProducts = mappedProducts.map(product => {
+      const withRatingsOnly = mappedProducts.map((product) => {
         const productIdStr = product.id.toString();
         const rating = ratingsMap[productIdStr] || { averageRating: 0, totalRatings: 0 };
-        const promo = promosMap[productIdStr];
-        const priceAfterPromo = promo ? promosService.calculatePromoPrice(product.rawPrice, promo) : product.rawPrice;
-
         return {
           ...product,
           averageRating: rating.averageRating,
           totalRatings: rating.totalRatings,
-          promo: promo,
-          price: formatPriceWithMarkup(priceAfterPromo), // Afficher le prix promo
-          oldPrice: promo ? formatPriceWithMarkup(product.rawPrice) : null, // Ancien prix barré
         };
       });
 
-      // Trier par note moyenne décroissante
-      const sortedProducts = enrichedProducts.sort((a, b) => {
+      const sortedProducts = withRatingsOnly.sort((a, b) => {
         if (b.averageRating !== a.averageRating) {
           return b.averageRating - a.averageRating;
         }
         return b.totalRatings - a.totalRatings;
       });
 
-      setProducts(sortedProducts);
+      setFsPromoMap(promosMap || {});
+      setProductsWithRatings(sortedProducts);
     } catch (error) {
       console.error("Erreur lors du chargement des produits:", error);
       setError(t.products.loadError);
@@ -182,7 +198,7 @@ const AllProducts = ({ navigation }) => {
     }
   };
 
-  const renderProduct = ({ item }) => (
+  const renderProduct = useCallback(({ item }) => (
     <TouchableOpacity
       style={styles.card}
       onPress={() => handleProductPress(item)}
@@ -191,6 +207,7 @@ const AllProducts = ({ navigation }) => {
         source={item.hasValidImage ? { uri: item.imageUrl } : require('../../assets/images/place.png')}
         style={styles.productImage}
         defaultSource={require('../../assets/images/place.png')}
+        key={`product-image-${item.id}`}
       />
       {item.discount && (
         <View style={styles.discountBadge}>
@@ -261,7 +278,7 @@ const AllProducts = ({ navigation }) => {
         <Ionicons name="add" size={20} color="#FFF" />
       </TouchableOpacity>
     </TouchableOpacity>
-  );
+  ), [handleProductPress, handleToggleFavorite, isFavorite, t.products]);
 
   if (loading) {
     return (
@@ -301,6 +318,12 @@ const AllProducts = ({ navigation }) => {
         initialNumToRender={6}
         maxToRenderPerBatch={10}
         windowSize={11}
+        updateCellsBatchingPeriod={50}
+        getItemLayout={(data, index) => ({
+          length: 200,
+          offset: 200 * Math.floor(index / 2),
+          index,
+        })}
         ListFooterComponent={<View style={{ height: Platform.OS === 'android' ? 80 : 30 }} />}
       />
       <ProductModal

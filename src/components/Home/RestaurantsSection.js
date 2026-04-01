@@ -26,6 +26,7 @@ import InteractiveRating from '../InteractiveRating';
 import StatusBadge from '../StatusBadge';
 import { resolveImageUrl } from '../../Utils/imageUtils';
 import ConnectionError from '../ConnectionError';
+import { HOME_RESTAURANTS_ENRICH_MAX } from '../../constants/homeContentLimits';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const BASE_URL = "https://www.api-mayombe.mayombe-app.com/public";
@@ -50,32 +51,48 @@ const RestaurantsSection = () => {
   useEffect(() => {
     (async () => {
       try {
-        let { status } = await Location.getForegroundPermissionsAsync();
-        
-        if (status !== 'granted') {
-          const permission = await Location.requestForegroundPermissionsAsync();
-          status = permission.status;
+        let coords = null;
+        try {
+          const last = await Location.getLastKnownPositionAsync();
+          if (last?.coords) {
+            coords = {
+              latitude: last.coords.latitude,
+              longitude: last.coords.longitude,
+            };
+          }
+        } catch (_) {
+          /* noop */
         }
 
-        if (status !== 'granted') {
-          console.log('Permission localisation refusée - Utilisation position par défaut');
-          // Brazzaville par défaut
-          setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
-          return;
+        if (!coords) {
+          let { status } = await Location.getForegroundPermissionsAsync();
+
+          if (status !== 'granted') {
+            const permission = await Location.requestForegroundPermissionsAsync();
+            status = permission.status;
+          }
+
+          if (status !== 'granted') {
+            console.log('Permission localisation refusée - Utilisation position par défaut');
+            setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
+            return;
+          }
+
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Low,
+          }).catch((err) => {
+            console.warn("Impossible d'obtenir la position:", err);
+            return null;
+          });
+
+          if (location) {
+            coords = location.coords;
+          }
         }
 
-        // Essayer d'obtenir la position précise
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced, 
-        }).catch(err => {
-          console.warn("Impossible d'obtenir la position précise:", err);
-          return null;
-        });
-
-        if (location) {
-          setUserLocation(location.coords);
+        if (coords) {
+          setUserLocation(coords);
         } else {
-          // Fallback en cas d'erreur technique (ex: simulateur)
           console.log('Position technique impossible - Utilisation position par défaut');
           setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
         }
@@ -84,8 +101,7 @@ const RestaurantsSection = () => {
         setUserLocation({ latitude: -4.2634, longitude: 15.2429 });
       }
     })();
-    
-    // Charger les villes
+
     fetchCities();
   }, []);
 
@@ -175,7 +191,9 @@ const RestaurantsSection = () => {
                  cityName.toLowerCase().includes("pointe noire");
         });
 
-        const mappedRestaurants = filteredData.map(restaurant => {
+        const limitedForHome = filteredData.slice(0, HOME_RESTAURANTS_ENRICH_MAX);
+
+        const mappedRestaurants = limitedForHome.map(restaurant => {
           // Calcul distance si possible
           let distance = null;
           
@@ -225,11 +243,19 @@ const RestaurantsSection = () => {
         let imagesMap = {};
         
         try {
-          if (getBatchRatings && typeof getBatchRatings === 'function') {
-            ratingsMap = await getBatchRatings(restaurantIds, 'restaurant');
-          }
-          statusesMap = await restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
-          imagesMap = await restaurantStatusService.getBatchRestaurantImages(restaurantIds);
+          const ratingsPromise =
+            getBatchRatings && typeof getBatchRatings === 'function'
+              ? getBatchRatings(restaurantIds, 'restaurant')
+              : Promise.resolve({});
+          const statusesPromise =
+            restaurantStatusService.getBatchRestaurantStatuses(restaurantIds);
+          const imagesPromise =
+            restaurantStatusService.getBatchRestaurantImages(restaurantIds);
+          [ratingsMap, statusesMap, imagesMap] = await Promise.all([
+            ratingsPromise,
+            statusesPromise,
+            imagesPromise,
+          ]);
         } catch (error) {
           console.error('❌ Erreur lors de la récupération des ratings, statuts ou images:', error);
         }

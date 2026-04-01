@@ -11,13 +11,14 @@ import {
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import { useCart } from '../context/CartContext';
-import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
+import { applyMarkup, formatPriceWithMarkup, MARKUP_PERCENTAGE } from '../Utils/priceUtils';
 
-const RestaurantProductModal = ({ 
-  visible, 
-  product, 
+const RestaurantProductModal = ({
+  visible,
+  product,
   onClose,
-  onAddToCart
+  onAddToCart,
+  markupPercentage = MARKUP_PERCENTAGE,
 }) => {
   const { addToCart } = useCart();
   const [selectedComplements, setSelectedComplements] = useState([]);
@@ -47,12 +48,12 @@ const RestaurantProductModal = ({
       ? parseFloat(basePriceToUse.toString().replace(/[^\d.-]/g, ''))
       : (typeof basePriceToUse === 'number' ? basePriceToUse : parseFloat(basePriceToUse) || 0);
     
-    const priceWithMarkup = applyMarkup(basePriceNumeric);
-    
+    const priceWithMarkup = applyMarkup(basePriceNumeric, markupPercentage);
+
     // Calculer le prix des compléments avec majoration
     const complementsWithMarkup = selectedComplements.map(comp => ({
       ...comp,
-      price: applyMarkup(parseFloat(comp.price) || 0)
+      price: applyMarkup(parseFloat(comp.price) || 0, markupPercentage)
     }));
     
     const complementsPrice = complementsWithMarkup.reduce((sum, comp) => 
@@ -72,6 +73,7 @@ const RestaurantProductModal = ({
       complements: complementsWithMarkup, // Compléments avec prix déjà majorés
       unitPrice, // Prix unitaire pré-calculé avec majoration
       totalPrice: unitPrice * quantity,
+      markupPercentage,
       // Conserver les informations de promo pour le panier
       hasPromo: hasPromo,
       promoPrice: promoPrice ? (typeof promoPrice === 'string' ? parseFloat(promoPrice.toString().replace(/[^\d.-]/g, '')) : promoPrice) : null,
@@ -100,12 +102,10 @@ const RestaurantProductModal = ({
       ? parseFloat(basePriceToUse.replace(/[^\d.-]/g, ''))
       : basePriceToUse;
     
-    // Appliquer la majoration de 7% au prix de base
-    const priceWithMarkup = applyMarkup(basePriceNumeric);
-    
-    // Appliquer la majoration aux compléments
-    const complementsPrice = selectedComplements.reduce((sum, comp) => 
-      sum + applyMarkup(parseFloat(comp.price) || 0), 0);
+    const priceWithMarkup = applyMarkup(basePriceNumeric, markupPercentage);
+
+    const complementsPrice = selectedComplements.reduce((sum, comp) =>
+      sum + applyMarkup(parseFloat(comp.price) || 0, markupPercentage), 0);
     
     return (priceWithMarkup + complementsPrice) * quantity;
   };
@@ -142,11 +142,11 @@ const RestaurantProductModal = ({
               <Text style={styles.productName}>{product.name}</Text>
               {product.hasPromo ? (
                 <View style={styles.promoPriceContainer}>
-                  <Text style={styles.productPricePromo}>{formatPriceWithMarkup(product.promoPrice)}</Text>
-                  <Text style={styles.productPriceOriginal}>{formatPriceWithMarkup(product.price)}</Text>
+                  <Text style={styles.productPricePromo}>{formatPriceWithMarkup(product.promoPrice, 'FCFA', markupPercentage)}</Text>
+                  <Text style={styles.productPriceOriginal}>{formatPriceWithMarkup(product.price, 'FCFA', markupPercentage)}</Text>
                 </View>
               ) : (
-                <Text style={styles.productPrice}>{formatPriceWithMarkup(product.price)}</Text>
+                <Text style={styles.productPrice}>{formatPriceWithMarkup(product.price, 'FCFA', markupPercentage)}</Text>
               )}
               <Text style={styles.description}>{product.description}</Text>
             </View>
@@ -198,7 +198,7 @@ const RestaurantProductModal = ({
                         />
                         <Text style={styles.complementName}>{complement.name}</Text>
                       </View>
-                      <Text style={styles.complementPrice}>+{formatPriceWithMarkup(complement.price)}</Text>
+                      <Text style={styles.complementPrice}>+{formatPriceWithMarkup(complement.price, 'FCFA', markupPercentage)}</Text>
                     </TouchableOpacity>
                   );
                 })}

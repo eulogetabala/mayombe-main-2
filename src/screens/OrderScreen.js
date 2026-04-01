@@ -35,12 +35,18 @@ const OrderScreen = ({ route, navigation }) => {
     
     const distanceNum = parseFloat(distance);
     
-    if (distanceNum <= 10) {
-      return 1000; // 0-10km : 1000 FCFA
+    if (distanceNum <= 5) {
+      return 1000; // Zone 1 : 0-5km : 1000 FCFA
+    } else if (distanceNum <= 10) {
+      return 1500; // Zone 2 : 5-10km : 1500 FCFA
+    } else if (distanceNum <= 15) {
+      return 2000; // Zone 3 : 10-15km : 2000 FCFA
     } else if (distanceNum <= 20) {
-      return 1500; // 11-20km : 1500 FCFA
+      return 2500; // Zone 4 : 15-20km : 2500 FCFA
+    } else if (distanceNum <= 30) {
+      return 3000; // Zone 5 : 20-30km : 3000 FCFA
     } else {
-      return 2000; // 21km+ : 2000 FCFA
+      return 3000; // Au-delà de 30km : 3000 FCFA (Zone 5)
     }
   };
 
@@ -52,12 +58,18 @@ const OrderScreen = ({ route, navigation }) => {
     
     const distanceNum = parseFloat(distance);
     
-    if (distanceNum <= 10) {
-      return `Frais de livraison (0-10km)`;
+    if (distanceNum <= 5) {
+      return `Frais de livraison (Zone 1: 0-5km)`;
+    } else if (distanceNum <= 10) {
+      return `Frais de livraison (Zone 2: 5-10km)`;
+    } else if (distanceNum <= 15) {
+      return `Frais de livraison (Zone 3: 10-15km)`;
     } else if (distanceNum <= 20) {
-      return `Frais de livraison (11-20km)`;
+      return `Frais de livraison (Zone 4: 15-20km)`;
+    } else if (distanceNum <= 30) {
+      return `Frais de livraison (Zone 5: 20-30km)`;
     } else {
-      return `Frais de livraison (21km+)`;
+      return `Frais de livraison (Zone 5: 20-30km+)`;
     }
   };
 

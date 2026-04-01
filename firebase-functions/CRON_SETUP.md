@@ -2,13 +2,19 @@
 
 ## 📋 Prérequis
 
-1. **Déployer la fonction** :
+1. **Déployer les fonctions** :
    ```bash
    firebase login
-   firebase deploy --only functions:checkScheduledNotifications
+   firebase deploy --only functions:checkScheduledNotifications,functions:scheduledNotificationsCron
    ```
+   - `checkScheduledNotifications` : URL HTTP pour un cron externe (ou tests manuels).
+   - `scheduledNotificationsCron` : exécution **automatique chaque minute** via Cloud Scheduler (Gen2, **plan Blaze** requis). Si vous n’avez pas Blaze, ne déployez que `checkScheduledNotifications` et gardez cron-job.org.
 
-2. **Récupérer l'URL de la fonction** :
+2. **Sécuriser l’URL HTTP (optionnel)** : dans la console Firebase (Functions) ou en local, définir la variable d’environnement `CRON_SECRET`. Ensuite appeler :
+   `https://.../checkScheduledNotifications?key=VOTRE_SECRET`  
+   ou envoyer le header `x-cron-key: VOTRE_SECRET`. Sans `CRON_SECRET`, l’URL reste publique comme avant.
+
+3. **Récupérer l'URL de la fonction** :
    Après le déploiement, vous obtiendrez une URL comme :
    ```
    https://us-central1-mayombe-ba11b.cloudfunctions.net/checkScheduledNotifications
@@ -52,8 +58,8 @@
 
 ## ⚠️ Note importante
 
-- Le plan gratuit de Firebase ne supporte pas `functions.pubsub.schedule()`
-- Cette solution utilise une fonction HTTP appelée par un service externe
+- Le plan gratuit ne permet pas Cloud Scheduler intégré pour une fonction **Gen2 planifiée** : sans Blaze, utilisez uniquement l’URL HTTP + cron externe.
+- Avec Blaze, `scheduledNotificationsCron` remplace avantageusement cron-job.org (une exécution par minute en UTC).
 - Les services de cron gratuits ont généralement des limitations (fréquence minimale, nombre de jobs, etc.)
 - **cron-job.org** permet des appels toutes les minutes en gratuit
 - **EasyCron** permet aussi des appels fréquents en gratuit

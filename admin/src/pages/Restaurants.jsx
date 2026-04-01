@@ -36,14 +36,12 @@ const Restaurants = () => {
       try {
         setLoading(true)
         
-        // 1. Charger les restaurants depuis l'API
-        // restaurantService.getAll() retourne déjà un tableau normalisé (pas une réponse axios)
-        const apiRestaurants = await restaurantService.getAll()
+        const [apiRestaurants, firebaseImages] = await Promise.all([
+          restaurantService.getAll(),
+          firebaseService.getAllRestaurantImages(),
+        ])
         console.log('📡 Restaurants chargés depuis l\'API:', apiRestaurants.length)
         console.log('📡 [DEBUG] Premier restaurant:', apiRestaurants[0])
-        
-        // 2. Charger les images depuis Firebase Realtime Database
-        const firebaseImages = await firebaseService.getAllRestaurantImages()
         console.log('🖼️ Images chargées depuis Firebase:', Object.keys(firebaseImages).length, 'restaurants')
         
         // 3. Fusionner les données : priorité aux images Firebase

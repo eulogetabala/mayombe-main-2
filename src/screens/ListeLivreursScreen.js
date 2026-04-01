@@ -27,12 +27,18 @@ const ListeLivreursScreen = () => {
 
   // Calculer les frais de livraison selon la distance
   const calculateDeliveryFee = (distance) => {
-    if (distance <= 3) {
-      return 1000; // Prix de base
-    } else if (distance <= 7) {
-      return 1500; // Prix intermédiaire
+    if (distance <= 5) {
+      return 1000; // Zone 1 : 0-5km
+    } else if (distance <= 10) {
+      return 1500; // Zone 2 : 5-10km
+    } else if (distance <= 15) {
+      return 2000; // Zone 3 : 10-15km
+    } else if (distance <= 20) {
+      return 2500; // Zone 4 : 15-20km
+    } else if (distance <= 30) {
+      return 3000; // Zone 5 : 20-30km
     } else {
-      return 2000; // Prix élevé
+      return 3000; // Au-delà de 30km : Zone 5
     }
   };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -20,10 +20,12 @@ import { useFavorites } from '../../context/FavoritesContext';
 import { useRatings } from '../../context/RatingsContext';
 import { translations } from '../../translations';
 import { withRefreshAndLoading } from '../common/withRefreshAndLoading';
-import { applyMarkup, formatPriceWithMarkup } from '../../Utils/priceUtils';
+import { formatPriceWithMarkup, getMarkupPercentageFromProduct } from '../../Utils/priceUtils';
 import promosService from '../../services/promosService';
+import { HOME_POPULAR_PRODUCTS_MAX } from '../../constants/homeContentLimits';
 import InteractiveRating from '../InteractiveRating';
 import PromoBadge from '../PromoBadge';
+import { useProductPromosLive } from '../../../contexts/ProductPromosContext';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const STORAGE_URL = "https://www.api-mayombe.mayombe-app.com/storage";
@@ -54,6 +56,9 @@ const ProductSectionContent = ({
         data={products}
         horizontal
         showsHorizontalScrollIndicator={false}
+        initialNumToRender={8}
+        maxToRenderPerBatch={10}
+        windowSize={5}
         keyExtractor={item => item.id.toString()}
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -127,7 +132,9 @@ const ProductSectionContent = ({
 
 const ProductSection = ({ listMode = "vertical" }) => {
   const navigation = useNavigation();
-  const [products, setProducts] = useState([]);
+  const { rtdbPromoById } = useProductPromosLive();
+  const [productsWithRatings, setProductsWithRatings] = useState([]);
+  const [fsPromoMap, setFsPromoMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -138,6 +145,18 @@ const ProductSection = ({ listMode = "vertical" }) => {
   const { toggleFavorite, isFavorite, favorites } = useFavorites();
   const { getBatchRatings } = useRatings();
   const t = translations[currentLanguage];
+
+  const products = useMemo(() => {
+    if (!productsWithRatings.length) {
+      return [];
+    }
+    return promosService.applyPromosToProductRows(
+      productsWithRatings,
+      fsPromoMap,
+      rtdbPromoById,
+      formatPriceWithMarkup
+    );
+  }, [productsWithRatings, fsPromoMap, rtdbPromoById]);
 
   useEffect(() => {
     fetchProducts();
@@ -278,13 +297,21 @@ const ProductSection = ({ listMode = "vertical" }) => {
           : null;
         const defaultImage = require('../../../assets/images/2.jpg');
         const basePrice = product.price || 0;
-        const priceWithMarkup = basePrice ? formatPriceWithMarkup(basePrice) : t.products.priceNotAvailable;
-        
+        const restaurantStub = {
+          restaurant_id: product.restaurant_id,
+          restaurant_name: product.restaurant_name || product.resto_name,
+        };
+        const pct = getMarkupPercentageFromProduct({ ...restaurantStub, rawPrice: basePrice });
+        const priceWithMarkup = basePrice ? formatPriceWithMarkup(basePrice, 'FCFA', pct) : t.products.priceNotAvailable;
+
         return {
           id: product.id,
           name: product.name || product.libelle || t.products.noName,
           price: priceWithMarkup,
-          rawPrice: basePrice, // Conserver le prix original
+          rawPrice: basePrice,
+          restaurant_id: product.restaurant_id,
+          restaurant_name: product.restaurant_name || product.resto_name,
+          markupPercentage: pct,
           unite: product.unite || "",
           description: product.desc || t.products.noDescription,
           ingredients: product.ingredients?.map(ing => normalizeAndTranslateIngredient(ing)) || [],
@@ -302,46 +329,42 @@ const ProductSection = ({ listMode = "vertical" }) => {
         };
       });
 
-      // Récupérer les ratings et promos depuis Firebase
-      const productIds = mappedProducts.map(p => p.id.toString());
+      // Accueil : enrichir seulement un sous-ensemble (évite des centaines de lectures Firestore)
+      const productsForHome = mappedProducts.slice(0, HOME_POPULAR_PRODUCTS_MAX);
+      const productIds = productsForHome.map(p => p.id.toString());
       let ratingsMap = {};
       let promosMap = {};
-      
+
       try {
-        if (getBatchRatings && typeof getBatchRatings === 'function') {
-          ratingsMap = await getBatchRatings(productIds, 'product');
-        }
-        promosMap = await promosService.getBatchPromos(productIds);
+        const ratingsPromise =
+          getBatchRatings && typeof getBatchRatings === 'function'
+            ? getBatchRatings(productIds, 'product')
+            : Promise.resolve({});
+        const promosPromise = promosService.getBatchPromosFirestoreOnly(productIds);
+        [ratingsMap, promosMap] = await Promise.all([ratingsPromise, promosPromise]);
       } catch (error) {
         console.error('❌ Erreur lors de la récupération des ratings ou promos:', error);
       }
 
-      // Enrichir les produits avec ratings et promos
-      const enrichedProducts = mappedProducts.map(product => {
+      const withRatingsOnly = productsForHome.map((product) => {
         const productIdStr = product.id.toString();
         const rating = ratingsMap[productIdStr] || { averageRating: 0, totalRatings: 0 };
-        const promo = promosMap[productIdStr];
-        const priceAfterPromo = promo ? promosService.calculatePromoPrice(product.rawPrice, promo) : product.rawPrice;
-
         return {
           ...product,
           averageRating: rating.averageRating,
           totalRatings: rating.totalRatings,
-          promo: promo,
-          price: formatPriceWithMarkup(priceAfterPromo), // Afficher le prix promo
-          oldPrice: promo ? formatPriceWithMarkup(product.rawPrice) : null, // Ancien prix barré
         };
       });
 
-      // Trier par note moyenne décroissante pour "Produits populaires"
-      const sortedProducts = enrichedProducts.sort((a, b) => {
+      const sortedWithRatings = withRatingsOnly.sort((a, b) => {
         if (b.averageRating !== a.averageRating) {
           return b.averageRating - a.averageRating;
         }
         return b.totalRatings - a.totalRatings;
       });
 
-      setProducts(sortedProducts);
+      setFsPromoMap(promosMap || {});
+      setProductsWithRatings(sortedWithRatings);
       setLoading(false);
     } catch (error) {
       console.error("Erreur lors du chargement des produits:", error);

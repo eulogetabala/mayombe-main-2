@@ -26,11 +26,11 @@ import { RefreshProvider } from './src/context/RefreshContext';
 import { LanguageProvider } from './src/context/LanguageContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { RatingsProvider } from './src/context/RatingsContext';
+import { ProductPromosProvider } from './contexts/ProductPromosContext';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import getStripePublishableKey from './src/config/stripe';
 import { initializeImageCache } from './src/config/ImageCacheConfig';
-import { showFCMTokenOnStartup } from './src/Utils/showFCMToken';
-
+import { logFCMDebugOnStartup } from './src/Utils/showFCMToken';
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/Auth/LoginScreen";
 import RegisterScreen from "./src/screens/Auth/RegisterScreen";
@@ -169,14 +169,13 @@ export default function App() {
         ]);
 
         await initializeImageCache();
-        
-        // Initialiser le service FCM
+
         const fcmService = require('./src/services/fcmService').default;
-        await fcmService.initialize();
-        
-        showFCMTokenOnStartup();
+        await fcmService.requestPermission();
+
+        logFCMDebugOnStartup();
       } catch (error) {
-        console.error("Erreur de chargement des polices:", error);
+        console.error("Erreur au démarrage (polices / init):", error);
       } finally {
         setIsAppReady(true);
         await SplashScreen.hideAsync();
@@ -209,8 +208,10 @@ export default function App() {
               <CartProvider>
                 <FavoritesProvider>
                   <RatingsProvider>
-                    <MainAppContent initialRoute={initialRoute} />
-                    <Toast />
+                    <ProductPromosProvider>
+                      <MainAppContent initialRoute={initialRoute} />
+                      <Toast />
+                    </ProductPromosProvider>
                   </RatingsProvider>
                 </FavoritesProvider>
               </CartProvider>
@@ -226,14 +227,16 @@ export default function App() {
 const MainAppContent = ({ initialRoute }) => {
   const { isConnected, checkConnection } = useConnectivity();
 
-  if (!isConnected) {
-    return <NoConnectionScreen onRetry={checkConnection} />;
-  }
-
   return (
-    <NavigationContainer>
-      <AppNavigator initialRoute={initialRoute} />
-    </NavigationContainer>
+    <>
+      {!isConnected ? (
+        <NoConnectionScreen onRetry={checkConnection} />
+      ) : (
+        <NavigationContainer>
+          <AppNavigator initialRoute={initialRoute} />
+        </NavigationContainer>
+      )}
+    </>
   );
 };
 

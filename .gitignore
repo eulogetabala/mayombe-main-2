@@ -88,3 +88,4 @@ yarn-error.*
 *.plist
 !GoogleService-Info.plist
 mayombe-ba11b-firebase-adminsdk-*.json
+.idea/

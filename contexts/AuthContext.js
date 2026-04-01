@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import apiClient from '../services/apiClients';
+import fcmService from '../src/services/fcmService';
 
 const AuthContext = createContext(null);
 
@@ -31,6 +32,19 @@ export const AuthProvider = ({ children }) => {
     try {
       await AsyncStorage.setItem('userToken', token);
       await AsyncStorage.removeItem('isGuest'); // Supprimer le statut invité
+      
+      // Récupérer l'ID de l'utilisateur pour l'enregistrement FCM
+      const user = await getCurrentUser();
+      if (user && user.id) {
+        await AsyncStorage.setItem('userId', String(user.id));
+        await AsyncStorage.setItem('fcmUserId', String(user.id));
+        // Enregistrer le token FCM avec l'ID utilisateur
+        await fcmService.getFCMToken();
+      } else {
+        // Fallback sans ID
+        await fcmService.getFCMToken();
+      }
+
       setIsAuthenticated(true);
       setIsGuest(false);
     } catch (error) {
@@ -88,6 +102,12 @@ export const AuthProvider = ({ children }) => {
     try {
       await AsyncStorage.setItem('isGuest', 'true');
       await AsyncStorage.removeItem('userToken');
+      await AsyncStorage.removeItem('userId');
+      await AsyncStorage.removeItem('fcmUserId');
+      
+      // Enregistrer le token en mode invité/anonyme
+      await fcmService.getFCMToken();
+
       setIsGuest(true);
       setIsAuthenticated(false);
     } catch (error) {

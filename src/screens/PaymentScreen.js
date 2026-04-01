@@ -145,13 +145,19 @@ const PaymentScreen = ({ route, navigation }) => {
           distance = parseFloat(distance.toFixed(2));
           console.log('📏 [PaymentScreen] Distance recalculée:', distance, 'km');
 
-          // 4. Calculer les frais selon la règle
-          if (distance <= 10) {
-            fee = 1000;
+          // 4. Calculer les frais selon les zones de livraison
+          if (distance <= 5) {
+            fee = 1000; // Zone 1 : 0-5km
+          } else if (distance <= 10) {
+            fee = 1500; // Zone 2 : 5-10km
+          } else if (distance <= 15) {
+            fee = 2000; // Zone 3 : 10-15km
           } else if (distance <= 20) {
-            fee = 1500;
+            fee = 2500; // Zone 4 : 15-20km
+          } else if (distance <= 30) {
+            fee = 3000; // Zone 5 : 20-30km
           } else {
-            fee = 2000;
+            fee = 3000; // Au-delà de 30km : Zone 5
           }
         } else {
           console.log('ℹ️ [PaymentScreen] Coordonnées restaurant absentes ou invalides. Frais par défaut.');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Search, Edit, Trash2, Tag, Loader2, DollarSign, Store } from 'lucide-react'
+import { Search, Edit, Trash2, Loader2, Store, RefreshCw, Layers } from 'lucide-react'
 import menuService from '../services/menuService'
 import firebaseService from '../services/firebaseService'
 
@@ -9,6 +9,8 @@ const Promos = () => {
   const [productPromos, setProductPromos] = useState({})
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  /** all | catalog | restaurant — catalogue simple vs menus restos */
+  const [sourceFilter, setSourceFilter] = useState('all')
   const [selectedRestaurant, setSelectedRestaurant] = useState('all')
   const [showModal, setShowModal] = useState(false)
   const [editingProduct, setEditingProduct] = useState(null)
@@ -20,26 +22,25 @@ const Promos = () => {
 
   useEffect(() => {
     filterProducts()
-  }, [searchTerm, selectedRestaurant, products])
+  }, [searchTerm, selectedRestaurant, sourceFilter, products])
 
   const loadData = async () => {
     try {
       setLoading(true)
-      
-      // Charger tous les produits
-      const allProducts = await menuService.getAllMenus()
+
+      const [allProducts, promos] = await Promise.all([
+        menuService.getProductsForPromosAdmin(),
+        firebaseService.getAllProductPromos(),
+      ])
       setProducts(allProducts)
-      // Initialiser filteredProducts avec tous les produits
       setFilteredProducts(allProducts)
-      
-      // Charger tous les prix promotionnels
-      const promos = await firebaseService.getAllProductPromos()
       const promosMap = {}
-      promos.forEach(promo => {
-        promosMap[promo.productId] = promo
+      promos.forEach((promo) => {
+        if (promo.productId != null) {
+          promosMap[String(promo.productId)] = promo
+        }
       })
       setProductPromos(promosMap)
-      
     } catch (error) {
       console.error('Erreur lors du chargement des données:', error)
     } finally {
@@ -54,28 +55,40 @@ const Promos = () => {
     }
     
     let filtered = [...products]
-    
+
+    if (sourceFilter === 'catalog') {
+      filtered = filtered.filter((p) => p.productOrigin === 'catalog')
+    } else if (sourceFilter === 'restaurant') {
+      filtered = filtered.filter((p) => p.productOrigin === 'restaurant')
+    }
+
     // Filtre par recherche
     if (searchTerm && searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase().trim()
-      filtered = filtered.filter(product => {
+      filtered = filtered.filter((product) => {
         const libelle = product.libelle?.toLowerCase() || ''
         const restaurantName = product.restaurant_name?.toLowerCase() || ''
         const description = product.description?.toLowerCase() || ''
-        
-        return libelle.includes(searchLower) || 
-               restaurantName.includes(searchLower) ||
-               description.includes(searchLower)
+        const subMenu = product.sub_menu_name?.toLowerCase() || ''
+
+        return (
+          libelle.includes(searchLower) ||
+          restaurantName.includes(searchLower) ||
+          description.includes(searchLower) ||
+          subMenu.includes(searchLower)
+        )
       })
     }
     
-    // Filtre par restaurant
-    if (selectedRestaurant !== 'all') {
-      filtered = filtered.filter(product => {
+    // Filtre par restaurant (ignoré sur « Catalogue seul » : pas de rattachement resto fiable)
+    if (selectedRestaurant !== 'all' && sourceFilter !== 'catalog') {
+      filtered = filtered.filter((product) => {
         const productRestaurantId = product.restaurant_id
-        const selectedId = parseInt(selectedRestaurant)
-        return productRestaurantId === selectedId || 
-               productRestaurantId?.toString() === selectedRestaurant
+        const selectedId = parseInt(selectedRestaurant, 10)
+        return (
+          productRestaurantId === selectedId ||
+          productRestaurantId?.toString() === selectedRestaurant
+        )
       })
     }
     
@@ -84,7 +97,7 @@ const Promos = () => {
 
   const handleSetPromo = (product) => {
     setEditingProduct(product)
-    const existingPromo = productPromos[product.id]
+    const existingPromo = productPromos[String(product.id)]
     setPromoPrice(existingPromo ? existingPromo.promoPrice.toString() : '')
     setShowModal(true)
   }
@@ -93,13 +106,16 @@ const Promos = () => {
     if (!editingProduct || !promoPrice) return
     
     try {
-      await firebaseService.setProductPromoPrice(
-        editingProduct.id,
-        parseFloat(promoPrice)
-      )
-      
-      // Recharger les données
-      await loadData()
+      const price = parseFloat(promoPrice)
+      await firebaseService.setProductPromoPrice(editingProduct.id, price)
+      setProductPromos((prev) => ({
+        ...prev,
+        [String(editingProduct.id)]: {
+          productId: editingProduct.id,
+          promoPrice: price,
+          active: true,
+        },
+      }))
       setShowModal(false)
       setEditingProduct(null)
       setPromoPrice('')
@@ -116,40 +132,87 @@ const Promos = () => {
     
     try {
       await firebaseService.removeProductPromoPrice(productId)
-      await loadData()
+      setProductPromos((prev) => {
+        const next = { ...prev }
+        delete next[String(productId)]
+        return next
+      })
     } catch (error) {
       console.error('Erreur lors de la suppression du prix promo:', error)
       alert('Erreur lors de la suppression du prix promotionnel')
     }
   }
 
-  // Obtenir la liste unique des restaurants
-  const restaurants = [...new Set(products.map(p => ({
-    id: p.restaurant_id,
-    name: p.restaurant_name
-  })).filter(r => r.id && r.name))]
-    .filter((r, index, self) => self.findIndex(t => t.id === r.id) === index)
-    .sort((a, b) => a.name.localeCompare(b.name))
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-primary-500" size={32} />
-      </div>
-    )
-  }
+  // Restaurants : uniquement les lignes « menus restaurant »
+  const restaurants = [
+    ...new Map(
+      products
+        .filter(
+          (p) =>
+            p.productOrigin === 'restaurant' &&
+            p.restaurant_id != null &&
+            p.restaurant_name &&
+            p.restaurant_name !== '—'
+        )
+        .map((p) => [p.restaurant_id, { id: p.restaurant_id, name: p.restaurant_name }])
+    ).values(),
+  ].sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Gestion des Prix</h1>
-        <p className="text-gray-600 mt-1">Gérez les prix normaux et promotionnels de vos produits</p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Gestion des Prix</h1>
+            <p className="text-gray-600 mt-1">Gérez les prix normaux et promotionnels de vos produits</p>
+            {loading && (
+              <p className="text-sm text-primary-600 mt-2 flex items-center gap-2">
+                <Loader2 className="animate-spin" size={16} />
+                Chargement (catalogue + menus restaurants + promos Firebase)…
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => loadData()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary-700 bg-primary-50 rounded-lg border border-primary-200 hover:bg-primary-100 disabled:opacity-50"
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" size={18} />
+            ) : (
+              <RefreshCw size={18} />
+            )}
+            Rafraîchir
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="card">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className={`card ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Layers className="inline mr-2" size={16} />
+              Origine
+            </label>
+            <select
+              value={sourceFilter}
+              onChange={(e) => {
+                setSourceFilter(e.target.value)
+                if (e.target.value === 'catalog') {
+                  setSelectedRestaurant('all')
+                }
+              }}
+              className="input-field"
+              disabled={loading}
+            >
+              <option value="all">Tout : catalogue + menus restaurants</option>
+              <option value="catalog">Catalogue général uniquement</option>
+              <option value="restaurant">Menus restaurants uniquement</option>
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Search className="inline mr-2" size={16} />
@@ -159,22 +222,29 @@ const Promos = () => {
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Nom du produit ou restaurant..."
+              placeholder="Nom, description, restaurant…"
               className="input-field"
+              disabled={loading}
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <Store className="inline mr-2" size={16} />
-              Filtrer par restaurant
+              Restaurant (menus)
             </label>
             <select
               value={selectedRestaurant}
               onChange={(e) => setSelectedRestaurant(e.target.value)}
               className="input-field"
+              disabled={loading || sourceFilter === 'catalog'}
+              title={
+                sourceFilter === 'catalog'
+                  ? 'Filtre restaurant désactivé pour le catalogue général'
+                  : undefined
+              }
             >
               <option value="all">Tous les restaurants</option>
-              {restaurants.map(restaurant => (
+              {restaurants.map((restaurant) => (
                 <option key={restaurant.id} value={restaurant.id}>
                   {restaurant.name}
                 </option>
@@ -194,6 +264,9 @@ const Promos = () => {
                   Produit
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Type
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Restaurant
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -208,17 +281,27 @@ const Promos = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredProducts.length === 0 ? (
+              {loading && products.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan="6" className="px-6 py-16 text-center text-gray-500">
+                    <Loader2 className="animate-spin inline mr-2 text-primary-500" size={24} />
+                    Chargement de la liste produits…
+                  </td>
+                </tr>
+              ) : filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
                     Aucun produit trouvé
                   </td>
                 </tr>
               ) : (
                 filteredProducts.map((product) => {
-                  const promo = productPromos[product.id]
+                  const promo = productPromos[String(product.id)]
                   return (
-                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                    <tr
+                      key={`${product.productOrigin}-${product.id}-${product.restaurant_id ?? 'cat'}-${product.sub_menu_id ?? ''}`}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
                       <td className="px-6 py-4">
                         <div className="flex items-center space-x-3">
                           {product.image_url && (
@@ -233,23 +316,46 @@ const Promos = () => {
                           )}
                           <div>
                             <div className="font-medium text-gray-900">{product.libelle}</div>
-                            <div className="text-sm text-gray-500">{product.description?.substring(0, 50)}...</div>
+                            <div className="text-sm text-gray-500">
+                              {(product.description || '').substring(0, 50)}
+                              {(product.description || '').length > 50 ? '…' : ''}
+                            </div>
                           </div>
                         </div>
                       </td>
+                      <td className="px-6 py-4 text-sm">
+                        {product.productOrigin === 'catalog' ? (
+                          <span className="inline-block text-xs font-medium bg-slate-100 text-slate-700 px-2 py-1 rounded-md">
+                            Catalogue
+                          </span>
+                        ) : (
+                          <div className="space-y-1">
+                            <span className="inline-block text-xs font-medium bg-amber-50 text-amber-900 px-2 py-1 rounded-md">
+                              Menu restaurant
+                            </span>
+                            {product.sub_menu_name && (
+                              <div className="text-xs text-gray-500">{product.sub_menu_name}</div>
+                            )}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-700">
-                        {product.restaurant_name}
+                        {product.productOrigin === 'catalog'
+                          ? product.restaurant_name && product.restaurant_name !== '—'
+                            ? product.restaurant_name
+                            : '—'
+                          : product.restaurant_name}
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-lg font-semibold text-gray-900">
-                          {parseInt(product.prix).toLocaleString()} FCFA
+                          {Math.round(Number(product.prix) || 0).toLocaleString()} FCFA
                         </span>
                       </td>
                       <td className="px-6 py-4">
                         {promo ? (
                           <div className="flex items-center space-x-2">
                             <span className="text-lg font-bold text-green-600">
-                              {parseInt(promo.promoPrice).toLocaleString()} FCFA
+                              {Math.round(Number(promo.promoPrice) || 0).toLocaleString()} FCFA
                             </span>
                             <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
                               Actif
@@ -293,7 +399,7 @@ const Promos = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              {productPromos[editingProduct.id] ? 'Modifier' : 'Ajouter'} le Prix Promo
+              {productPromos[String(editingProduct.id)] ? 'Modifier' : 'Ajouter'} le Prix Promo
             </h2>
             
             <div className="mb-4">
@@ -304,7 +410,7 @@ const Promos = () => {
             <div className="mb-4">
               <p className="text-sm text-gray-600 mb-2">Prix Normal</p>
               <p className="text-lg font-bold text-gray-900">
-                {parseInt(editingProduct.prix).toLocaleString()} FCFA
+                {Math.round(Number(editingProduct.prix) || 0).toLocaleString()} FCFA
               </p>
             </div>
 
@@ -322,9 +428,16 @@ const Promos = () => {
                 max={editingProduct.prix}
                 required
               />
-              {promoPrice && parseInt(promoPrice) < parseInt(editingProduct.prix) && (
+              {promoPrice &&
+                parseFloat(promoPrice) < (Number(editingProduct.prix) || 0) && (
                 <p className="mt-2 text-sm text-green-600">
-                  Réduction: {(((parseInt(editingProduct.prix) - parseInt(promoPrice)) / parseInt(editingProduct.prix)) * 100).toFixed(0)}%
+                  Réduction:{' '}
+                  {(
+                    (((Number(editingProduct.prix) || 0) - parseFloat(promoPrice)) /
+                      (Number(editingProduct.prix) || 1)) *
+                    100
+                  ).toFixed(0)}
+                  %
                 </p>
               )}
             </div>
@@ -333,7 +446,10 @@ const Promos = () => {
               <button
                 onClick={handleSavePromo}
                 className="flex-1 btn-primary"
-                disabled={!promoPrice || parseInt(promoPrice) >= parseInt(editingProduct.prix)}
+                disabled={
+                  !promoPrice ||
+                  parseFloat(promoPrice) >= (Number(editingProduct.prix) || 0)
+                }
               >
                 Enregistrer
               </button>

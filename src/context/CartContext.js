@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
-import { applyMarkup } from '../Utils/priceUtils';
+import { applyMarkup, getMarkupPercentageFromProduct } from '../Utils/priceUtils';
 
 const CartContext = createContext();
 
@@ -63,21 +63,39 @@ export const CartProvider = ({ children }) => {
       // Vérifier si le prix unitaire est déjà calculé (venant de RestaurantProductModal)
       let unitPrice;
       
+      const markupPct = getMarkupPercentageFromProduct(product);
+
       if (product.unitPrice) {
         // Le prix est déjà majoré, on l'utilise directement
         unitPrice = product.unitPrice;
       } else {
         // Fallback: calculer le prix avec majoration (pour compatibilité avec d'autres écrans)
-        // Utiliser le prix promo si disponible, sinon le prix normal
-        const basePriceToUse = product.hasPromo && product.promoPrice 
-          ? product.promoPrice 
-          : product.price;
+        let basePriceToUse;
+
+        const hasPromo = product.hasPromo || (product.promo && product.promo.promoPrice);
+        const promoPrice = product.promoPrice || (product.promo && product.promo.promoPrice);
+
+        if (hasPromo && promoPrice) {
+          basePriceToUse = promoPrice;
+        } else if (product.rawPrice !== undefined && product.rawPrice !== null) {
+          basePriceToUse = product.rawPrice;
+        } else if (product.originalPrice !== undefined && product.originalPrice !== null) {
+          basePriceToUse = product.originalPrice;
+        } else {
+          const extractedPrice = Number(product.price.toString().replace(/[^\d.-]/g, ''));
+          const divisor = 1 + markupPct / 100;
+          const assumedBasePrice = extractedPrice / divisor;
+          if (assumedBasePrice > 0 && assumedBasePrice < extractedPrice) {
+            basePriceToUse = Math.round(assumedBasePrice);
+          } else {
+            basePriceToUse = extractedPrice;
+          }
+        }
         const basePrice = Number(basePriceToUse.toString().replace(/[^\d.-]/g, ''));
-        const productPrice = applyMarkup(basePrice);
-        
-        // Calculer le prix des compléments avec majoration
-        const complementsPrice = product.complements?.reduce((sum, comp) => 
-          sum + applyMarkup(Number(comp.price || 0)), 0) || 0;
+        const productPrice = applyMarkup(basePrice, markupPct);
+
+        const complementsPrice = product.complements?.reduce((sum, comp) =>
+          sum + applyMarkup(Number(comp.price || 0), markupPct), 0) || 0;
 
         unitPrice = productPrice + complementsPrice;
       }
@@ -87,15 +105,14 @@ export const CartProvider = ({ children }) => {
       );
 
       if (existingItem) {
-        // Mettre à jour l'item existant
-        cart = cart.map(item => 
+        cart = cart.map(item =>
           item.productKey === productKey
             ? {
                 ...item,
                 quantity: item.quantity + quantity,
-                unitPrice: unitPrice, // Mettre à jour le prix unitaire (au cas où le prix promo change)
+                unitPrice,
                 total: (item.quantity + quantity) * unitPrice,
-                // Conserver/mettre à jour les informations de promo
+                markupPercentage: product.markupPercentage ?? item.markupPercentage ?? markupPct,
                 hasPromo: product.hasPromo !== undefined ? product.hasPromo : item.hasPromo,
                 promoPrice: product.promoPrice || item.promoPrice,
                 originalPrice: product.originalPrice || product.price || item.originalPrice,
@@ -110,7 +127,7 @@ export const CartProvider = ({ children }) => {
           quantity,
           unitPrice,
           total: quantity * unitPrice,
-          // Conserver les informations de promo
+          markupPercentage: product.markupPercentage ?? getMarkupPercentageFromProduct(product),
           hasPromo: product.hasPromo || false,
           promoPrice: product.promoPrice || null,
           originalPrice: product.originalPrice || product.price,

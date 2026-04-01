@@ -168,8 +168,13 @@ const Dashboard = () => {
         const startOfPreviousMonth = getStartOfPreviousMonth()
         const endOfPreviousMonth = getEndOfPreviousMonth()
         
-        // Récupérer les restaurants depuis l'API
-        const restaurants = await restaurantService.getAll()
+        // API + Firebase en parallèle (évite d’attendre 3 allers-retours séquentiels)
+        const [restaurants, promos, allOrders] = await Promise.all([
+          restaurantService.getAll(),
+          firebaseService.getPromos(),
+          firebaseService.getOrders(),
+        ])
+
         const activeRestaurants = restaurants.filter(r => r.statut === 'actif' || r.statut === 'ouvert')
         
         // Calculer les restaurants créés ce mois vs mois dernier
@@ -191,8 +196,6 @@ const Dashboard = () => {
           restaurantsLastMonth.length
         )
         
-        // Récupérer les promos depuis Firebase
-        const promos = await firebaseService.getPromos()
         const activePromos = promos.filter(p => p.active === true || p.statut === 'active')
         
         // Calculer les promos créées cette semaine vs semaine dernière
@@ -212,9 +215,6 @@ const Dashboard = () => {
           promosThisWeek.length,
           promosLastWeek.length
         )
-        
-        // Récupérer les commandes depuis Firebase
-        const allOrders = await firebaseService.getOrders()
         
         // Filtrer selon la période sélectionnée (semaine ou mois)
         let ordersCurrentPeriod, ordersPreviousPeriod, periodLabel

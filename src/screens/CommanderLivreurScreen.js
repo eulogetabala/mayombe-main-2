@@ -104,10 +104,21 @@ const CommanderLivreurContent = () => {
             if (distanceKm > 0) {
               setDeliveryDistance(distanceKm);
               
-              // 3. Calculer les nouveaux frais
+              // 3. Calculer les nouveaux frais selon les zones de livraison
               let newFee = 1000;
-              if (distanceKm > 3 && distanceKm <= 7) newFee = 1500;
-              else if (distanceKm > 7) newFee = 2000;
+              if (distanceKm <= 5) {
+                newFee = 1000; // Zone 1 : 0-5km
+              } else if (distanceKm <= 10) {
+                newFee = 1500; // Zone 2 : 5-10km
+              } else if (distanceKm <= 15) {
+                newFee = 2000; // Zone 3 : 10-15km
+              } else if (distanceKm <= 20) {
+                newFee = 2500; // Zone 4 : 15-20km
+              } else if (distanceKm <= 30) {
+                newFee = 3000; // Zone 5 : 20-30km
+              } else {
+                newFee = 3000; // Au-delà de 30km : Zone 5
+              }
               
               setDeliveryFee(newFee);
               console.log(`✅ [CommanderLivreur] Résultat final: ${distanceKm.toFixed(2)}km -> ${newFee} FCFA`);

@@ -553,96 +553,95 @@ class FirebaseService {
     try {
       const activities = []
 
-      // 1. Récupérer les restaurants récemment modifiés (via restaurant_status)
-      try {
-        const statusRef = ref(database, 'restaurant_status')
-        const statusSnapshot = await get(statusRef)
-        
-        if (statusSnapshot.exists()) {
-          const statusData = statusSnapshot.val()
-          Object.keys(statusData).forEach(restaurantId => {
-            const status = statusData[restaurantId]
-            if (status.updatedAt) {
-              activities.push({
-                type: status.isOpen ? 'restaurant_opened' : 'restaurant_closed',
-                title: status.isOpen ? 'Restaurant ouvert' : 'Restaurant fermé',
-                description: `Restaurant ID: ${restaurantId}`,
-                timestamp: status.updatedAt,
-                color: status.isOpen ? 'yellow' : 'red',
-                icon: 'store'
-              })
-            }
-          })
+      const safeGet = async (dbRef) => {
+        try {
+          return await get(dbRef)
+        } catch (error) {
+          console.error('Erreur lecture RTDB (activités):', error)
+          return null
         }
-      } catch (error) {
-        console.error('Erreur récupération statuts restaurants:', error)
       }
 
-      // 2. Récupérer les promos récentes (promotions générales)
-      try {
-        const promos = await this.getPromos()
-        promos.forEach(promo => {
-          if (promo.createdAt || promo.updatedAt) {
-            const timestamp = promo.createdAt || promo.updatedAt
-            // Ne prendre que les promos créées récemment (pas les mises à jour)
-            if (promo.createdAt) {
-              activities.push({
-                type: 'promo_created',
-                title: 'Promo créée',
-                description: `Promotion créée`,
-                timestamp: timestamp,
-                color: 'blue',
-                icon: 'tag'
-              })
-            }
+      const statusRef = ref(database, 'restaurant_status')
+      const promotionsRef = ref(database, 'promotions')
+      const productPromosRef = ref(database, 'product_promos')
+      const ordersRef = ref(database, 'orders')
+
+      const [statusSnapshot, promotionsSnapshot, productPromosSnapshot, ordersSnapshot] =
+        await Promise.all([
+          safeGet(statusRef),
+          safeGet(promotionsRef),
+          safeGet(productPromosRef),
+          safeGet(ordersRef),
+        ])
+
+      if (statusSnapshot?.exists()) {
+        const statusData = statusSnapshot.val()
+        Object.keys(statusData).forEach((restaurantId) => {
+          const status = statusData[restaurantId]
+          if (status.updatedAt) {
+            activities.push({
+              type: status.isOpen ? 'restaurant_opened' : 'restaurant_closed',
+              title: status.isOpen ? 'Restaurant ouvert' : 'Restaurant fermé',
+              description: `Restaurant ID: ${restaurantId}`,
+              timestamp: status.updatedAt,
+              color: status.isOpen ? 'yellow' : 'red',
+              icon: 'store',
+            })
           }
         })
-      } catch (error) {
-        console.error('Erreur récupération promos:', error)
       }
 
-      // 3. Récupérer les prix promotionnels des produits récents
-      try {
-        const productPromosRef = ref(database, 'product_promos')
-        const productPromosSnapshot = await get(productPromosRef)
-        
-        if (productPromosSnapshot.exists()) {
-          const productPromosData = productPromosSnapshot.val()
-          Object.keys(productPromosData).forEach(productId => {
-            const promo = productPromosData[productId]
-            if (promo.createdAt) {
-              activities.push({
-                type: 'product_promo_created',
-                title: 'Prix promo défini',
-                description: `Produit ID: ${productId}`,
-                timestamp: promo.createdAt,
-                color: 'blue',
-                icon: 'tag'
-              })
-            }
-          })
-        }
-      } catch (error) {
-        console.error('Erreur récupération prix promos produits:', error)
+      if (promotionsSnapshot?.exists()) {
+        const data = promotionsSnapshot.val()
+        Object.keys(data).forEach((key) => {
+          const promo = data[key]
+          if (promo.createdAt) {
+            activities.push({
+              type: 'promo_created',
+              title: 'Promo créée',
+              description: `Promotion créée`,
+              timestamp: promo.createdAt,
+              color: 'blue',
+              icon: 'tag',
+            })
+          }
+        })
       }
 
-      // 4. Récupérer les commandes récentes
-      try {
-        const orders = await this.getOrders()
-        orders.forEach(order => {
+      if (productPromosSnapshot?.exists()) {
+        const productPromosData = productPromosSnapshot.val()
+        Object.keys(productPromosData).forEach((productId) => {
+          const promo = productPromosData[productId]
+          if (promo.createdAt) {
+            activities.push({
+              type: 'product_promo_created',
+              title: 'Prix promo défini',
+              description: `Produit ID: ${productId}`,
+              timestamp: promo.createdAt,
+              color: 'blue',
+              icon: 'tag',
+            })
+          }
+        })
+      }
+
+      if (ordersSnapshot?.exists()) {
+        const ordersData = ordersSnapshot.val()
+        Object.keys(ordersData).forEach((key) => {
+          const order = ordersData[key]
+          const orderWithId = { id: key, ...order }
           if (order.createdAt) {
             activities.push({
               type: 'order_created',
               title: 'Nouvelle commande',
-              description: `Commande #${order.id || order.clientOrderId || 'N/A'}`,
+              description: `Commande #${orderWithId.id || order.clientOrderId || 'N/A'}`,
               timestamp: order.createdAt,
               color: 'green',
-              icon: 'shopping-cart'
+              icon: 'shopping-cart',
             })
           }
         })
-      } catch (error) {
-        console.error('Erreur récupération commandes:', error)
       }
 
       // Trier par date (plus récent en premier) et limiter

@@ -10,11 +10,13 @@ const CachedImage = ({ source, style, defaultSource, ...props }) => {
 
   useEffect(() => {
     if (source && source.uri) {
-      loadCachedImage(source.uri);
+      // Utiliser uniquement l'URI comme dépendance pour éviter les rechargements inutiles
+      const uri = source.uri;
+      loadCachedImage(uri);
     } else if (source) {
       setImageSource(source);
     }
-  }, [source]);
+  }, [source?.uri]);
 
   const loadCachedImage = async (uri) => {
     try {

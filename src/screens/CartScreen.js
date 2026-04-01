@@ -16,7 +16,7 @@ import FirebaseTrackingService from '../services/firebase';
 import sharedCartService from '../services/sharedCartService';
 import * as ExpoLocation from 'expo-location';
 import { CartSkeleton } from '../components/Skeletons';
-import { applyMarkup } from '../Utils/priceUtils';
+import { applyMarkup, getMarkupPercentageFromProduct } from '../Utils/priceUtils';
 
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -203,12 +203,18 @@ const CartScreen = ({ navigation, route }) => {
     
     const distanceNum = parseFloat(distance);
     
-    if (distanceNum <= 10) {
-      return 1000; // 0-10km : 1000 FCFA
+    if (distanceNum <= 5) {
+      return 1000; // Zone 1 : 0-5km : 1000 FCFA
+    } else if (distanceNum <= 10) {
+      return 1500; // Zone 2 : 5-10km : 1500 FCFA
+    } else if (distanceNum <= 15) {
+      return 2000; // Zone 3 : 10-15km : 2000 FCFA
     } else if (distanceNum <= 20) {
-      return 1500; // 11-20km : 1500 FCFA
+      return 2500; // Zone 4 : 15-20km : 2500 FCFA
+    } else if (distanceNum <= 30) {
+      return 3000; // Zone 5 : 20-30km : 3000 FCFA
     } else {
-      return 2000; // 21km+ : 2000 FCFA
+      return 3000; // Au-delà de 30km : 3000 FCFA (Zone 5)
     }
   };
 
@@ -684,7 +690,7 @@ const CartScreen = ({ navigation, route }) => {
                 textDecorationLine: 'line-through', 
                 marginLeft: 8 
               }}>
-                {formatPrice(applyMarkup(parseFloat(item.originalPrice)))} FCFA
+                {formatPrice(applyMarkup(parseFloat(item.originalPrice), item.markupPercentage ?? getMarkupPercentageFromProduct(item)))} FCFA
               </Text>
             </View>
           ) : (

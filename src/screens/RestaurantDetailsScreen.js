@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -19,8 +19,9 @@ import * as Location from 'expo-location';
 import UniformHeader from '../components/UniformHeader';
 import AnimatedProductCount from '../components/AnimatedProductCount';
 import { RestaurantDetailsSkeleton } from '../components/Skeletons';
-import { applyMarkup, formatPriceWithMarkup } from '../Utils/priceUtils';
-import promoService from '../services/promoService';
+import { applyMarkup, formatPriceWithMarkup, getMarkupPercentageForRestaurant } from '../Utils/priceUtils';
+import { isRtdbPromoActive } from '../services/promosService';
+import { useProductPromosLive } from '../../contexts/ProductPromosContext';
 import restaurantStatusService from '../services/restaurantStatusService';
 import StatusBadge from '../components/StatusBadge';
 import { resolveImageUrl } from '../Utils/imageUtils';
@@ -44,7 +45,35 @@ const RestaurantDetails = ({ route, navigation }) => {
   const [distance, setDistance] = useState(null);
   const [validDates, setValidDates] = useState({ debut: null, fin: null });
   const [isScreenFocused, setIsScreenFocused] = useState(true);
-  const [productPromos, setProductPromos] = useState({});
+  const { rawProductPromos } = useProductPromosLive();
+
+  const markupPct = useMemo(
+    () => getMarkupPercentageForRestaurant(restaurant),
+    [restaurant?.id, restaurant?.name]
+  );
+
+  const displayMenus = useMemo(() => {
+    if (!menus?.length) {
+      return [];
+    }
+    return menus.map((menu) => {
+      const promoInfo = rawProductPromos[menu.id] ?? rawProductPromos[String(menu.id)];
+      const hasPromo = isRtdbPromoActive(promoInfo);
+      const base = parseFloat(menu.rawPrice || menu.price || 0);
+      const unit =
+        hasPromo && promoInfo?.promoPrice != null
+          ? Number(promoInfo.promoPrice)
+          : base;
+      return {
+        ...menu,
+        hasPromo,
+        promoPrice: hasPromo ? promoInfo.promoPrice : null,
+        unitPrice: applyMarkup(unit, markupPct),
+        total: applyMarkup(unit, markupPct),
+        markupPercentage: markupPct,
+      };
+    });
+  }, [menus, rawProductPromos, markupPct]);
 
   // Utiliser useFocusEffect pour éviter les appels API quand l'écran n'est pas actif
   useFocusEffect(
@@ -283,11 +312,7 @@ const RestaurantDetails = ({ route, navigation }) => {
       setLoading(true);
       setError(null);
 
-      console.log('🔄 Récupération des promos et des menus...');
-      
-      // Récupérer les promos en parallèle
-      const promosData = await promoService.getAllProductPromos();
-      setProductPromos(promosData);
+      console.log('🔄 Récupération des menus (promos RTDB en temps réel via le provider)...');
 
       console.log('🔄 Récupération dynamique de tous les menus disponibles...');
       
@@ -347,16 +372,16 @@ const RestaurantDetails = ({ route, navigation }) => {
                 const imageUrl = resolveImageUrl(menu.cover);
                 console.log('URL image menu:', imageUrl);
                 
-                const promoInfo = promosData[menu.id];
-                const hasPromo = promoInfo && promoInfo.active;
-                
+                const basePrice = parseFloat(menu.prix || menu.price || 0);
+                const pct = getMarkupPercentageForRestaurant(restaurant);
+
                 return {
                   id: menu.id,
                   name: menu.name || menu.libelle || "Sans nom",
                   description: menu.description || "Aucune description",
                   price: menu.prix || menu.price || "0",
-                  promoPrice: hasPromo ? promoInfo.promoPrice : null,
-                  hasPromo: hasPromo,
+                  promoPrice: null,
+                  hasPromo: false,
                   image: imageUrl
                     ? { uri: imageUrl }
                     : require('../../assets/images/2.jpg'),
@@ -367,12 +392,13 @@ const RestaurantDetails = ({ route, navigation }) => {
                   created_at: menu.created_at,
                   updated_at: menu.updated_at,
                   quantity: 1,
-                  unitPrice: applyMarkup(parseFloat(hasPromo ? promoInfo.promoPrice : (menu.prix || menu.price || 0))),
-                  total: applyMarkup(parseFloat(hasPromo ? promoInfo.promoPrice : (menu.prix || menu.price || 0))),
-                  rawPrice: menu.prix || menu.price || "0", 
+                  unitPrice: applyMarkup(basePrice, pct),
+                  total: applyMarkup(basePrice, pct),
+                  rawPrice: menu.prix || menu.price || "0",
                   productKey: `${menu.id}-${Date.now()}`,
                   type: 'menu',
-                  subMenuName: selectedSubMenu.name || selectedSubMenu.libelle
+                  subMenuName: selectedSubMenu.name || selectedSubMenu.libelle,
+                  markupPercentage: pct,
                 };
               });
               
@@ -458,9 +484,9 @@ const RestaurantDetails = ({ route, navigation }) => {
           <Text style={styles.headerName}>{restaurant.name}</Text>
           <StatusBadge isOpen={restaurant.isOpen !== false} />
         </View>
-        {menus.length > 0 && (
-          <AnimatedProductCount 
-            count={menus.length} 
+        {displayMenus.length > 0 && (
+          <AnimatedProductCount
+            count={displayMenus.length}
             style={styles.animatedMenuCount}
           />
         )}
@@ -538,6 +564,7 @@ const RestaurantDetails = ({ route, navigation }) => {
       const productToAdd = {
         ...product, // Conserver TOUTES les propriétés du produit (y compris unitPrice, hasPromo, promoPrice, etc.)
         restaurant: restaurant, // Passer l'objet restaurant complet (avec altitude/longitude)
+        markupPercentage: product.markupPercentage ?? markupPct,
         // S'assurer que productKey est correct
         productKey: product.productKey || `${product.id}-${product.complements?.map(c => c.id).join('-') || ''}`,
         isMenu: true,
@@ -605,15 +632,15 @@ const RestaurantDetails = ({ route, navigation }) => {
             {item.hasPromo ? (
               <>
                 <Text style={styles.productPricePromo}>
-                  {formatPriceWithMarkup(item.promoPrice)}
+                  {formatPriceWithMarkup(item.promoPrice, 'FCFA', markupPct)}
                 </Text>
                 <Text style={styles.productPriceOriginal}>
-                  {formatPriceWithMarkup(item.rawPrice || item.price || 0)}
+                  {formatPriceWithMarkup(item.rawPrice || item.price || 0, 'FCFA', markupPct)}
                 </Text>
               </>
             ) : (
               <Text style={styles.productPrice}>
-                {formatPriceWithMarkup(item.rawPrice || item.price || 0)}
+                {formatPriceWithMarkup(item.rawPrice || item.price || 0, 'FCFA', markupPct)}
               </Text>
             )}
           </View>
@@ -637,7 +664,7 @@ const RestaurantDetails = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
-        data={menus}
+        data={displayMenus}
         renderItem={renderProductCard}
         keyExtractor={item => item.id.toString()}
         ListHeaderComponent={
@@ -666,6 +693,7 @@ const RestaurantDetails = ({ route, navigation }) => {
         product={selectedProduct}
         onClose={() => setModalVisible(false)}
         onAddToCart={handleAddToCart}
+        markupPercentage={markupPct}
       />
     </SafeAreaView>
   );
