@@ -32,6 +32,31 @@ const getApnsConfig = (title, body) => ({
 });
 
 const MULTICAST_LIMIT = 500;
+
+/** Aligné avec l’app : `src/constants/fcmAndroid.js` (canal créé au démarrage via expo-notifications). */
+const FCM_ANDROID_CHANNEL_ID = 'promotions';
+
+function mergeAndroidPayload(baseAndroid) {
+  const defaults = {
+    priority: 'high',
+    notification: {
+      channelId: FCM_ANDROID_CHANNEL_ID,
+      sound: 'default',
+    },
+  };
+  if (baseAndroid == null || typeof baseAndroid !== 'object') {
+    return defaults;
+  }
+  const notif =
+    baseAndroid.notification && typeof baseAndroid.notification === 'object'
+      ? { ...defaults.notification, ...baseAndroid.notification }
+      : { ...defaults.notification };
+  return {
+    ...defaults,
+    ...baseAndroid,
+    notification: notif,
+  };
+}
 const SCHEDULED_LATE_WINDOW_MS = 5 * 60 * 1000;
 const SCHEDULED_EARLY_WINDOW_MS = 60 * 1000;
 
@@ -120,7 +145,7 @@ function normalizeFcmData(data) {
  */
 async function sendMulticastInBatches(tokens, base) {
   const { notification, data, apns } = base;
-  const android = base.android != null ? base.android : { priority: 'high' };
+  const android = mergeAndroidPayload(base.android);
   let successCount = 0;
   let failureCount = 0;
   for (let i = 0; i < tokens.length; i += MULTICAST_LIMIT) {

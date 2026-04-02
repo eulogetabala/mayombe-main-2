@@ -3,6 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, set } from 'firebase/database';
 import { database } from './firebase';
 import { Platform } from 'react-native';
+import { FCM_ANDROID_DEFAULT_CHANNEL_ID } from '../constants/fcmAndroid';
+
+/** Chargement paresseux : évite d’initialiser expo-notifications au parse du module (souvent lié aux erreurs bridgeless). */
+function getExpoNotifications() {
+  return require('expo-notifications');
+}
 
 /** Topic FCM pour cibler tous les iPhones (campagnes Console : envoyer vers ce topic). */
 export const FCM_IOS_BROADCAST_TOPIC = 'mayombe_ios';
@@ -32,8 +38,30 @@ class FCMService {
     }
   }
 
+  async ensureAndroidPromotionsChannel() {
+    if (Platform.OS !== 'android') return;
+    const Notifications = getExpoNotifications();
+    await Notifications.setNotificationChannelAsync(FCM_ANDROID_DEFAULT_CHANNEL_ID, {
+      name: 'Promotions',
+      description: 'Offres, promotions et annonces Mayombe',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 250, 250, 250],
+      sound: 'default',
+    });
+  }
+
   async requestPermission() {
     try {
+      if (Platform.OS === 'android') {
+        try {
+          const Notifications = getExpoNotifications();
+          await Notifications.requestPermissionsAsync();
+          await this.ensureAndroidPromotionsChannel();
+        } catch (e) {
+          console.log('⚠️ expo-notifications (Android 13+ / canal):', e?.message || e);
+        }
+      }
+
       const authStatus = await messaging().requestPermission();
       const enabled =
         authStatus === messaging.AuthorizationStatus.AUTHORIZED ||

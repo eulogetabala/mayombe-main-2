@@ -60,7 +60,8 @@
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
         "WRITE_EXTERNAL_STORAGE",
-        "INTERNET"
+        "INTERNET",
+        "POST_NOTIFICATIONS"
       ],
       "config": {
         "googleMaps": {
@@ -76,10 +77,17 @@
         "projectId": "6837dea2-ee67-43e8-84ee-89c88d78277c"
       }
     },
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "owner": "thprojet",
     "plugins": [
       "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "promotions"
+        }
+      ],
       [
         "expo-build-properties",
         {

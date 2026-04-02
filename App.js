@@ -3,19 +3,6 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { View, StyleSheet, LogBox } from "react-native";
-
-// Import conditionnel de NetInfo (peut ne pas être disponible si l'app n'est pas reconstruite)
-let NetInfo = null;
-try {
-  NetInfo = require("@react-native-community/netinfo").default;
-} catch (error) {
-  console.log("⚠️ NetInfo non disponible - l'app fonctionnera sans détection de connexion");
-}
-
-// Désactiver l'inspecteur de développement
-if (!__DEV__) {
-  LogBox.ignoreAllLogs(true);
-}
 import * as Font from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import * as Animatable from "react-native-animatable";
@@ -31,6 +18,7 @@ import { StripeProvider } from '@stripe/stripe-react-native';
 import getStripePublishableKey from './src/config/stripe';
 import { initializeImageCache } from './src/config/ImageCacheConfig';
 import { logFCMDebugOnStartup } from './src/Utils/showFCMToken';
+import fcmService from './src/services/fcmService';
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import LoginScreen from "./src/screens/Auth/LoginScreen";
 import RegisterScreen from "./src/screens/Auth/RegisterScreen";
@@ -69,6 +57,10 @@ import StripePaymentScreen from './src/screens/StripePaymentScreen';
 import NoConnectionScreen from './src/components/common/NoConnectionScreen';
 import ConnectivityBanner from './src/components/common/ConnectivityBanner';
 import { ConnectivityProvider, useConnectivity } from './src/context/ConnectivityContext';
+
+if (!__DEV__) {
+  LogBox.ignoreAllLogs(true);
+}
 
 SplashScreen.preventAutoHideAsync();
 const Stack = createNativeStackNavigator();
@@ -170,7 +162,6 @@ export default function App() {
 
         await initializeImageCache();
 
-        const fcmService = require('./src/services/fcmService').default;
         await fcmService.requestPermission();
 
         logFCMDebugOnStartup();
