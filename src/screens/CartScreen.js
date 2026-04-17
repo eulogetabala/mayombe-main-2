@@ -17,6 +17,7 @@ import sharedCartService from '../services/sharedCartService';
 import * as ExpoLocation from 'expo-location';
 import { CartSkeleton } from '../components/Skeletons';
 import { applyMarkup, getMarkupPercentageFromProduct } from '../Utils/priceUtils';
+import { setPaymentFlowHandlers } from '../navigation/paymentFlowBridge';
 
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -506,29 +507,24 @@ const CartScreen = ({ navigation, route }) => {
       );
 
       // NE PAS vider le panier ici - il sera vidé seulement après paiement réussi
-      navigation.navigate('PaymentScreen', { 
-        orderDetails,
-        onPaymentSuccess: async (updatedOrderDetails) => {
+      setPaymentFlowHandlers({
+        onSuccess: async (updatedOrderDetails) => {
           try {
-            // Vider le panier seulement après paiement réussi
             await AsyncStorage.removeItem('cart');
             setCartItems([]);
-            
-            // Redirection vers OrderSuccess avec les détails mis à jour
-            navigation.navigate('OrderSuccess', { 
+            navigation.navigate('OrderSuccess', {
               orderDetails: updatedOrderDetails || orderDetails,
-              showTracking: updatedOrderDetails?.payment_method === 'cash'
+              showTracking: updatedOrderDetails?.payment_method === 'cash',
             });
           } catch (error) {
-            console.error("Erreur lors du nettoyage du panier:", error);
+            console.error('Erreur lors du nettoyage du panier:', error);
           }
         },
-        onPaymentCancel: () => {
-          // Si l'utilisateur annule le paiement, ne rien faire
-          // Le panier reste intact
+        onCancel: () => {
           console.log('💳 Paiement annulé - panier conservé');
-        }
+        },
       });
+      navigation.navigate('PaymentScreen', { orderDetails });
 
     } catch (error) {
       console.error("Erreur détaillée:", {

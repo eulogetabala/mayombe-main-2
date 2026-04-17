@@ -15,6 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../context/CartContext';
 import { getDistanceToRestaurant, formatDistance } from '../services/LocationService';
+import { setPaymentFlowHandlers } from '../navigation/paymentFlowBridge';
 
 const OrderScreen = ({ route, navigation }) => {
   const { cartItems = [], totalAmount = 0 } = route.params || {};
@@ -153,6 +154,10 @@ const OrderScreen = ({ route, navigation }) => {
       return;
     }
 
+    setPaymentFlowHandlers({
+      onSuccess: saveOrder,
+      onCancel: () => {},
+    });
     navigation.navigate('Payment', {
       orderDetails: {
         items: cartItems,
@@ -164,7 +169,6 @@ const OrderScreen = ({ route, navigation }) => {
         rating,
         orderId: route.params?.orderId,
       },
-      onPaymentSuccess: saveOrder
     });
   };
 

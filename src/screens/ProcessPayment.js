@@ -23,6 +23,7 @@ import Toast from 'react-native-toast-message';
 import { useCart } from '../context/CartContext';
 import { translations } from '../translations';
 import StripePaymentCorrect from '../components/StripePaymentCorrect';
+import { invokePaymentSuccess } from '../navigation/paymentFlowBridge';
 
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -36,7 +37,7 @@ const ProcessPayment = () => {
   const { clearCart } = useCart();
   const t = translations[currentLanguage];
   
-  const { orderDetails, onPaymentSuccess } = route.params || {};
+  const { orderDetails } = route.params || {};
   const [isLoading, setIsLoading] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [cardNumber, setCardNumber] = useState('');
@@ -82,11 +83,10 @@ const ProcessPayment = () => {
       console.log('💳 Redirection vers StripePaymentScreen...');
       navigation.navigate('StripePaymentScreen', {
         orderDetails: orderDetails,
-        onPaymentSuccess: onPaymentSuccess
       });
       return;
     }
-  }, [orderDetails, navigation, onPaymentSuccess]);
+  }, [orderDetails, navigation]);
 
   const proceedWithPayment = async () => {
     setIsLoading(true);
@@ -900,7 +900,7 @@ const ProcessPayment = () => {
       return (
         <StripePaymentCorrect
           orderDetails={orderDetails}
-          onPaymentSuccess={onPaymentSuccess}
+          onPaymentSuccess={invokePaymentSuccess}
           onPaymentError={(error) => {
             console.error('Erreur de paiement Stripe:', error);
             Alert.alert('Erreur de paiement', error.message);
