@@ -16,12 +16,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCart } from '../context/CartContext';
+import { invokePaymentSuccess } from '../navigation/paymentFlowBridge';
 
 const { width } = Dimensions.get('window');
 const scaleFont = (size) => Math.round(size * (width / 375));
 
 const StripePaymentScreen = ({ route, navigation }) => {
-  const { orderDetails, onPaymentSuccess } = route.params;
+  const params = route?.params ?? {};
+  const { orderDetails } = params;
   const { createPaymentMethod } = useStripe();
   const { confirmPayment } = useConfirmPayment();
   const { clearCart } = useCart();
@@ -173,9 +175,7 @@ const StripePaymentScreen = ({ route, navigation }) => {
                 {
                   text: 'OK',
                   onPress: () => {
-                    if (onPaymentSuccess) {
-                      onPaymentSuccess(data);
-                    }
+                    invokePaymentSuccess(data);
                     navigation.navigate('OrderSuccess', { orderDetails: data });
                   }
                 }
@@ -236,9 +236,7 @@ const StripePaymentScreen = ({ route, navigation }) => {
                 {
                   text: 'OK',
                   onPress: () => {
-                    if (onPaymentSuccess) {
-                      onPaymentSuccess(data);
-                    }
+                    invokePaymentSuccess(data);
                     navigation.navigate('OrderSuccess', { orderDetails: data });
                   }
                 }

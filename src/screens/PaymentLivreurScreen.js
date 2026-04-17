@@ -26,7 +26,7 @@ const scaleFont = (size) => Math.round(size * (width / 375));
 const PaymentLivreurScreen = ({ route, navigation }) => {
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
-  const { orderDetails, onPaymentSuccess } = route.params;
+  const { orderDetails } = route.params || {};
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -98,7 +98,6 @@ const PaymentLivreurScreen = ({ route, navigation }) => {
             // Passer le téléphone du destinataire
             phone: orderDetails.deliveryDetails?.recipientPhone || '',
           },
-          onPaymentSuccess: onPaymentSuccess,
         });
       } else {
         const data = await response.json();
