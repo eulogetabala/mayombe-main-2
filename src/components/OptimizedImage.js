@@ -1,10 +1,11 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Image, ActivityIndicator, StyleSheet, Dimensions } from 'react-native';
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import imageCacheService from '../services/imageCacheService';
+import AppImage from './AppImage';
 
-const { width: screenWidth } = Dimensions.get('window');
-
+// Compatible avec l'ancienne interface OptimizedImage.
+// Les images distantes passent par FastImage (cache natif disque + mémoire),
+// ce qui évite les re-téléchargements et accélère l'affichage.
 const OptimizedImage = ({ 
   source, 
   style, 
@@ -13,119 +14,23 @@ const OptimizedImage = ({
   placeholderColor = '#f0f0f0',
   onLoad,
   onError,
-  priority = 'normal', // 'high', 'normal', 'low'
+  priority = 'normal',
   enableCache = true,
   ...props 
 }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [cachedSource, setCachedSource] = useState(null);
+  const [failed, setFailed] = React.useState(false);
+  const [loaded, setLoaded] = React.useState(false);
 
-  // Initialiser le service de cache
-  useEffect(() => {
-    if (enableCache) {
-      imageCacheService.initialize();
-    }
-  }, [enableCache]);
+  React.useEffect(() => {
+    setFailed(false);
+    setLoaded(false);
+  }, [source]);
 
-  // Optimiser l'URL de l'image selon la priorité
-  const optimizedSource = useMemo(() => {
-    if (!source || !source.uri) {
-      return defaultSource;
-    }
+  const isRemote = source && typeof source === 'object' && source.uri &&
+    (source.uri.startsWith('http://') || source.uri.startsWith('https://'));
 
-    const uri = source.uri;
-    
-    // Si c'est une image locale, pas d'optimisation nécessaire
-    if (uri.startsWith('file://') || uri.startsWith('data:')) {
-      return source;
-    }
-
-    // Optimiser les images distantes selon la priorité
-    if (uri.includes('mayombe-app.com')) {
-      const quality = priority === 'high' ? '80' : priority === 'normal' ? '60' : '40';
-      const width = Math.floor(screenWidth * (priority === 'high' ? 1 : priority === 'normal' ? 0.8 : 0.6));
-      
-      return imageCacheService.optimizeImageUrl(uri, { quality, width, format: 'webp' });
-    }
-
-    return uri;
-  }, [source, priority, defaultSource]);
-
-  // Vérifier le cache et charger l'image
-  useEffect(() => {
-    if (!enableCache || !optimizedSource || typeof optimizedSource !== 'string') {
-      return;
-    }
-
-    const loadImageFromCache = async () => {
-      try {
-        // Vérifier si l'image est en cache
-        const isCached = await imageCacheService.isCached(optimizedSource, {
-          width: Math.floor(screenWidth * (priority === 'high' ? 1 : priority === 'normal' ? 0.8 : 0.6)),
-          quality: priority === 'high' ? '80' : priority === 'normal' ? '60' : '40'
-        });
-
-        if (isCached) {
-          console.log('✅ Image trouvée en cache:', optimizedSource);
-          setCachedSource({ uri: optimizedSource });
-          setIsLoading(false);
-          setImageLoaded(true);
-          onLoad?.();
-        }
-      } catch (error) {
-        console.warn('Erreur vérification cache:', error);
-      }
-    };
-
-    loadImageFromCache();
-  }, [optimizedSource, enableCache, priority, onLoad]);
-
-  const handleLoadStart = useCallback(() => {
-    if (!cachedSource) {
-      setIsLoading(true);
-      setHasError(false);
-    }
-  }, [cachedSource]);
-
-  const handleLoad = useCallback(() => {
-    setIsLoading(false);
-    setImageLoaded(true);
-    
-    // Ajouter au cache si activé
-    if (enableCache && optimizedSource && typeof optimizedSource === 'string') {
-      imageCacheService.addToMemoryCache(optimizedSource, optimizedSource);
-    }
-    
-    onLoad?.();
-  }, [enableCache, optimizedSource, onLoad]);
-
-  const handleError = useCallback((error) => {
-    console.warn('Erreur chargement image optimisée:', error.nativeEvent?.error || error);
-    setIsLoading(false);
-    setHasError(true);
-    onError?.(error);
-  }, [onError]);
-
-  // Déterminer la source finale
-  const finalSource = useMemo(() => {
-    if (cachedSource) return cachedSource;
-    if (typeof optimizedSource === 'string') return { uri: optimizedSource };
-    return optimizedSource || defaultSource;
-  }, [cachedSource, optimizedSource, defaultSource]);
-
-  // Afficher le placeholder pendant le chargement
-  if (isLoading && !imageLoaded && !cachedSource) {
-    return (
-      <View style={[styles.container, style, { backgroundColor: placeholderColor }]}>
-        <ActivityIndicator size="small" color="#51A905" />
-      </View>
-    );
-  }
-
-  // Afficher l'icône d'erreur si l'image n'a pas pu être chargée
-  if (hasError) {
+  // Fallback sur l'image par défaut en cas d'erreur
+  if (failed || (!source && !defaultSource)) {
     return (
       <View style={[styles.container, style, { backgroundColor: placeholderColor }]}>
         <Ionicons name="image-outline" size={24} color="#ccc" />
@@ -134,18 +39,28 @@ const OptimizedImage = ({
   }
 
   return (
-    <Image
-      source={finalSource}
+    <AppImage
+      source={source}
+      defaultSource={defaultSource}
       style={[styles.image, style]}
       resizeMode={resizeMode}
-      onLoadStart={handleLoadStart}
-      onLoad={handleLoad}
-      onError={handleError}
-      // Optimisations supplémentaires
-      fadeDuration={300}
-      progressiveRenderingEnabled={true}
+      priority={priority}
+      onLoad={(e) => {
+        setLoaded(true);
+        onLoad?.(e);
+      }}
+      onError={(e) => {
+        setFailed(true);
+        onError?.(e);
+      }}
       {...props}
-    />
+    >
+      {!loaded && isRemote && (
+        <View style={[styles.loader, { backgroundColor: placeholderColor }]}>
+          <Ionicons name="image-outline" size={24} color="#ccc" />
+        </View>
+      )}
+    </AppImage>
   );
 };
 
@@ -158,6 +73,11 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  loader: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 

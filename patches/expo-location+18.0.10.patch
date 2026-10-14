@@ -1,0 +1,28 @@
+diff --git a/node_modules/expo-location/android/build.gradle b/node_modules/expo-location/android/build.gradle
+index 0000000..0000001 100644
+--- a/node_modules/expo-location/android/build.gradle
++++ b/node_modules/expo-location/android/build.gradle
+@@ -21,4 +21,5 @@ dependencies {
+ dependencies {
+   api 'com.google.android.gms:play-services-location:21.0.1'
+-  implementation project(":${project.name}\$io.nlopez.smartlocation-jetified-aar")
++  // AAR local : évite le sous-projet jetified (mergeDex / chemins _dex avec AGP 8).
++  implementation files('libs/io.nlopez.smartlocation-3.3.3-jetified.aar')
+ }
+diff --git a/node_modules/expo-location/expo-module.config.json b/node_modules/expo-location/expo-module.config.json
+index 0000000..0000001 100644
+--- a/node_modules/expo-location/expo-module.config.json
++++ b/node_modules/expo-location/expo-module.config.json
+@@ -11,11 +11,5 @@
+   "android": {
+     "modules": [
+       "expo.modules.location.LocationModule"
+-    ],
+-    "gradleAarProjects": [
+-      {
+-        "name": "io.nlopez.smartlocation-jetified-aar",
+-        "aarFilePath": "android/libs/io.nlopez.smartlocation-3.3.3-jetified.aar"
+-      }
+-    ]
++    ]
+   }

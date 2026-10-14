@@ -12,6 +12,7 @@ import {
   Platform,
   FlatList,
   Image,
+  Pressable,
 } from "react-native";
 import * as Location from "expo-location";
 import { Ionicons, MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
@@ -21,10 +22,10 @@ import { useNavigation } from '@react-navigation/native';
 import { useCart } from '../../context/CartContext';
 import Toast from 'react-native-toast-message';
 import ProductModal from '../ProductModal';
+import RestaurantProductModal from '../RestaurantProductModal';
 import { useLanguage } from '../../context/LanguageContext';
 import { translations } from '../../translations';
-
-const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+import { searchAllProducts, preloadSearchIndex } from '../../services/searchService';
 
 const HeaderSection = ({ navigation }) => {
   const { cartItems, addToCart } = useCart();
@@ -48,39 +49,16 @@ const HeaderSection = ({ navigation }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [productModalVisible, setProductModalVisible] = useState(false);
   const [internalProductModalVisible, setInternalProductModalVisible] = useState(false);
-  const [searchHistory, setSearchHistory] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  // Produits sélectionnés dans les résultats de recherche (multi-choix)
+  const [selectedSearchItems, setSelectedSearchItems] = useState({});
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
   const [showLocationModal, setShowLocationModal] = useState(false);
   const searchInputRef = useRef(null);
 
-
-  // Charger l'historique de recherche au montage
   useEffect(() => {
-    loadSearchHistory();
+    preloadSearchIndex();
   }, []);
-
-  const loadSearchHistory = async () => {
-    try {
-      const history = await AsyncStorage.getItem('searchHistory');
-      if (history) {
-        setSearchHistory(JSON.parse(history));
-      }
-    } catch (error) {
-      console.error('Erreur lors du chargement de l\'historique de recherche:', error);
-    }
-  };
-
-  const saveSearchHistory = async (searchTerm) => {
-    try {
-      const newHistory = [searchTerm, ...searchHistory.filter(item => item !== searchTerm)].slice(0, 10);
-      setSearchHistory(newHistory);
-      await AsyncStorage.setItem('searchHistory', JSON.stringify(newHistory));
-    } catch (error) {
-      console.error('Erreur lors de la sauvegarde de l\'historique de recherche:', error);
-    }
-  };
 
   useEffect(() => {
     const initializeLocation = async () => {
@@ -185,78 +163,38 @@ const HeaderSection = ({ navigation }) => {
     return total + (item?.quantity || 0);
   }, 0) || 0;
 
-  const handleSearch = async (text) => {
-    // Fermer le modal produit si il est ouvert
+  const handleSearchTextChange = (text) => {
+    setSearch(text);
+
+    if (text.length === 0) {
+      setSearchResults([]);
+      setSelectedSearchItems({});
+      setShowSearchModal(false);
+    }
+  };
+
+  const executeSearch = async (query) => {
+    const text = query.trim();
+
     if (productModalVisible) {
       setProductModalVisible(false);
       setSelectedProduct(null);
       setInternalProductModalVisible(false);
     }
-    
-    setSearch(text);
-    
-    if (text.length === 0) {
+
+    if (!text) {
       setSearchResults([]);
       setShowSearchModal(false);
-      setShowSuggestions(false);
       return;
     }
-    
-    // Recherche immédiate dès qu'on tape quelque chose
-    setShowSuggestions(false);
+
     setSearching(true);
-    
+    setShowSearchModal(true);
+    setSelectedSearchItems({});
+
     try {
-      const url = `${API_BASE_URL}/products-list?search=${encodeURIComponent(text)}`;
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!Array.isArray(data)) {
-        throw new Error("Format de données incorrect, un tableau est attendu.");
-      }
-
-      // Filtrer et reformater les résultats
-      const filteredResults = data
-        .filter(item => {
-          const itemName = item.name || item.libelle || "";
-          return typeof itemName === 'string' && itemName.toLowerCase().includes(text.toLowerCase());
-        })
-        .map(item => {
-          // S'assurer que toutes les valeurs sont correctement formatées
-          const cleanItem = {
-            id: parseInt(item.id) || 0,
-            name: String(item.name || item.libelle || "Produit sans nom").trim(),
-            price: item.price ? `${String(item.price).trim()} FCFA` : "Prix non disponible",
-            description: String(item.desc || item.description || "Aucune description").trim(),
-            image: item.image_url ? { uri: `https://www.mayombe-app.com/uploads_admin/${String(item.image_url).trim()}` } : require("../../../assets/images/2.jpg"),
-            category: String(item.category?.libelle || item.category || "Produit").trim(),
-            rating: item.rating ? String(item.rating).trim() : null,
-          };
-          
-          // Validation supplémentaire pour éviter les valeurs [object Object]
-          Object.keys(cleanItem).forEach(key => {
-            if (typeof cleanItem[key] === 'string' && cleanItem[key].includes('[object Object]')) {
-              cleanItem[key] = "Donnée non disponible";
-            }
-          });
-          
-          return cleanItem;
-        });
-
-      setSearchResults(filteredResults);
-      setShowSearchModal(true);
+      const results = await searchAllProducts(text);
+      setSearchResults(results);
     } catch (error) {
       console.error("❌ Erreur lors de la recherche :", error);
       setSearchResults([]);
@@ -273,33 +211,73 @@ const HeaderSection = ({ navigation }) => {
   
 
   const handleSearchItemPress = (item) => {
-    // Fermer le modal de recherche immédiatement
-    setShowSearchModal(false);
-    setSearch('');
-    setSearchResults([]);
-    
-    // Attendre un court délai avant d'ouvrir le modal produit
-    setTimeout(() => {
-      setSelectedProduct(item);
-      setProductModalVisible(true);
-    }, 100);
-    
-    // Sauvegarder dans l'historique
-    saveSearchHistory(item.name);
+    // Toggle de sélection du produit (multi-choix) SANS fermer le modal
+    const key = item.searchKey || `${item.productOrigin || 'item'}-${item.id}`;
+    setSelectedSearchItems(prev => {
+      const next = { ...prev };
+      if (next[key]) {
+        delete next[key];
+      } else {
+        next[key] = item;
+      }
+      return next;
+    });
   };
 
-  const handleSuggestionPress = (suggestion) => {
-    setSearch(suggestion);
-    setShowSuggestions(false);
-    // Déclencher la recherche avec la suggestion
-    handleSearch(suggestion);
+  const openProductDetails = (item) => {
+    // Ouvrir le détail du produit SANS fermer le modal de recherche
+    setSelectedProduct(item);
+    setProductModalVisible(true);
+  };
+
+  const selectedCount = Object.keys(selectedSearchItems).length;
+
+  const addSelectedToCart = async () => {
+    const items = Object.values(selectedSearchItems);
+    if (items.length === 0) return;
+
+    try {
+      let addedCount = 0;
+      for (const item of items) {
+        const success = await addToCart(item);
+        if (success) addedCount++;
+      }
+
+      setSelectedSearchItems({});
+
+      if (addedCount > 0) {
+        Toast.show({
+          type: "success",
+          text1: "Produits ajoutés",
+          text2: `${addedCount} produit(s) ajouté(s) au panier !`,
+          position: "bottom",
+        });
+      }
+    } catch (error) {
+      console.error("❌ Erreur lors de l'ajout au panier:", error);
+      Toast.show({
+        type: "error",
+        text1: "Erreur",
+        text2: "Impossible d'ajouter les produits au panier",
+        position: "bottom",
+      });
+    }
   };
 
   const closeSearchModal = () => {
-    console.log("🔴 Fermeture du modal de recherche");
     setShowSearchModal(false);
+    setSearching(false);
     setSearch('');
     setSearchResults([]);
+    setSelectedSearchItems({});
+  };
+
+  const handleFilterButtonPress = () => {
+    if (!search.trim()) {
+      searchInputRef.current?.focus();
+      return;
+    }
+    executeSearch(search);
   };
 
 
@@ -318,16 +296,14 @@ const HeaderSection = ({ navigation }) => {
     const cleanDescription = safeDescription.includes('[object Object]') ? "Aucune description" : safeDescription;
     const cleanCategory = safeCategory.includes('[object Object]') ? "Produit" : safeCategory;
 
+    const searchKey = item.searchKey || `${item.productOrigin || 'item'}-${item.id}`;
+    const isSelected = !!selectedSearchItems[searchKey];
+
     return (
       <TouchableOpacity
-        style={styles.searchResultItem}
+        style={[styles.searchResultItem, isSelected && styles.searchResultItemSelected]}
         onPress={() => {
-          console.log("🔍 Clic sur le produit dans les résultats:", item.name);
-          console.log("🔍 Données du produit:", JSON.stringify(item, null, 2));
           handleSearchItemPress(item);
-        }}
-        onPressIn={() => {
-          console.log("🔍 onPressIn - Clic détecté sur:", item.name);
         }}
       >
         <View style={styles.searchResultImageContainer}>
@@ -339,6 +315,11 @@ const HeaderSection = ({ navigation }) => {
               item.image = require("../../../assets/images/2.jpg");
             }}
           />
+          {isSelected && (
+            <View style={styles.selectedCheckmark}>
+              <Ionicons name="checkmark" size={14} color="#FFF" />
+            </View>
+          )}
         </View>
         <View style={styles.searchResultText}>
           <View style={styles.searchResultHeader}>
@@ -354,27 +335,33 @@ const HeaderSection = ({ navigation }) => {
             <View style={styles.categoryBadge}>
               <Text style={styles.categoryText}>{cleanCategory}</Text>
             </View>
+            {item.productOrigin === 'restaurant' && item.restaurant_name ? (
+              <View style={[styles.categoryBadge, styles.restaurantBadge]}>
+                <Text style={styles.categoryText}>{item.restaurant_name}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <View style={styles.searchResultActions}>
+          <TouchableOpacity 
+            style={styles.searchResultDetailButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              openProductDetails(item);
+            }}
+          >
+            <Ionicons name="eye-outline" size={16} color="#FF9800" />
+          </TouchableOpacity>
           <TouchableOpacity 
             style={styles.searchResultAddButton}
             onPress={async (e) => {
               e.stopPropagation();
               
               try {
-                // Ajouter le produit au panier
+                // Ajouter le produit au panier SANS fermer le modal de recherche
+                // afin de permettre un multi-choix de produits
                 const success = await addToCart(item);
                 if (success) {
-                  // Fermer le modal de recherche
-                  setShowSearchModal(false);
-                  setSearch('');
-                  setSearchResults([]);
-                  
-                  // Naviguer vers le panier
-                  navigation.navigate('Cart');
-                  
-                  // Afficher un message de succès
                   Toast.show({
                     type: "success",
                     text1: "Produit ajouté",
@@ -471,7 +458,7 @@ const HeaderSection = ({ navigation }) => {
             
             <TouchableOpacity 
               style={styles.iconContainer}
-              onPress={() => navigation.navigate('CartTab', { screen: 'CartMain' })}
+              onPress={() => navigation.navigate('CartTab', { screen: 'Cart' })}
             >
               {cartItemsCount > 0 && (
                 <View style={[styles.badge, { backgroundColor: '#4CAF50' }]}>
@@ -485,66 +472,64 @@ const HeaderSection = ({ navigation }) => {
 
         {/* Barre de recherche intégrée dans le header */}
         <View style={styles.searchBarContainer}>
-          <View style={styles.searchBar}>
-            <Ionicons name="search-outline" size={20} color="#999" />
-            <TouchableOpacity 
-              style={styles.searchInputContainer}
-              activeOpacity={1}
-              onPress={() => {
-                console.log("🔍 Clic sur le conteneur de recherche");
-                // Forcer le focus sur l'input
-                if (searchInputRef.current) {
-                  searchInputRef.current.focus();
-                }
-              }}
-            >
-              <TextInput
-                ref={searchInputRef}
-                placeholder={t.home.search}
-                placeholderTextColor="#999"
-                style={styles.searchInput}
-                value={search}
-                onChangeText={handleSearch}
-                editable={true}
-                selectTextOnFocus={true}
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                onSubmitEditing={() => handleSearch(search)}
-                onFocus={() => console.log("🔍 Input de recherche focusé")}
-                onBlur={() => console.log("🔍 Input de recherche perdu le focus")}
-              />
-            </TouchableOpacity>
-            {search.length > 0 && (
-              <TouchableOpacity 
-                onPress={() => {
-                  setSearch('');
-                  closeSearchModal();
-                }}
-                style={styles.clearButton}
+          <View style={styles.searchBarWrapper}>
+            <View style={styles.searchBar}>
+              <TouchableOpacity
+                onPress={() => executeSearch(search)}
+                style={styles.searchIconButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="close-circle" size={20} color="#999" />
+                <Ionicons name="search-outline" size={20} color="#999" />
               </TouchableOpacity>
-            )}
+              <View style={styles.searchInputContainer}>
+                <TextInput
+                  ref={searchInputRef}
+                  placeholder={t.home.search}
+                  placeholderTextColor="#999"
+                  style={styles.searchInput}
+                  value={search}
+                  onChangeText={handleSearchTextChange}
+                  editable={true}
+                  selectTextOnFocus={true}
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="search"
+                  onSubmitEditing={() => executeSearch(search)}
+                />
+              </View>
+              {search.length > 0 && (
+                <TouchableOpacity 
+                  onPress={() => {
+                    setSearch('');
+                    closeSearchModal();
+                  }}
+                  style={styles.clearButton}
+                >
+                  <Ionicons name="close-circle" size={20} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
-          <TouchableOpacity style={styles.filterButton}>
+
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={handleFilterButtonPress}
+            activeOpacity={0.8}
+          >
             <Ionicons name="options-outline" size={22} color="#FF9800" />
           </TouchableOpacity>
         </View>
       </LinearGradient>
 
-      {/* Modal de recherche et suggestions */}
+      {/* Modal de recherche */}
       <Modal
-        visible={showSearchModal && !productModalVisible}
+        visible={showSearchModal}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          console.log("🔍 Modal onRequestClose - IGNORÉ pour éviter la fermeture automatique");
-          // Ne pas fermer automatiquement
-        }}
+        onRequestClose={closeSearchModal}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+        <Pressable style={styles.modalContainer} onPress={closeSearchModal}>
+          <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
             {/* Poignée pour indiquer qu'on peut glisser */}
             <View style={styles.modalHandle} />
             
@@ -567,7 +552,7 @@ const HeaderSection = ({ navigation }) => {
                   <FlatList
                     data={searchResults}
                     renderItem={renderSearchResult}
-                    keyExtractor={(item) => item.id.toString()}
+                    keyExtractor={(item) => item.searchKey || `${item.productOrigin || 'item'}-${item.id}`}
                     ListEmptyComponent={
                       <View style={styles.emptyResultContainer}>
                         <Ionicons name="search-outline" size={50} color="#ccc" />
@@ -584,26 +569,51 @@ const HeaderSection = ({ navigation }) => {
               })()
             )}
             
+            {selectedCount > 0 && (
+              <TouchableOpacity 
+                onPress={addSelectedToCart}
+                style={styles.addSelectedButton}
+              >
+                <FontAwesome5 name="cart-plus" size={16} color="#FFF" />
+                <Text style={styles.addSelectedButtonText}>
+                  Ajouter {selectedCount} produit{selectedCount > 1 ? 's' : ''} au panier
+                </Text>
+              </TouchableOpacity>
+            )}
+            
             <TouchableOpacity 
               onPress={closeSearchModal}
               style={styles.closeButton}
             >
               <Text style={styles.closeButtonText}>Fermer</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
 
-      {/* Modal du produit */}
-      <ProductModal
-        visible={internalProductModalVisible}
-        product={selectedProduct}
-        onClose={() => {
-          setProductModalVisible(false);
-          setSelectedProduct(null);
-          setInternalProductModalVisible(false);
-        }}
-      />
+      {/* Modal du produit catalogue */}
+      {selectedProduct?.type !== 'menu' ? (
+        <ProductModal
+          visible={internalProductModalVisible}
+          product={selectedProduct}
+          onClose={() => {
+            setProductModalVisible(false);
+            setSelectedProduct(null);
+            setInternalProductModalVisible(false);
+          }}
+        />
+      ) : (
+        <RestaurantProductModal
+          visible={internalProductModalVisible}
+          product={selectedProduct}
+          markupPercentage={selectedProduct?.markupPercentage}
+          onClose={() => {
+            setProductModalVisible(false);
+            setSelectedProduct(null);
+            setInternalProductModalVisible(false);
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -696,7 +706,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingHorizontal: 15, // Ajouter le padding horizontal pour maintenir l'espacement
+    paddingHorizontal: 15,
+  },
+  searchBarWrapper: {
+    flex: 1,
   },
   searchBar: {
     flex: 1,
@@ -711,6 +724,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.22,
     shadowRadius: 2.22,
+  },
+  searchIconButton: {
+    padding: 2,
   },
   searchInputContainer: {
     flex: 1,
@@ -850,22 +866,6 @@ const styles = StyleSheet.create({
   searchResultsList: {
     paddingHorizontal: 15,
   },
-  suggestionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    backgroundColor: '#fff',
-    marginVertical: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  suggestionText: {
-    marginLeft: 10,
-    fontSize: 16,
-    fontFamily: 'Montserrat-Regular',
-    color: '#333',
-  },
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -880,6 +880,37 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     borderWidth: 1,
     borderColor: '#f0f0f0',
+  },
+  searchResultItemSelected: {
+    borderColor: '#FF9800',
+    backgroundColor: '#FFF8F0',
+  },
+  selectedCheckmark: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FF9800',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addSelectedButton: {
+    marginTop: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#FF6B35',
+    borderRadius: 25,
+    elevation: 2,
+  },
+  addSelectedButtonText: {
+    color: '#FFF',
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 14,
   },
   searchResultImageContainer: {
     width: 80,
@@ -921,6 +952,14 @@ const styles = StyleSheet.create({
   searchResultActions: {
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+  },
+  searchResultDetailButton: {
+    backgroundColor: '#FFF3E0',
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#FFE0B2',
   },
   searchResultAddButton: {
     backgroundColor: '#FF6B35',
@@ -953,7 +992,12 @@ const styles = StyleSheet.create({
   categoryBadgeContainer: {
     flexDirection: 'row',
     justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 6,
     marginTop: 4,
+  },
+  restaurantBadge: {
+    backgroundColor: '#4CAF50',
   },
   emptyResultContainer: {
     alignItems: 'center',

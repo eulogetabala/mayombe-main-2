@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Dimensions, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Dimensions, SafeAreaView, Platform, StatusBar } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import { useFavorites } from '../context/FavoritesContext';
 import { useCart } from '../context/CartContext';
 import ProductModal from '../components/ProductModal';
+import AppImage from '../components/AppImage';
 
 const { width, height } = Dimensions.get('window');
 const isSmallScreen = width < 375;
@@ -44,7 +45,7 @@ const FavoritesScreen = ({ navigation }) => {
         setModalVisible(true);
       }}
     >
-      <Image source={item.image} style={styles.image} />
+      <AppImage source={item.image} style={styles.image} priority="high" />
       <View style={styles.cardContent}>
         <View style={styles.headerRow}>
           <Text style={styles.productName} numberOfLines={1}>
@@ -81,7 +82,7 @@ const FavoritesScreen = ({ navigation }) => {
         navigation.navigate('RestaurantDetails', { restaurant: item });
       }}
     >
-      <Image source={item.image} style={styles.image} />
+      <AppImage source={item.image} style={styles.image} priority="high" />
       <View style={styles.cardContent}>
         <View style={styles.headerRow}>
           <Text style={styles.productName} numberOfLines={1}>

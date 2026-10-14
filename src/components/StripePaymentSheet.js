@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useStripe, CardField } from '@stripe/stripe-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 
 const { width } = Dimensions.get('window');
 const scaleFont = (size) => Math.round(size * (width / 375));
@@ -33,7 +33,7 @@ const StripePaymentSheet = ({
     try {
       setIsLoading(true);
       
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       
       if (!userToken) {
         Alert.alert('Erreur', 'Vous devez être connecté');

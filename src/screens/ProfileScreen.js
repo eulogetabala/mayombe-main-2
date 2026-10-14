@@ -1,32 +1,106 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, SafeAreaView, StatusBar, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView, Platform, SafeAreaView, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { useFocusEffect } from '@react-navigation/native';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
+const PROFILE_CACHE_KEY = 'userProfileCache';
+
+// Extrait le nom depuis la réponse de l'API en gérant plusieurs structures possibles
+const extractName = (data) => {
+  if (!data) return null;
+  return data.name
+    || data.user?.name
+    || data.user?.full_name
+    || data.data?.name
+    || data.data?.user?.name
+    || data.profile?.name
+    || data.nom
+    || null;
+};
+
+// Extrait le téléphone depuis la réponse de l'API
+const extractPhone = (data) => {
+  if (!data) return null;
+  return data.phone
+    || data.user?.phone
+    || data.data?.phone
+    || data.data?.user?.phone
+    || data.profile?.phone
+    || data.telephone
+    || null;
+};
+
+// Extrait l'email depuis la réponse de l'API
+const extractEmail = (data) => {
+  if (!data) return null;
+  return data.email
+    || data.user?.email
+    || data.data?.email
+    || data.data?.user?.email
+    || data.profile?.email
+    || null;
+};
 
 const ProfileScreen = ({ navigation }) => {
   const [userData, setUserData] = useState({
-    name: 'Utilisateur',
-    phone: 'Non renseigné',
+    name: '',
+    phone: '',
   });
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [lastLoadTime, setLastLoadTime] = useState(0);
 
   const { currentLanguage, changeLanguage } = useLanguage();
   const { logout } = useAuth();
   const t = translations[currentLanguage];
 
+  // Charge le cache local du profil (affichage immédiat même hors ligne)
+  const loadProfileCache = async () => {
+    try {
+      const cached = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.name) {
+          setUserData(prev => ({
+            name: parsed.name || prev.name,
+            phone: parsed.phone || prev.phone,
+          }));
+        }
+      }
+    } catch (error) {
+      // Cache illisible : ignorer silencieusement
+    }
+    // Ne pas désactiver le loader ici : il s'arrête dans loadUserData,
+    // une fois le fetch réseau terminé. La condition d'affichage
+    // (loadingProfile && !userData.name) montre déjà le cache s'il existe.
+  };
+
+  // Sauvegarde le profil en cache local
+  const saveProfileCache = (name, phone, email) => {
+    try {
+      AsyncStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({
+        name: name || '',
+        phone: phone || '',
+        email: email || '',
+        savedAt: Date.now(),
+      })).catch(() => {});
+    } catch (error) {
+      // Ignorer les erreurs de cache
+    }
+  };
+
   // Charger les données au montage du composant
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const userToken = await AsyncStorage.getItem('userToken');
+        loadProfileCache();
+        const userToken = await secureTokenStorage.getToken();
         if (userToken) {
-          console.log('🚀 Chargement initial des données utilisateur...');
           loadUserData();
         }
       } catch (error) {
@@ -40,21 +114,32 @@ const ProfileScreen = ({ navigation }) => {
   // Charger automatiquement les données utilisateur
   useFocusEffect(
     React.useCallback(() => {
-      console.log('🔄 Focus sur ProfileScreen - Chargement automatique...');
-      
       const checkAuthAndLoad = async () => {
         try {
-          const userToken = await AsyncStorage.getItem('userToken');
+          loadProfileCache();
+          const userToken = await secureTokenStorage.getToken();
           
           if (userToken) {
-            console.log('✅ Token trouvé, chargement des données...');
             loadUserData();
           } else {
-            console.log('❌ Aucun token trouvé, affichage non connecté');
+            // Pas de token : garder le cache local si disponible
+            const cached = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (parsed?.name) {
+                setUserData({
+                  name: parsed.name,
+                  phone: parsed.phone || 'Non renseigné',
+                });
+                setLoadingProfile(false);
+                return;
+              }
+            }
             setUserData({
               name: 'Non connecté',
               phone: 'Non disponible',
             });
+            setLoadingProfile(false);
           }
         } catch (error) {
           console.error('❌ Erreur vérification auth:', error);
@@ -68,10 +153,10 @@ const ProfileScreen = ({ navigation }) => {
   const loadUserData = async () => {
     try {
       // Vérifier le token
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       
       if (userToken) {
-        console.log('🔄 Chargement des données utilisateur...');
+        setLoadingProfile(true);
         
         const response = await fetch(`${API_BASE_URL}/user`, {
           headers: {
@@ -87,23 +172,48 @@ const ProfileScreen = ({ navigation }) => {
         }
 
         const data = await response.json();
-        console.log('✅ Données utilisateur reçues:', data);
         
-        // Utiliser les données reçues du serveur
-        setUserData({
-          name: data?.name || data?.user?.name || 'Utilisateur',
-          phone: data?.phone || data?.user?.phone || 'Non renseigné',
-        });
+        // Extraire les informations avec gestion robuste de la structure
+        const name = extractName(data);
+        const phone = extractPhone(data);
+        const email = extractEmail(data);
         
-        console.log('📱 Données utilisateur mises à jour:', {
-          name: data?.name || data?.user?.name,
-          phone: data?.phone || data?.user?.phone
-        });
+        if (name) {
+          setUserData({
+            name,
+            phone: phone || 'Non renseigné',
+          });
+          
+          // Mettre à jour le cache local
+          saveProfileCache(name, phone, email);
+        } else {
+          // La réponse ne contient pas le nom : garder le cache existant
+          const cached = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed?.name) {
+              setUserData({
+                name: parsed.name,
+                phone: parsed.phone || 'Non renseigné',
+              });
+            }
+          }
+        }
         
         // Mettre à jour le timestamp du cache
         setLastLoadTime(Date.now());
       } else {
-        console.log('❌ Aucun token utilisateur trouvé');
+        const cached = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed?.name) {
+            setUserData({
+              name: parsed.name,
+              phone: parsed.phone || 'Non renseigné',
+            });
+            return;
+          }
+        }
         setUserData({
           name: 'Non connecté',
           phone: 'Non disponible',
@@ -112,11 +222,29 @@ const ProfileScreen = ({ navigation }) => {
     } catch (error) {
       console.error('❌ Erreur lors du chargement des données utilisateur:', error);
       
-      // Gérer l'erreur de manière appropriée
+      // En cas d'erreur réseau, afficher les données du cache local si disponibles
+      const cached = await AsyncStorage.getItem(PROFILE_CACHE_KEY).catch(() => null);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.name) {
+            setUserData({
+              name: parsed.name,
+              phone: parsed.phone || 'Non renseigné',
+            });
+            return;
+          }
+        } catch (parseError) {
+          // Cache illisible
+        }
+      }
+      
       setUserData({
         name: 'Erreur de chargement',
         phone: 'Non disponible',
       });
+    } finally {
+      setLoadingProfile(false);
     }
   };
 
@@ -181,7 +309,7 @@ const ProfileScreen = ({ navigation }) => {
                   style: "destructive",
                   onPress: async () => {
                     try {
-                      const userToken = await AsyncStorage.getItem('userToken');
+                      const userToken = await secureTokenStorage.getToken();
                       if (!userToken) {
                         Alert.alert('Erreur', 'Vous devez être connecté pour supprimer votre compte');
                         return;
@@ -203,7 +331,7 @@ const ProfileScreen = ({ navigation }) => {
 
                       if (response.ok) {
                         // Supprimer toutes les données locales
-                        await AsyncStorage.removeItem('userToken');
+                        await secureTokenStorage.removeToken();
                         await AsyncStorage.removeItem('selectedLanguage');
                         await AsyncStorage.removeItem('isGuest');
                         
@@ -257,8 +385,12 @@ const ProfileScreen = ({ navigation }) => {
               </Text>
             </View>
             <View style={styles.userInfoContainer}>
-              <Text style={styles.userName}>{userData.name}</Text>
-              <Text style={styles.userPhone}>{userData.phone}</Text>
+              {loadingProfile && !userData.name ? (
+                <ActivityIndicator size="small" color="#FF9800" style={{ alignSelf: 'flex-start' }} />
+              ) : (
+                <Text style={styles.userName}>{userData.name || 'Utilisateur'}</Text>
+              )}
+              <Text style={styles.userPhone}>{userData.phone || 'Non renseigné'}</Text>
             </View>
           </View>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import ProductModal from '../ProductModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,6 +7,7 @@ import { useCart } from '../../context/CartContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { translations } from '../../translations';
 import ConnectionError from '../ConnectionError';
+import AppImage from '../AppImage';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -204,7 +205,7 @@ const NouveauxProduits = () => {
   const renderItem = ({ item }) => (
     <View style={[styles.card, { width: screenWidth * 0.45 }]}>
       <TouchableOpacity onPress={() => handleProductPress(item)}>
-        <Image source={item.image} style={styles.image} />
+        <AppImage source={item.image} style={styles.image} priority="high" />
       </TouchableOpacity>
       
       <TouchableOpacity 

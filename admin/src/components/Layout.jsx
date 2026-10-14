@@ -11,9 +11,10 @@ import {
   LogOut
 } from 'lucide-react'
 import logo from '../assets/images/logo_mayombe.jpg'
+import logoMono from '../assets/images/LOGO_MAYOMBE_Mono.png'
 
 // Fallback si l'image n'est pas trouvée
-const logoPath = logo || '/src/assets/images/logo_mayombe.jpg'
+const logoPath = logo || logoMono
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = React.useState(true)
@@ -57,7 +58,10 @@ const Layout = ({ children }) => {
                   alt="Mayombe Logo" 
                   className="w-full h-full rounded-lg object-cover"
                   onError={(e) => {
-                    e.target.src = '/src/assets/images/LOGO_MAYOMBE_Mono.png'
+                    const img = e.target
+                    if (img.dataset.fallbackApplied) return
+                    img.dataset.fallbackApplied = '1'
+                    img.src = logoMono
                   }}
                 />
               </div>

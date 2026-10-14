@@ -29,15 +29,6 @@ const ResetPasswordScreen = ({ navigation, route }) => {
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
 
-  // Log des paramètres reçus pour debug
-  console.log("🔍 ResetPasswordScreen - Paramètres reçus:", {
-    phone,
-    receivedOtp,
-    callingCode,
-    phoneNumber,
-    allParams: route.params
-  });
-
   const validateInputs = () => {
     if (!newPassword.trim()) {
       Alert.alert("Erreur", "Veuillez entrer un nouveau mot de passe.");
@@ -67,15 +58,7 @@ const ResetPasswordScreen = ({ navigation, route }) => {
     setLoading(true);
 
     try {
-      console.log("🔑 Réinitialisation avec OTP:", {
-        receivedOtp,
-        otpType: typeof receivedOtp,
-        otpLength: receivedOtp.length,
-        newPassword
-      });
-      
       const response = await api.resetPassword(receivedOtp, newPassword);
-      console.log("📥 Réponse API reset password:", response);
 
       if (response.status === 200 || response.data?.success) {
         Alert.alert(

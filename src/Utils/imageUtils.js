@@ -8,6 +8,19 @@ const UPLOADS_BASE_URL = "https://www.mayombe-app.com/uploads_admin";
 const DEFAULT_IMAGE = require('../../assets/images/2.jpg');
 
 /**
+ * Convertit un chemin gs:// de Firebase Storage en URL HTTPS téléchargeable
+ * @param {string} gsUri - Chemin au format gs://bucket/object/path
+ * @returns {string} - URL https://firebasestorage.googleapis.com/...
+ */
+export const gsToHttpUrl = (gsUri) => {
+  const match = gsUri.match(/^gs:\/\/([^/]+)\/(.+)$/);
+  if (!match) return gsUri;
+  const [, bucket, objectPath] = match;
+  const encodedPath = objectPath.split('/').map(encodeURIComponent).join('/');
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodedPath}?alt=media`;
+};
+
+/**
  * Résout une URL d'image avec priorité Firebase > API > Image par défaut
  * @param {string|null|undefined} firebaseUrl - URL depuis Firebase (priorité 1)
  * @param {string|null|undefined} apiPath - Chemin depuis l'API (priorité 2)
@@ -20,10 +33,9 @@ export const resolveImageUrl = (firebaseUrl, apiPath, defaultImage = DEFAULT_IMA
     if (firebaseUrl.startsWith('http://') || firebaseUrl.startsWith('https://')) {
       return { uri: firebaseUrl };
     }
-    // Si c'est un chemin relatif Firebase Storage, construire l'URL complète
+    // Si c'est un chemin Firebase Storage (gs://), construire l'URL HTTPS téléchargeable
     if (firebaseUrl.startsWith('gs://')) {
-      // Firebase Storage path - on retourne tel quel, React Native gérera
-      return { uri: firebaseUrl };
+      return { uri: gsToHttpUrl(firebaseUrl) };
     }
   }
 
@@ -58,4 +70,40 @@ export const resolveFirebaseImageUrl = (firebaseUrl, defaultImage = DEFAULT_IMAG
  */
 export const resolveApiImageUrl = (apiPath, defaultImage = DEFAULT_IMAGE) => {
   return resolveImageUrl(null, apiPath, defaultImage);
+};
+
+/**
+ * Préchauffe les images distantes via FastImage pour un affichage immédiat.
+ * À appeler dès que les URLs sont résolues (avant même le rendu).
+ * @param {Array<object|string>} sources - Liste de sources (objet { uri } ou string URL)
+ * @returns {Promise<void>}
+ */
+export const prefetchImages = (sources) => {
+  if (!sources || sources.length === 0) return Promise.resolve();
+
+  try {
+    // Import dynamique : le module peut être exporté en ES6 (`.default`) ou CommonJS direct
+    const FastImageModule = require('react-native-fast-image');
+    const FastImage = FastImageModule && (FastImageModule.default || FastImageModule);
+
+    if (!FastImage || typeof FastImage.prefetch !== 'function') {
+      return Promise.resolve();
+    }
+
+    const urls = sources
+      .map((source) => {
+        if (!source) return null;
+        let uri = typeof source === 'string' ? source : source.uri;
+        if (!uri) return null;
+        if (uri.startsWith('gs://')) uri = gsToHttpUrl(uri);
+        if (uri.startsWith('http://') || uri.startsWith('https://')) return uri;
+        return null;
+      })
+      .filter(Boolean);
+
+    if (urls.length === 0) return Promise.resolve();
+    return Promise.resolve(FastImage.prefetch(urls)).catch(() => {});
+  } catch (e) {
+    return Promise.resolve();
+  }
 };

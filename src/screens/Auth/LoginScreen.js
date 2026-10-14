@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import secureTokenStorage from "../../services/secureTokenStorage";
 import { Ionicons } from "@expo/vector-icons";
 import * as Animatable from "react-native-animatable";
 import CountryPicker, { 
@@ -23,7 +23,7 @@ import CountryPicker, {
 import { useLanguage } from '../../context/LanguageContext';
 import { translations } from '../../translations';
 import { api } from '../../services/api';
-import { useAuth } from '../../../contexts/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 
 const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState("");
@@ -40,7 +40,7 @@ const LoginScreen = ({ navigation }) => {
   useEffect(() => {
     const checkUserLoggedIn = async () => {
       try {
-        const token = await AsyncStorage.getItem("userToken");
+        const token = await secureTokenStorage.getToken();
         if (token) {
           navigation.replace("MainApp");
         }
@@ -74,13 +74,8 @@ const LoginScreen = ({ navigation }) => {
 
     try {
       const fullPhone = `+${callingCode}${phone}`;
-      console.log("Tentative de connexion avec:", { 
-        phone: fullPhone, 
-        passwordLength: password.length
-      });
       
       const result = await api.login(fullPhone, password);
-      console.log("Résultat API login:", result);
 
       if (result.status === 200) {
         // Utiliser la fonction login du contexte pour mettre à jour l'état d'authentification

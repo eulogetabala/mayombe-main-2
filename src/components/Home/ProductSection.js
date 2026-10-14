@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
@@ -11,6 +10,7 @@ import {
   FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import AppImage from '../AppImage';
 import ProductModal from '../ProductModal';
 import { useNavigation } from '@react-navigation/native';
 import { useCart } from '../../context/CartContext';
@@ -25,7 +25,7 @@ import promosService from '../../services/promosService';
 import { HOME_POPULAR_PRODUCTS_MAX } from '../../constants/homeContentLimits';
 import InteractiveRating from '../InteractiveRating';
 import PromoBadge from '../PromoBadge';
-import { useProductPromosLive } from '../../../contexts/ProductPromosContext';
+import { useProductPromosLive } from '../../context/ProductPromosContext';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const STORAGE_URL = "https://www.api-mayombe.mayombe-app.com/storage";
@@ -66,9 +66,11 @@ const ProductSectionContent = ({
             onPress={() => handleProductPress(item)}
           >
             <View style={styles.imageWrapper}>
-              <Image
+              <AppImage
                 source={item.hasValidImage ? { uri: item.imageUrl } : require('../../../assets/images/2.jpg')}
+                defaultSource={require('../../../assets/images/2.jpg')}
                 style={styles.productImage}
+                priority="high"
               />
               <TouchableOpacity
                 style={styles.favoriteButton}

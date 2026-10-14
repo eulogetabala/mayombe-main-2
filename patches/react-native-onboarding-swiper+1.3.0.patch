@@ -1,0 +1,48 @@
+diff --git a/node_modules/react-native-onboarding-swiper/src/index.js b/node_modules/react-native-onboarding-swiper/src/index.js
+index ad23272..a81ca06 100755
+--- a/node_modules/react-native-onboarding-swiper/src/index.js
++++ b/node_modules/react-native-onboarding-swiper/src/index.js
+@@ -182,13 +182,14 @@ class Onboarding extends Component {
+     return (
+       <Animated.View
+         onLayout={this._onLayout}
+-        style={{ flex: 1, backgroundColor, justifyContent: 'center' }}
++        style={{ flex: 1, backgroundColor }}
+       >
+         {controlStatusBar && <StatusBar barStyle={barStyle} />}
+         <FlatList
+           ref={(list) => {
+             this.flatList = list;
+           }}
++          style={{ flex: 1 }}
+           data={pages}
+           pagingEnabled
+           horizontal
+@@ -204,7 +205,12 @@ class Onboarding extends Component {
+           {...flatlistProps}
+         />
+         {showPagination && (
+-          <SafeAreaView style={bottomBarHighlight ? styles.overlay : {}}>
++          <SafeAreaView
++            style={[
++              bottomBarHighlight ? styles.overlay : {},
++              styles.topBar,
++            ]}
++          >
+             <Pagination
+               isLight={isLight}
+               bottomBarHeight={bottomBarHeight}
+@@ -314,6 +320,13 @@ const styles = {
+   overlay: {
+     backgroundColor: 'rgba(0, 0, 0, 0.1)',
+   },
++  topBar: {
++    position: 'absolute',
++    top: 0,
++    left: 0,
++    right: 0,
++    zIndex: 10,
++  },
+ };
+ 
+ export default Onboarding;

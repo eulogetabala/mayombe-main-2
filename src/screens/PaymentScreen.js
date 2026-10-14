@@ -16,7 +16,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import AddressModal from '../components/AddressModal';
 import CountryPicker, { 
   CountryModalProvider,
@@ -67,14 +67,14 @@ const PaymentScreen = ({ route, navigation }) => {
       id: 'mtn',
       name: 'MTN Mobile Money',
       logo: require('../../assets/images/mtn.jpeg'),
-      disabled: true,
+      disabled: false,
       description: 'Paiement mobile sécurisé'
     },
     {
       id: 'cb',
       name: 'Carte Bancaire',
       logo: require('../../assets/images/visa-mastercard.webp'),
-      disabled: false,
+      disabled: true,
       description: 'Paiement sécurisé par Stripe'
     },
     {
@@ -193,7 +193,7 @@ const PaymentScreen = ({ route, navigation }) => {
   // Fonction pour enregistrer le mode de paiement via l'API
   const savePaymentMethod = async (paymentMethod) => {
     try {
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       
       if (!userToken) {
         Alert.alert("Erreur", "Vous devez être connecté pour effectuer cette action");

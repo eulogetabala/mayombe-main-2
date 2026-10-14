@@ -3,7 +3,6 @@ import {
   View,
   Text,
   FlatList,
-  Image,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -18,8 +17,9 @@ import * as Location from 'expo-location';
 import restaurantStatusService from '../services/restaurantStatusService';
 import InteractiveRating from '../components/InteractiveRating';
 import StatusBadge from '../components/StatusBadge';
-import { resolveImageUrl } from '../Utils/imageUtils';
+import { resolveImageUrl, prefetchImages } from '../Utils/imageUtils';
 import ConnectionError from '../components/ConnectionError';
+import AppImage from '../components/AppImage';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const { width } = Dimensions.get('window');
@@ -213,6 +213,13 @@ const AllRestaurants = ({ route, navigation }) => {
           return b.totalRatings - a.totalRatings;
         });
         setRestaurants(sortedRestaurants);
+
+        // Précharger les images pour un affichage immédiat
+        prefetchImages(
+          sortedRestaurants.map(r => r.image).concat(
+            sortedRestaurants.map(r => r.logo).filter(Boolean)
+          )
+        );
       } else {
         throw new Error('Format de données invalide');
       }
@@ -261,13 +268,13 @@ const AllRestaurants = ({ route, navigation }) => {
       activeOpacity={0.7}
     >
       <View style={styles.imageContainer}>
-        <Image source={item.image} style={styles.restaurantImage} />
+        <AppImage source={item.image} style={styles.restaurantImage} priority="high" />
         <View style={styles.overlay} />
         
         {/* Logo du restaurant */}
         {item.logo && (
           <View style={styles.logoContainer}>
-            <Image source={item.logo} style={styles.logoImage} />
+            <AppImage source={item.logo} style={styles.logoImage} />
           </View>
         )}
         

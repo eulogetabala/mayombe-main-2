@@ -1,0 +1,6 @@
+name = "mayombe-api-proxy"
+main = "src/index.js"
+compatibility_date = "2026-09-15"
+
+# Aucune variable, aucun secret : ce Worker est un simple relais public.
+# Il n'expose ni clé d'API ni jeton.

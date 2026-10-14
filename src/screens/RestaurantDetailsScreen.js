@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   SafeAreaView,
   FlatList,
   ActivityIndicator,
@@ -21,10 +20,11 @@ import AnimatedProductCount from '../components/AnimatedProductCount';
 import { RestaurantDetailsSkeleton } from '../components/Skeletons';
 import { applyMarkup, formatPriceWithMarkup, getMarkupPercentageForRestaurant } from '../Utils/priceUtils';
 import { isRtdbPromoActive } from '../services/promosService';
-import { useProductPromosLive } from '../../contexts/ProductPromosContext';
+import { useProductPromosLive } from '../context/ProductPromosContext';
 import restaurantStatusService from '../services/restaurantStatusService';
 import StatusBadge from '../components/StatusBadge';
-import { resolveImageUrl } from '../Utils/imageUtils';
+import { resolveImageUrl, prefetchImages } from '../Utils/imageUtils';
+import AppImage from '../components/AppImage';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -167,6 +167,9 @@ const RestaurantDetails = ({ route, navigation }) => {
       try {
         console.log(`🖼️ Récupération des images Firebase pour le restaurant ${restaurant.id}`);
         const images = await restaurantStatusService.getRestaurantImages(restaurant.id.toString());
+
+        // Précharger les images Firebase dès leur récupération
+        prefetchImages([images.cover, images.logo].filter(Boolean));
         
         setRestaurant(prev => {
           const newState = { ...prev };
@@ -463,13 +466,13 @@ const RestaurantDetails = ({ route, navigation }) => {
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Image source={restaurant.image} style={styles.coverImage} />
+      <AppImage source={restaurant.image} style={styles.coverImage} priority="high" />
       <View style={styles.headerOverlay} />
       
       {/* Logo du restaurant */}
       {restaurant.logo && (
         <View style={styles.logoContainer}>
-          <Image source={restaurant.logo} style={styles.logoImage} />
+          <AppImage source={restaurant.logo} style={styles.logoImage} priority="high" />
         </View>
       )}
 
@@ -606,7 +609,7 @@ const RestaurantDetails = ({ route, navigation }) => {
       onPress={() => handleProductPress(item)}
     >
       <View style={styles.productImageContainer}>
-        <Image source={item.image} style={styles.productImage} />
+        <AppImage source={item.image} style={styles.productImage} priority="high" />
         {item.hasPromo && (
           <View style={styles.promoBadge}>
             <Text style={styles.promoBadgeText}>PROMO</Text>

@@ -17,6 +17,7 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import CountryPicker, { DEFAULT_THEME, DARK_THEME } from 'react-native-country-picker-modal';
 import { useLanguage } from '../context/LanguageContext';
 import Toast from 'react-native-toast-message';
@@ -55,7 +56,7 @@ const ProcessPayment = () => {
   // Marquer la commande comme annulée (ou échec paiement) côté backend
   const markOrderAsCancelled = async (orderId) => {
     try {
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       if (!userToken || !orderId) return;
       await fetch(`${API_BASE_URL}/orders/${orderId}/status`, {
         method: 'PUT',
@@ -93,7 +94,7 @@ const ProcessPayment = () => {
 
     try {
 
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       
       if (!userToken) {
         Alert.alert("Erreur", "Vous devez être connecté pour effectuer cette action");

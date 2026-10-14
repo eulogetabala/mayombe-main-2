@@ -21,7 +21,7 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
   }
 }
 
-rootProject.name = 'mayombeclient'
+rootProject.name = 'MayombeClient'
 
 dependencyResolutionManagement {
   versionCatalogs {

@@ -4,7 +4,6 @@ import {
   Text, 
   StyleSheet, 
   TouchableOpacity, 
-  Image, 
   FlatList,
   ActivityIndicator,
 } from 'react-native';
@@ -14,7 +13,8 @@ import { useRatings } from '../context/RatingsContext';
 import restaurantStatusService from '../services/restaurantStatusService';
 import InteractiveRating from '../components/InteractiveRating';
 import StatusBadge from '../components/StatusBadge';
-import { resolveImageUrl } from '../Utils/imageUtils';
+import { resolveImageUrl, prefetchImages } from '../Utils/imageUtils';
+import AppImage from '../components/AppImage';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -230,6 +230,13 @@ const TopRatedRestaurants = ({ navigation }) => {
           return b.totalRatings - a.totalRatings;
         });
         setRestaurants(sortedRestaurants);
+
+        // Précharger les images pour un affichage immédiat
+        prefetchImages(
+          sortedRestaurants.map(r => r.image).concat(
+            sortedRestaurants.map(r => r.logo).filter(Boolean)
+          )
+        );
       }
     } catch (error) {
       setError('Impossible de charger les restaurants');
@@ -244,11 +251,11 @@ const TopRatedRestaurants = ({ navigation }) => {
       onPress={() => navigation.navigate('RestaurantDetails', { restaurant: item })}
     >
       <View style={styles.imageContainer}>
-        <Image source={item.image} style={styles.restaurantImage} />
+        <AppImage source={item.image} style={styles.restaurantImage} priority="high" />
         {/* Logo du restaurant */}
         {item.logo && (
           <View style={styles.logoContainer}>
-            <Image source={item.logo} style={styles.logoImage} />
+            <AppImage source={item.logo} style={styles.logoImage} />
           </View>
         )}
       </View>

@@ -289,45 +289,6 @@ class FirebaseTrackingService {
     }
   }
 
-  // S'abonner aux mises à jour de position du driver
-  subscribeToDriverLocation(orderId, callback) {
-    
-    const locationRef = ref(database, `orders/${orderId}/driver/location`);
-    const statusRef = ref(database, `orders/${orderId}/status`);
-    
-    // Écouter les changements de position
-    const locationUnsubscribe = onValue(locationRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        callback({
-          type: 'location',
-          data: data
-        });
-      }
-    }, (error) => {
-      console.error('❌ Erreur écoute position:', error);
-    });
-    
-    // Écouter les changements de statut
-    const statusUnsubscribe = onValue(statusRef, (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        callback({
-          type: 'status',
-          data: data
-        });
-      }
-    }, (error) => {
-      console.error('❌ Erreur écoute statut:', error);
-    });
-    
-    // Retourner la fonction de nettoyage
-    return () => {
-      locationUnsubscribe();
-      statusUnsubscribe();
-    };
-  }
-
   // Démarrer le tracking complet pour une commande
   startTracking(orderId, callbacks) {
     

@@ -3,11 +3,12 @@ import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, SafeAreaView
 import CachedImage from '../components/CachedImage';
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import useCartSharing from '../hooks/useCartSharing';
 import { getDistanceToRestaurant, formatDistance, getCurrentLocation } from '../services/LocationService';
 import CustomHeader from '../components/common/CustomHeader';
@@ -249,7 +250,7 @@ const CartScreen = ({ navigation, route }) => {
     setIsSubmitting(true);
 
     try {
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       const isGuest = await AsyncStorage.getItem('isGuest');
       
       if (!userToken && !isGuest) {

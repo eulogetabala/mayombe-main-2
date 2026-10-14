@@ -13,17 +13,25 @@ const USE_PROXY = !isDevelopment // Activer le proxy uniquement en production
 const API_BASE_URL = 'https://www.api-mayombe.mayombe-app.com/public/api'
 const PROXY_URL = 'https://us-central1-mayombe-ba11b.cloudfunctions.net/apiProxy'
 
+// Permet de brancher un proxy fonctionnel (Worker, etc.) sans modifier le code.
+// Ex. dans admin/.env.production : VITE_API_PROXY_URL=https://xxx.workers.dev
+const ENV_PROXY_URL = import.meta.env.VITE_API_PROXY_URL
+const ENV_API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+
 if (typeof window !== 'undefined') {
   console.log(`🔧 [API Config] Mode: ${isDevelopment ? 'DEVELOPPEMENT' : 'PRODUCTION'}, Proxy: ${USE_PROXY ? 'ACTIVÉ' : 'DÉSACTIVÉ'}`)
   console.log(`🔧 [API Config] Hostname: ${window.location.hostname}, URL: ${window.location.href}`)
 }
 
 const api = axios.create({
-  baseURL: USE_PROXY ? PROXY_URL : API_BASE_URL,
+  baseURL: ENV_API_BASE_URL || ENV_PROXY_URL || (USE_PROXY ? PROXY_URL : API_BASE_URL),
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
+  // Timeout court : si l'API/proxy ne répond pas, on bascule rapidement
+  // sur le catalogue embarqué au lieu de laisser la page bloquée.
+  timeout: 10000,
 })
 
 // Intercepteur pour ajouter le token d'authentification et logger les requêtes

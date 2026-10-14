@@ -15,6 +15,7 @@ import { CardField, useStripe, useConfirmPayment } from '@stripe/stripe-react-na
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import { useCart } from '../context/CartContext';
 
 const { width } = Dimensions.get('window');
@@ -54,7 +55,7 @@ const StripePaymentScreen = ({ route, navigation }) => {
       console.log('✅ PaymentMethod créé:', paymentMethod);
       
       // Récupérer le token d'authentification
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       
       if (!userToken) {
         Alert.alert("Erreur", "Vous devez être connecté pour effectuer cette action");

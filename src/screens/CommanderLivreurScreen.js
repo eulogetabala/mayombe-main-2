@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import AddressModal from '../components/AddressModal';
 import CountryPicker, { 
   CountryModalProvider,
@@ -170,7 +170,7 @@ const CommanderLivreurContent = () => {
     
     setIsSubmitting(true);
     try {
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       if (!userToken) {
         Alert.alert('Erreur', 'Vous devez être connecté pour réserver');
         setIsSubmitting(false);

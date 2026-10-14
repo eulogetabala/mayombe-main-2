@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Dimensions, ActivityIndicator, FlatList, Image, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Dimensions, ActivityIndicator, FlatList, Linking } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
 import ConnectionError from '../ConnectionError';
+import AppImage from '../AppImage';
+import { prefetchImages } from '../../Utils/imageUtils';
 
 const FindNearbyRestaurants = () => {
   const navigation = useNavigation();
@@ -162,6 +164,13 @@ const FindNearbyRestaurants = () => {
           .slice(0, 10); // Prendre les 10 plus proches
 
         setNearbyRestaurants(restaurantsWithDistance);
+
+        // Précharger les images des restaurants proches
+        prefetchImages(
+          restaurantsWithDistance.map(r => r.image)
+            .filter(img => img && img.uri)
+            .map(img => img.uri)
+        );
       }
     } catch (error) {
       console.error('Erreur récupération restaurants:', error);
@@ -306,7 +315,7 @@ const FindNearbyRestaurants = () => {
                   keyExtractor={(item) => item.id.toString()}
                   renderItem={({ item }) => (
                     <TouchableOpacity style={styles.restaurantCard}>
-                      <Image source={item.image} style={styles.restaurantImage} />
+                      <AppImage source={item.image} style={styles.restaurantImage} priority="high" />
                       <View style={styles.restaurantInfo}>
                         <Text style={styles.restaurantName} numberOfLines={1}>{item.name}</Text>
                         <Text style={styles.restaurantAddress} numberOfLines={1}>{item.address}</Text>

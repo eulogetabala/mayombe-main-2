@@ -13,6 +13,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import AppImage from '../components/AppImage';
 import { Ionicons } from "@expo/vector-icons";
 import { CommonActions } from '@react-navigation/native';
 import { useLanguage } from '../context/LanguageContext';
@@ -78,7 +79,7 @@ const CategoriesContent = ({ categories, navigation, t }) => {
         {/* Carte circulaire avec effet de profondeur */}
         <View style={styles.circleCard}>
           {imageUrl && !hasImageError ? (
-            <Image
+            <AppImage
               source={{ uri: imageUrl }}
               style={styles.circleImage}
               onError={() => handleImageError(item.id)}
@@ -92,7 +93,6 @@ const CategoriesContent = ({ categories, navigation, t }) => {
               style={styles.circleImage}
             />
           )}
-          
           {/* Overlay subtil */}
           <View style={styles.circleOverlay} />
           

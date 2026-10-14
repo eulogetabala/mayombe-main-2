@@ -2,10 +2,10 @@
 
 buildscript {
     ext {
-        buildToolsVersion = findProperty('android.buildToolsVersion') ?: '35.0.0'
+        buildToolsVersion = findProperty('android.buildToolsVersion') ?: '36.0.0'
         minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '24')
-        compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '35')
-        targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '34')
+        compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '36')
+        targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '36')
         kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.25'
 
         ndkVersion = "26.1.10909125"
@@ -38,5 +38,36 @@ allprojects {
         google()
         mavenCentral()
         maven { url 'https://www.jitpack.io' }
+    }
+}
+
+subprojects { project ->
+    project.plugins.withId('com.android.library') {
+        project.android {
+            defaultConfig {
+                externalNativeBuild {
+                    cmake {
+                        arguments += ["-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384"]
+                    }
+                    ndkBuild {
+                        arguments += ["APP_LDFLAGS+=-Wl,-z,max-page-size=16384"]
+                    }
+                }
+            }
+        }
+    }
+    project.plugins.withId('com.android.application') {
+        project.android {
+            defaultConfig {
+                externalNativeBuild {
+                    cmake {
+                        arguments += ["-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384"]
+                    }
+                    ndkBuild {
+                        arguments += ["APP_LDFLAGS+=-Wl,-z,max-page-size=16384"]
+                    }
+                }
+            }
+        }
     }
 }

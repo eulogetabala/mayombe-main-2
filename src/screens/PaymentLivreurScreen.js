@@ -14,7 +14,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -43,7 +43,7 @@ const PaymentLivreurScreen = ({ route, navigation }) => {
       id: 'cb',
       name: 'Carte Bancaire',
       logo: require('../../assets/images/visa-mastercard.webp'),
-      disabled: false,
+      disabled: true,
       color: '#F3E5F5',
       description: 'Visa, Mastercard via Stripe'
     },
@@ -58,6 +58,15 @@ const PaymentLivreurScreen = ({ route, navigation }) => {
   ];
 
   const handleMethodSelection = (methodId) => {
+    const method = paymentMethods.find(m => m.id === methodId);
+    if (method && method.disabled) {
+      Alert.alert(
+        'Mode de paiement non disponible',
+        'Le paiement par carte bancaire n\'est pas encore disponible. Veuillez choisir un autre mode de paiement.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     setSelectedMethod(methodId);
   };
 
@@ -69,7 +78,7 @@ const PaymentLivreurScreen = ({ route, navigation }) => {
 
     setIsProcessing(true);
     try {
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       
       // 1. Enregistrer le mode de paiement
       const response = await fetch(`${API_BASE_URL}/mode-paiement`, {
@@ -165,23 +174,30 @@ const PaymentLivreurScreen = ({ route, navigation }) => {
               key={method.id}
               style={[
                 styles.methodItem,
-                selectedMethod === method.id && styles.methodItemSelected
+                selectedMethod === method.id && styles.methodItemSelected,
+                method.disabled && styles.methodItemDisabled
               ]}
               onPress={() => handleMethodSelection(method.id)}
             >
               <View style={[styles.logoContainer, { backgroundColor: method.color }]}>
-                <Image source={method.logo} style={styles.methodLogo} />
+                <Image source={method.logo} style={[styles.methodLogo, method.disabled && styles.disabledLogo]} />
               </View>
               <View style={styles.methodTextContainer}>
-                <Text style={styles.methodName}>{method.name}</Text>
-                <Text style={styles.methodDesc}>{method.description}</Text>
+                <Text style={[styles.methodName, method.disabled && styles.disabledText]}>{method.name}</Text>
+                <Text style={[styles.methodDesc, method.disabled && styles.disabledText]}>{method.description}</Text>
               </View>
-              <View style={[
-                styles.selector,
-                selectedMethod === method.id && styles.selectorActive
-              ]}>
-                {selectedMethod === method.id && <View style={styles.selectorDot} />}
-              </View>
+              {method.disabled ? (
+                <View style={styles.comingSoonBadge}>
+                  <Ionicons name="time-outline" size={16} color="#FFA500" />
+                </View>
+              ) : (
+                <View style={[
+                  styles.selector,
+                  selectedMethod === method.id && styles.selectorActive
+                ]}>
+                  {selectedMethod === method.id && <View style={styles.selectorDot} />}
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
@@ -349,6 +365,23 @@ const styles = StyleSheet.create({
   methodItemSelected: {
     borderColor: '#FF9800',
     backgroundColor: '#FFF9F1',
+  },
+  methodItemDisabled: {
+    opacity: 0.7,
+    backgroundColor: '#F5F5F5',
+  },
+  disabledLogo: {
+    opacity: 0.7,
+  },
+  disabledText: {
+    color: '#999',
+  },
+  comingSoonBadge: {
+    backgroundColor: '#FFF4E5',
+    borderRadius: 10,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: '#FFA500',
   },
   logoContainer: {
     width: 50,

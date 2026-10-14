@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "catalog": "node scripts/generate-catalog.js",
+    "prebuild": "node scripts/generate-catalog.js",
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && cd .. && firebase deploy --only hosting"

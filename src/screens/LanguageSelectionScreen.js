@@ -11,6 +11,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 
 const { width } = Dimensions.get('window');
 
@@ -26,7 +27,7 @@ const LanguageSelectionScreen = ({ navigation }) => {
     try {
       const savedLanguage = await AsyncStorage.getItem('userLanguage');
       const firstLaunch = await AsyncStorage.getItem('firstLaunch');
-      const token = await AsyncStorage.getItem('userToken');
+      const token = await secureTokenStorage.getToken();
 
       if (savedLanguage) {
         await changeLanguage(savedLanguage);
@@ -48,7 +49,7 @@ const LanguageSelectionScreen = ({ navigation }) => {
       await AsyncStorage.setItem('userLanguage', language);
       await changeLanguage(language);
       
-      const token = await AsyncStorage.getItem('userToken');
+      const token = await secureTokenStorage.getToken();
       const firstLaunch = await AsyncStorage.getItem('firstLaunch');
 
       if (token) {

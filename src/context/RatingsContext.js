@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import ratingsService from '../services/ratingsService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from './AuthContext';
 
 const RatingsContext = createContext();
 

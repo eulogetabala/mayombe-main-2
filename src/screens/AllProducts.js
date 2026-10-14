@@ -21,7 +21,7 @@ import { formatPriceWithMarkup, getMarkupPercentageFromProduct } from '../Utils/
 import promosService from '../services/promosService';
 import InteractiveRating from '../components/InteractiveRating';
 import PromoBadge from '../components/PromoBadge';
-import { useProductPromosLive } from '../../contexts/ProductPromosContext';
+import { useProductPromosLive } from '../context/ProductPromosContext';
 
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";

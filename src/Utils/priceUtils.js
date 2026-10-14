@@ -29,12 +29,13 @@ function normalizeName(name) {
 
 /**
  * Correspondance par nom (insensible à la casse / accents légers).
- * Chocolat Sarayi + Clucks → 7 %
+ * Chocolat Sarayi + Clucks + Pizzeria → 7 %
  */
 function matchesReducedMarkupName(normalized) {
   if (!normalized) return false;
   if (normalized.includes('clucks')) return true;
   if (normalized.includes('chocolat') && normalized.includes('sarayi')) return true;
+  if (normalized.includes('pizzeria')) return true;
   return false;
 }
 

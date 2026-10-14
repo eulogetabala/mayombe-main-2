@@ -24,6 +24,7 @@ import { api } from '../../services/api';
 
 const ForgotPasswordScreen = ({ navigation }) => {
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [countryCode, setCountryCode] = useState("CG");
   const [callingCode, setCallingCode] = useState("242");
@@ -44,8 +45,23 @@ const ForgotPasswordScreen = ({ navigation }) => {
     return true;
   };
 
+  const validateEmail = () => {
+    if (!email.trim()) {
+      Alert.alert("Erreur", "Veuillez entrer votre adresse email.");
+      return false;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim().toLowerCase())) {
+      Alert.alert("Erreur", "Veuillez entrer une adresse email valide.");
+      return false;
+    }
+
+    return true;
+  };
+
   const handleForgotPassword = async () => {
-    if (!validatePhone()) return;
+    if (!validatePhone() || !validateEmail()) return;
 
     setLoading(true);
 
@@ -53,18 +69,19 @@ const ForgotPasswordScreen = ({ navigation }) => {
       const fullPhone = `+${callingCode}${phone}`;
       console.log("Envoi de la demande pour:", fullPhone);
       
-      const response = await api.forgotPassword(fullPhone);
+      const response = await api.forgotPassword(fullPhone, email.trim().toLowerCase());
       console.log("Réponse API forgot password:", response);
 
       if (response.status === 200 || response.data?.success) {
         Alert.alert(
           "Code envoyé",
-          "Un code de vérification a été envoyé à votre numéro de téléphone.",
+          "Un code de vérification a été envoyé par SMS et par mail.",
           [
             {
               text: "OK",
               onPress: () => navigation.navigate("ForgotPasswordOtp", { 
                 phone: fullPhone,
+                email: email.trim().toLowerCase(),
                 callingCode: callingCode,
                 phoneNumber: phone
               })
@@ -105,7 +122,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
               </Animatable.Text>
 
               <Animatable.Text animation="fadeInUp" style={styles.subtitle}>
-                Entrez votre numéro de téléphone pour recevoir un code de récupération
+                Entrez votre numéro et votre email pour recevoir un code de récupération par SMS et par mail
               </Animatable.Text>
 
               {/* Champ de numéro de téléphone avec Country Picker */}
@@ -128,6 +145,25 @@ const ForgotPasswordScreen = ({ navigation }) => {
                   value={phone}
                   onChangeText={setPhone}
                   maxLength={9}
+                />
+              </Animatable.View>
+
+              <Animatable.View animation="fadeInLeft" style={styles.inputContainer}>
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color="#aaa"
+                  style={styles.icon}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Adresse email"
+                  placeholderTextColor="#aaa"
+                  keyboardType="email-address"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoCorrect={false}
                 />
               </Animatable.View>
 
@@ -229,6 +265,9 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     marginTop: 4,
     includeFontPadding: false,
+  },
+  icon: {
+    marginRight: 10,
   },
   button: {
     backgroundColor: "#FF9800",

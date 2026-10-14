@@ -8,65 +8,85 @@ class RestaurantService {
   /**
    * Récupérer tous les restaurants depuis l'API
    */
+  /**
+   * Normalise une liste brute de restaurants (API ou catalogue de secours)
+   * vers la forme attendue par le dashboard.
+   */
+  normalizeRestaurants(data) {
+    if (!Array.isArray(data)) return []
+
+    return data.map(restaurant => {
+      // Fonction helper pour construire l'URL de l'image
+      const buildImageUrl = (imagePath) => {
+        if (!imagePath) return null
+
+        // Si c'est déjà une URL complète
+        if (typeof imagePath === 'string' && imagePath.startsWith('http')) {
+          return imagePath
+        }
+
+        // Sinon, construire l'URL complète (uploads_admin/xx ou xx)
+        return `${UPLOADS_BASE_URL}/${imagePath}`
+      }
+
+      return {
+        // Garder toutes les propriétés originales en premier
+        ...restaurant,
+        id: restaurant.id,
+        name: restaurant.name || restaurant.libelle,
+        libelle: restaurant.libelle,
+        adresse: restaurant.adresse || restaurant.address,
+        address: restaurant.address,
+        phone: restaurant.phone || restaurant.telephone,
+        telephone: restaurant.telephone,
+        statut: restaurant.statut || 'actif',
+        // Photo de couverture (comme dans l'app mobile)
+        cover: buildImageUrl(restaurant.cover),
+        cover_url: buildImageUrl(restaurant.cover),
+        cover_original: restaurant.cover, // Garder le chemin original pour les mises à jour
+        // Logo (utiliser le logo si présent, sinon fallback sur la photo de couverture)
+        logo: buildImageUrl(restaurant.logo) || buildImageUrl(restaurant.cover),
+        logo_url: buildImageUrl(restaurant.logo) || buildImageUrl(restaurant.cover),
+        logo_original: restaurant.logo, // Garder le chemin original
+        ville_id: restaurant.ville_id,
+        altitude: restaurant.altitude,
+        longitude: restaurant.longitude,
+        website: restaurant.website,
+      }
+    })
+  }
+
   async getAll() {
     try {
       const response = await api.get('/resto')
-      const data = response.data
-      
-      // Normaliser les données
-      if (Array.isArray(data)) {
-        return data.map(restaurant => {
-          // Fonction helper pour construire l'URL de l'image
-          const buildImageUrl = (imagePath) => {
-            if (!imagePath) return null
-            
-            // Si c'est déjà une URL complète
-            if (typeof imagePath === 'string' && imagePath.startsWith('http')) {
-              return imagePath
-            }
-            
-            // Si le chemin commence déjà par uploads_admin, ne pas le dupliquer
-            if (typeof imagePath === 'string' && imagePath.startsWith('uploads_admin/')) {
-              return `${UPLOADS_BASE_URL}/${imagePath}`
-            }
-            
-            // Sinon, construire l'URL complète
-            return `${UPLOADS_BASE_URL}/${imagePath}`
-          }
-
-          const normalizedRestaurant = {
-            // Garder toutes les propriétés originales en premier
-            ...restaurant,
-            id: restaurant.id,
-            name: restaurant.name || restaurant.libelle,
-            libelle: restaurant.libelle,
-            adresse: restaurant.adresse || restaurant.address,
-            address: restaurant.address,
-            phone: restaurant.phone || restaurant.telephone,
-            telephone: restaurant.telephone,
-            statut: restaurant.statut || 'actif',
-            // Photo de couverture (comme dans l'app mobile)
-            cover: buildImageUrl(restaurant.cover),
-            cover_url: buildImageUrl(restaurant.cover),
-            cover_original: restaurant.cover, // Garder le chemin original pour les mises à jour
-            // Logo (utiliser le logo si présent, sinon fallback sur la photo de couverture)
-            logo: buildImageUrl(restaurant.logo) || buildImageUrl(restaurant.cover),
-            logo_url: buildImageUrl(restaurant.logo) || buildImageUrl(restaurant.cover),
-            logo_original: restaurant.logo, // Garder le chemin original
-            ville_id: restaurant.ville_id,
-            altitude: restaurant.altitude,
-            longitude: restaurant.longitude,
-            website: restaurant.website,
-          }
-
-          return normalizedRestaurant
-        })
-      }
-      
-      return []
+      return this.normalizeRestaurants(response.data)
     } catch (error) {
       console.error('Erreur lors de la récupération des restaurants:', error)
       throw error
+    }
+  }
+
+  /**
+   * Catalogue de secours embarqué (public/restaurant-catalog.json).
+   *
+   * Utilisé lorsque l'API n'est pas joignable depuis le navigateur : le proxy
+   * historique (Cloud Function) est indisponible et l'API refuse les autres
+   * origines via CORS. Le fichier est servi par Firebase Hosting, donc même
+   * origine => aucun problème de CORS et aucune dépendance externe.
+   *
+   * Il est généré depuis l'API (voir scripts/) puis intégré au build.
+   */
+  async getFallbackCatalog() {
+    try {
+      const response = await fetch('/restaurant-catalog.json', { cache: 'no-cache' })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const payload = await response.json()
+      const list = Array.isArray(payload) ? payload : payload.restaurants
+      console.log('📦 Catalogue de secours chargé:', list?.length ?? 0, 'restaurants')
+      return this.normalizeRestaurants(list)
+    } catch (error) {
+      console.error('Catalogue de secours indisponible:', error.message)
+      return []
     }
   }
 

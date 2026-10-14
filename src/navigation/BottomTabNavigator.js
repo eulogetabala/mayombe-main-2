@@ -1,8 +1,9 @@
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View, Text, StyleSheet } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useCart } from '../context/CartContext';
 import HomeScreen from '../screens/HomeScreen';
 import CartScreen from '../screens/CartScreen';
 import ProfileScreen from '../screens/ProfileScreen';
@@ -262,6 +263,53 @@ function ProfileStack() {
   );
 }
 
+// Icône du panier avec badge dynamique (mise à jour via CartContext)
+const CartTabIcon = ({ color, size }) => {
+  const { cartItems } = useCart();
+
+  const count = (cartItems || []).reduce((total, item) => {
+    return total + (item?.quantity || 0);
+  }, 0);
+
+  return (
+    <View style={styles.iconWrapper}>
+      <Ionicons name="cart-outline" size={size} color={color} />
+      {count > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  iconWrapper: {
+    width: 26,
+    height: 26,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#51A905',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontFamily: 'Montserrat-Bold',
+    lineHeight: 14,
+  },
+});
+
 const BottomTabNavigator = () => {
   return (
     <Tab.Navigator
@@ -326,9 +374,7 @@ const BottomTabNavigator = () => {
         options={{
           headerShown: false,
           tabBarLabel: 'Panier',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cart-outline" size={size} color={color} />
-          ),
+          tabBarIcon: (props) => <CartTabIcon {...props} />,
         }}
       />
       <Tab.Screen 

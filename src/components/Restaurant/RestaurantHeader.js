@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AppImage from '../AppImage';
 
 export const RestaurantHeader = ({ restaurant, onBack }) => {
   const resolveImageUrl = (p) => {
@@ -8,14 +9,18 @@ export const RestaurantHeader = ({ restaurant, onBack }) => {
     if (typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://'))) {
       return { uri: p };
     }
+    if (typeof p === 'string' && p.startsWith('gs://')) {
+      return { uri: p };
+    }
     return { uri: `https://www.mayombe-app.com/uploads_admin/${p}` };
   };
 
   return (
     <View style={styles.header}>
-      <Image 
+      <AppImage 
         source={resolveImageUrl(restaurant.cover || restaurant.image)} 
         style={styles.coverImage} 
+        priority="high"
       />
     <View style={styles.headerOverlay} />
     <TouchableOpacity

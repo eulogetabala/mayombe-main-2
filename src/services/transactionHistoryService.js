@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from './secureTokenStorage';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 
@@ -82,7 +83,7 @@ const getLocalOrderAddress = async (orderId) => {
 // Récupérer l'historique des transactions depuis l'API
 export const getTransactionHistory = async () => {
   try {
-    const userToken = await AsyncStorage.getItem('userToken');
+    const userToken = await secureTokenStorage.getToken();
     
     if (!userToken) {
       throw new Error('Token utilisateur non trouvé');

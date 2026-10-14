@@ -1,6 +1,6 @@
 // Service de tracking temps réel optimisé
 import FirebaseTrackingService from './firebase';
-import { mapClientToFirebaseOrderId, saveOrderIdMapping } from './orderIdMappingService';
+// import { mapClientToFirebaseOrderId, saveOrderIdMapping } from './orderIdMappingService';
 
 class RealtimeTrackingService {
   constructor() {
@@ -26,10 +26,9 @@ class RealtimeTrackingService {
     this.currentOrderId = orderId;
     this.callbacks = callbacks;
     
-    // Mapper l'OrderId client vers Firebase et sauvegarder
-    const firebaseOrderId = mapClientToFirebaseOrderId(orderId);
-    console.log('🔗 MAPPING - RealtimeTrackingService: Client', orderId, '→ Firebase', firebaseOrderId);
-    saveOrderIdMapping();
+    // Utiliser directement l'OrderId (compatible avec le driver)
+    const firebaseOrderId = orderId;
+    console.log('🔗 RealtimeTrackingService: Démarrage tracking pour', orderId);
     
     // Configurer la fréquence
     if (options.updateFrequency) {

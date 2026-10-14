@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
@@ -24,8 +23,9 @@ import { translations } from '../../translations';
 import restaurantStatusService from '../../services/restaurantStatusService';
 import InteractiveRating from '../InteractiveRating';
 import StatusBadge from '../StatusBadge';
-import { resolveImageUrl } from '../../Utils/imageUtils';
+import { resolveImageUrl, prefetchImages } from '../../Utils/imageUtils';
 import ConnectionError from '../ConnectionError';
+import AppImage from '../AppImage';
 import { HOME_RESTAURANTS_ENRICH_MAX } from '../../constants/homeContentLimits';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
@@ -300,6 +300,11 @@ const RestaurantsSection = () => {
           .slice(0, 4);
 
         setRestaurants(topRatedRestaurants);
+
+        // Précharger les images des restaurants pour un affichage immédiat
+        prefetchImages(topRatedRestaurants.map(r => r.image).concat(
+          topRatedRestaurants.map(r => r.logo).filter(Boolean)
+        ));
         if (mappedRestaurants.length > 0 && cities[mappedRestaurants[0].ville_id]) {
           setUserCity(cities[mappedRestaurants[0].ville_id]);
         }
@@ -387,9 +392,10 @@ const RestaurantsSection = () => {
     >
       <View style={styles.imageContainer}>
         {/* Utiliser le logo comme bannière, avec fallback sur l'image de couverture */}
-        <Image 
+        <AppImage 
           source={restaurant.logo || restaurant.image} 
           style={styles.restaurantImage} 
+          priority="high"
         />
         <View style={styles.overlay} />
         

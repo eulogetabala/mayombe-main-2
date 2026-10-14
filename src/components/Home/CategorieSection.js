@@ -6,11 +6,11 @@ import {
   StyleSheet, 
   Dimensions, 
   ActivityIndicator,
-  Image,
   ScrollView,
   Platform
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AppImage from '../AppImage';
 import { useNavigation } from '@react-navigation/native';
 import { useLanguage } from '../../context/LanguageContext';
 import { translations } from '../../translations';
@@ -133,7 +133,7 @@ const CategorieSection = () => {
         >
           <View style={styles.iconBackground}>
             {imageUrl && !hasImageError ? (
-              <Image
+              <AppImage
                 source={{ uri: imageUrl }}
                 style={styles.categoryImage}
                 onError={() => handleImageError(category.id)}

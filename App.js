@@ -2,18 +2,19 @@ import React, { useEffect, useState } from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import secureTokenStorage from "./src/services/secureTokenStorage";
 import { View, StyleSheet, LogBox } from "react-native";
 import * as Font from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import * as Animatable from "react-native-animatable";
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import { CartProvider } from './src/context/CartContext';
 import Toast from 'react-native-toast-message';
 import { RefreshProvider } from './src/context/RefreshContext';
 import { LanguageProvider } from './src/context/LanguageContext';
 import { FavoritesProvider } from './src/context/FavoritesContext';
 import { RatingsProvider } from './src/context/RatingsContext';
-import { ProductPromosProvider } from './contexts/ProductPromosContext';
+import { ProductPromosProvider } from './src/context/ProductPromosContext';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import getStripePublishableKey from './src/config/stripe';
 import { initializeImageCache } from './src/config/ImageCacheConfig';
@@ -129,7 +130,7 @@ export default function App() {
   useEffect(() => {
     const prepareApp = async () => {
       try {
-        const userToken = await AsyncStorage.getItem('userToken');
+        const userToken = await secureTokenStorage.getToken();
         const isGuest = await AsyncStorage.getItem('isGuest');
         const hasCompletedOnboarding = await AsyncStorage.getItem('hasCompletedOnboarding');
         const hasSelectedLanguage = await AsyncStorage.getItem('selectedLanguage');

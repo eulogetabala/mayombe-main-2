@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Text, StyleSheet, View, Image, Dimensions, Platform } from 'react-native';
 import Onboarding from 'react-native-onboarding-swiper';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 
@@ -17,7 +18,7 @@ const OnboardingScreen = ({ navigation }) => {
   }, []);
 
   const checkSession = async () => {
-    const token = await AsyncStorage.getItem('userToken');
+    const token = await secureTokenStorage.getToken();
     if (token) {
       navigation.replace('MainApp');
     }
@@ -26,7 +27,7 @@ const OnboardingScreen = ({ navigation }) => {
   const handleFinish = async () => {
     try {
       await AsyncStorage.setItem('firstLaunch', 'false');
-      const token = await AsyncStorage.getItem('userToken');
+      const token = await secureTokenStorage.getToken();
       if (token) {
         navigation.replace('MainApp');
       } else {
@@ -41,7 +42,7 @@ const OnboardingScreen = ({ navigation }) => {
   const handleSkip = async () => {
     try {
       await AsyncStorage.setItem('firstLaunch', 'false');
-      const token = await AsyncStorage.getItem('userToken');
+      const token = await secureTokenStorage.getToken();
       if (token) {
         navigation.replace('MainApp');
       } else {

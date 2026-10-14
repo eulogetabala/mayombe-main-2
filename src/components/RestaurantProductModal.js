@@ -5,13 +5,13 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Image,
   ScrollView,
   Animated,
 } from 'react-native';
 import { Ionicons } from "@expo/vector-icons";
 import { useCart } from '../context/CartContext';
 import { applyMarkup, formatPriceWithMarkup, MARKUP_PERCENTAGE } from '../Utils/priceUtils';
+import AppImage from './AppImage';
 
 const RestaurantProductModal = ({
   visible,
@@ -23,13 +23,6 @@ const RestaurantProductModal = ({
   const { addToCart } = useCart();
   const [selectedComplements, setSelectedComplements] = useState([]);
   const [quantity, setQuantity] = useState(1);
-
-  useEffect(() => {
-    if (!visible) {
-      setSelectedComplements([]);
-      setQuantity(1);
-    }
-  }, [visible]);
 
   useEffect(() => {
     if (!visible) {
@@ -130,7 +123,7 @@ const RestaurantProductModal = ({
 
           <ScrollView showsVerticalScrollIndicator={false}>
             {product.image && (
-              <Image 
+              <AppImage 
                 source={product.image}
                 defaultSource={require('../../assets/images/2.jpg')}
                 style={styles.productImage}
@@ -185,10 +178,9 @@ const RestaurantProductModal = ({
                     >
                       <View style={styles.complementInfo}>
                         {complement.image && (
-                          <Image 
+                          <AppImage 
                             source={complement.image}
                             style={styles.complementImage}
-                            defaultSource={require('../../assets/images/2.jpg')}
                           />
                         )}
                         <Ionicons

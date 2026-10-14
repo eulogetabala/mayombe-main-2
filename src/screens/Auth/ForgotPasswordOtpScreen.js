@@ -21,7 +21,7 @@ const ForgotPasswordOtpScreen = ({ navigation, route }) => {
   const [loading, setLoading] = useState(false);
   
   const otpRefs = useRef([]);
-  const { phone, callingCode, phoneNumber } = route.params || {};
+  const { phone, email, callingCode, phoneNumber } = route.params || {};
 
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
@@ -59,7 +59,6 @@ const ForgotPasswordOtpScreen = ({ navigation, route }) => {
 
     try {
       const otpString = otp.join("");
-      console.log("Vérification OTP:", { phone, otp: otpString });
       
       // Pour l'instant, on passe directement à la réinitialisation
       // L'API ne semble pas avoir d'endpoint de vérification OTP séparé
@@ -94,7 +93,7 @@ const ForgotPasswordOtpScreen = ({ navigation, route }) => {
           text: "Renvoyer",
           onPress: () => {
             // Ici on pourrait appeler l'API pour renvoyer l'OTP
-            Alert.alert("Code renvoyé", "Un nouveau code a été envoyé à votre numéro.");
+            Alert.alert("Code renvoyé", "Un nouveau code a été envoyé par SMS et par mail.");
           }
         }
       ]
@@ -118,7 +117,7 @@ const ForgotPasswordOtpScreen = ({ navigation, route }) => {
             </Animatable.Text>
 
             <Animatable.Text animation="fadeInUp" style={styles.subtitle}>
-              Entrez le code de vérification envoyé à {phone}
+              Entrez le code de vérification envoyé par SMS à {phone} et par mail{email ? ` (${email})` : ''}.
             </Animatable.Text>
 
             {/* Code OTP */}

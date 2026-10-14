@@ -26,6 +26,7 @@ const RegisterScreen = ({ navigation }) => {
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -47,6 +48,11 @@ const RegisterScreen = ({ navigation }) => {
     }).start();
   }, [fadeAnim]);
 
+  const isValidEmail = (value) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(value);
+  };
+
   const handleRegister = async () => {
     // Validation du nom
     if (!name || name.trim().length < 2) {
@@ -67,6 +73,22 @@ const RegisterScreen = ({ navigation }) => {
     if (!isPhoneValid) {
       setAlertTitle("Numéro invalide");
       setAlertMessage("Veuillez entrer un numéro de téléphone valide.");
+      setAlertVisible(true);
+      return;
+    }
+
+    // Validation de l'email
+    if (!email || !email.trim()) {
+      setAlertTitle("Email requis");
+      setAlertMessage("Veuillez entrer votre adresse email.");
+      setAlertVisible(true);
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!isValidEmail(normalizedEmail)) {
+      setAlertTitle("Email invalide");
+      setAlertMessage("Veuillez entrer une adresse email valide.");
       setAlertVisible(true);
       return;
     }
@@ -114,19 +136,14 @@ const RegisterScreen = ({ navigation }) => {
           body: JSON.stringify({
             name: name.trim(),
             phone,
+            email: normalizedEmail,
             password,
           }),
         }
       );
   
       const data = await response.json();
-      console.log('📡 Réponse serveur complète:', { 
-        status: response.status, 
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        data: data 
-      });
-  
+
       if (response.ok) {
         setAlertTitle("Inscription réussie");
         setAlertMessage("Votre compte a été créé avec succès ! Vérifiez votre téléphone pour recevoir le code de vérification.");
@@ -329,6 +346,21 @@ const RegisterScreen = ({ navigation }) => {
               containerStyle={styles.phoneContainer}
               textContainerStyle={styles.phoneInput}
             />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <View style={styles.inputWithIcon}>
+              <Ionicons name="mail-outline" size={20} color="#4CAF50" style={styles.icon} />
+              <TextInput
+                style={styles.input}
+                placeholder="Adresse email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
           </View>
 
           <View style={styles.inputContainer}>

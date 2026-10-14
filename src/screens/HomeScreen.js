@@ -5,7 +5,6 @@ import {
   FlatList,
   StyleSheet,
   Dimensions,
-  Image,
   ScrollView,
   RefreshControl,
   Text,
@@ -18,7 +17,7 @@ import * as Animatable from "react-native-animatable";
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { BaseScreen } from '../components/common/BaseScreen';
 import { RestaurantSkeletonLoader } from '../components/common/SkeletonLoader';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { HomeSkeleton } from '../components/Skeletons';
 import ApiService from '../services/apiService';
 
@@ -30,6 +29,7 @@ import FindNearbyRestaurants from '../components/Home/FindNearbyRestaurants';
 import CommanderLivreur from '../components/Home/CommanderLivreur';
 import { Ionicons } from '@expo/vector-icons';
 import SharedCartScreen from './SharedCartScreen';
+import AppImage from '../components/AppImage';
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const BASE_URL = "https://www.mayombe-app.com/uploads_admin";
 
@@ -228,15 +228,10 @@ const HomeScreen = ({ navigation }) => {
               }}
               activeOpacity={item.link ? 0.8 : 1}
             >
-              <Image 
+              <AppImage 
                 source={item.image} 
                 style={styles.image}
                 resizeMode="cover"
-                onError={(error) => {
-                  console.log('❌ Erreur image:', item.title, error.nativeEvent);
-                  // En cas d'erreur, utiliser l'image de fallback
-                  item.image = fallbackImages[0];
-                }}
                 defaultSource={fallbackImages[0]}
               />
 

@@ -13,7 +13,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import { useLanguage } from '../context/LanguageContext';
 import { translations } from '../translations';
 
@@ -28,6 +28,7 @@ const EditProfileScreen = ({ navigation }) => {
     id: null,
     name: '',
     phone: '',
+    email: '',
   });
   
   // États pour gérer l'affichage des sections
@@ -37,6 +38,7 @@ const EditProfileScreen = ({ navigation }) => {
   // États pour les formulaires
   const [nameForm, setNameForm] = useState({
     name: '',
+    email: '',
   });
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
@@ -50,9 +52,8 @@ const EditProfileScreen = ({ navigation }) => {
 
   const loadUserData = async () => {
     try {
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       if (userToken) {
-        console.log('🔍 Chargement des données utilisateur...');
         const response = await fetch(`${API_BASE_URL}/user`, {
           headers: {
             'Authorization': `Bearer ${userToken}`,
@@ -62,16 +63,22 @@ const EditProfileScreen = ({ navigation }) => {
         });
         
         if (!response.ok) {
-          console.error('❌ Erreur API:', response.status);
           throw new Error(`Erreur HTTP: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('✅ Données utilisateur reçues:', data);
+        // Gérer les structures de réponse possibles
+        const user = data?.user || data?.data || data;
         
-        setUserData(data);
+        setUserData({
+          id: user?.id || data?.id || null,
+          name: user?.name || data?.name || '',
+          phone: user?.phone || data?.phone || '',
+          email: user?.email || data?.email || '',
+        });
         setNameForm({
-          name: data.name || '',
+          name: user?.name || data?.name || '',
+          email: user?.email || data?.email || '',
         });
       }
     } catch (error) {
@@ -81,28 +88,41 @@ const EditProfileScreen = ({ navigation }) => {
   };
 
   const handleUpdateName = async () => {
-    if (!nameForm.name.trim()) {
+    const normalizedName = nameForm.name.trim();
+    const normalizedEmail = nameForm.email.trim().toLowerCase();
+
+    if (!normalizedName) {
       Alert.alert('Erreur', 'Veuillez entrer un nom');
       return;
     }
 
-    if (nameForm.name.trim() === userData.name) {
+    if (!normalizedEmail) {
+      Alert.alert('Erreur', 'Veuillez entrer une adresse email');
+      return;
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      Alert.alert('Erreur', 'Veuillez entrer une adresse email valide');
+      return;
+    }
+
+    if (normalizedName === userData.name && normalizedEmail === (userData.email || '').toLowerCase()) {
       Alert.alert('Information', 'Aucune modification détectée');
       return;
     }
 
     setLoading(true);
     try {
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       if (!userToken) {
         Alert.alert('Erreur', 'Vous devez être connecté');
         return;
       }
 
-      const success = await updateUserName(nameForm.name.trim(), userToken);
+      const success = await updateUserProfile(normalizedName, normalizedEmail, userToken);
       if (success) {
         setShowNameSection(false);
-        setUserData(prev => ({ ...prev, name: nameForm.name }));
+        setUserData(prev => ({ ...prev, name: normalizedName, email: normalizedEmail }));
       }
     } catch (error) {
       console.error('❌ Erreur détaillée:', error);
@@ -140,7 +160,7 @@ const EditProfileScreen = ({ navigation }) => {
 
     setLoading(true);
     try {
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       if (!userToken) {
         Alert.alert('Erreur', 'Vous devez être connecté');
         return;
@@ -160,7 +180,12 @@ const EditProfileScreen = ({ navigation }) => {
   };
 
   // Fonction pour mettre à jour le nom de l'utilisateur
-  const updateUserName = async (newName, userToken) => {
+  const isValidEmail = (value) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(value);
+  };
+
+  const updateUserProfile = async (newName, newEmail, userToken) => {
     try {
       console.log('🔄 Mise à jour du nom...');
       
@@ -175,6 +200,7 @@ const EditProfileScreen = ({ navigation }) => {
           id: userData.id,
           phone: userData.phone,
           name: newName,
+          email: newEmail,
         }),
       });
 
@@ -182,22 +208,22 @@ const EditProfileScreen = ({ navigation }) => {
       console.log('📥 Réponse de l\'API update-user-profile:', data);
 
       if (response.ok) {
-        console.log('✅ Nom mis à jour avec succès');
-        Alert.alert('Succès', 'Votre nom a été mis à jour avec succès');
+        console.log('✅ Profil mis à jour avec succès');
+        Alert.alert('Succès', 'Votre profil a été mis à jour avec succès');
         return true;
       } else {
-        console.error('❌ Erreur lors de la mise à jour du nom:', data);
+        console.error('❌ Erreur lors de la mise à jour du profil:', data);
         if (data.errors) {
           const errorMessages = Object.values(data.errors).flat().join('\n');
           Alert.alert('Erreur', errorMessages);
         } else {
-          Alert.alert('Erreur', data.message || 'Impossible de mettre à jour le nom');
+          Alert.alert('Erreur', data.message || 'Impossible de mettre à jour le profil');
         }
         return false;
       }
     } catch (error) {
-      console.error('❌ Erreur lors de la mise à jour du nom:', error);
-      Alert.alert('Erreur', 'Une erreur est survenue lors de la mise à jour du nom');
+      console.error('❌ Erreur lors de la mise à jour du profil:', error);
+      Alert.alert('Erreur', 'Une erreur est survenue lors de la mise à jour du profil');
       return false;
     }
   };
@@ -294,7 +320,7 @@ const EditProfileScreen = ({ navigation }) => {
                 <View style={styles.optionTextContainer}>
                   <Text style={styles.optionTitle}>Modifier le nom</Text>
                   <Text style={styles.optionSubtitle}>
-                    Nom actuel: {userData.name || 'Non renseigné'}
+                    Nom: {userData.name || 'Non renseigné'} | Email: {userData.email || 'Non renseigné'}
                   </Text>
                 </View>
                 <Ionicons 
@@ -313,9 +339,22 @@ const EditProfileScreen = ({ navigation }) => {
                   <TextInput
                     style={styles.input}
                     value={nameForm.name}
-                    onChangeText={(value) => setNameForm({ name: value })}
+                    onChangeText={(value) => setNameForm(prev => ({ ...prev, name: value }))}
                     placeholder="Entrez votre nouveau nom"
                     placeholderTextColor="#999"
+                  />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Adresse email</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={nameForm.email}
+                    onChangeText={(value) => setNameForm(prev => ({ ...prev, email: value }))}
+                    placeholder="Entrez votre adresse email"
+                    placeholderTextColor="#999"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
                   />
                 </View>
                 <TouchableOpacity
@@ -326,7 +365,7 @@ const EditProfileScreen = ({ navigation }) => {
                   {loading ? (
                     <ActivityIndicator size="small" color="#FFF" />
                   ) : (
-                    <Text style={styles.saveButtonText}>Mettre à jour le nom</Text>
+                    <Text style={styles.saveButtonText}>Mettre à jour le profil</Text>
                   )}
                 </TouchableOpacity>
               </View>

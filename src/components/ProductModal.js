@@ -5,11 +5,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   Dimensions,
   Platform,
 } from 'react-native';
 import { FontAwesome5 } from "@expo/vector-icons";
+import AppImage from './AppImage';
 import { useCart } from '../context/CartContext';
 import { useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
@@ -105,14 +105,16 @@ const ProductModal = ({
           </TouchableOpacity>
 
           <View style={styles.contentContainer}>
-            <Image 
+            <AppImage 
               source={
                 product.image || 
                 (product.imageUrl ? { uri: product.imageUrl } : null) || 
                 require('../../assets/images/place.png')
               }
+              defaultSource={require('../../assets/images/place.png')}
               style={styles.productImage}
               onError={handleImageError}
+              priority="high"
             />
             
             <View style={styles.productInfo}>

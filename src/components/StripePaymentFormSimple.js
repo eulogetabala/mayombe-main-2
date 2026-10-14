@@ -10,7 +10,7 @@ import {
   TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import secureTokenStorage from '../services/secureTokenStorage';
 import { useStripe, CardField } from '@stripe/stripe-react-native';
 
 const { width } = Dimensions.get('window');
@@ -98,7 +98,7 @@ const StripePaymentFormSimple = ({
       console.log('🔍 PaymentMethod créé:', paymentMethod.id);
 
       // Récupérer le token d'authentification
-      const userToken = await AsyncStorage.getItem('userToken');
+      const userToken = await secureTokenStorage.getToken();
       
       if (!userToken) {
         Alert.alert('Erreur', 'Vous devez être connecté pour effectuer cette action');

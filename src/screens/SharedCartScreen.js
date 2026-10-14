@@ -101,7 +101,7 @@ const SharedCartScreen = () => {
                       {
                         text: 'OK',
                         onPress: () => {
-                          navigation.navigate('CartTab', { screen: 'CartMain' });
+                          navigation.navigate('CartTab', { screen: 'Cart' });
                         }
                       }
                     ]

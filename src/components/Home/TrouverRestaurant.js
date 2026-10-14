@@ -5,9 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   FlatList,
-  Image,
   ActivityIndicator,
-  ImageBackground,
 } from "react-native";
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -22,8 +20,9 @@ import { TrouverRestaurantSkeleton } from '../Skeletons';
 import restaurantStatusService from '../../services/restaurantStatusService';
 import InteractiveRating from '../InteractiveRating';
 import StatusBadge from '../StatusBadge';
-import { resolveImageUrl } from '../../Utils/imageUtils';
+import { resolveImageUrl, prefetchImages } from '../../Utils/imageUtils';
 import ConnectionError from '../ConnectionError';
+import AppImage from '../AppImage';
 
 const API_BASE_URL = "https://www.api-mayombe.mayombe-app.com/public/api";
 const BASE_URL = "https://www.api-mayombe.mayombe-app.com/public";
@@ -296,6 +295,13 @@ const TrouverRestaurant = ({ navigation }) => {
           ...prevRestaurants,
           [selectedCity]: sortedRestaurants
         }));
+
+        // Précharger les images des restaurants pour un affichage immédiat
+        prefetchImages(
+          sortedRestaurants.map(r => r.image).concat(
+            sortedRestaurants.map(r => r.logo).filter(Boolean)
+          )
+        );
       }
     } catch (error) {
       console.error('Erreur lors du chargement des restaurants:', error);
@@ -361,7 +367,7 @@ const TrouverRestaurant = ({ navigation }) => {
       activeOpacity={0.7}
     >
       <View style={styles.cardHeader}>
-        <Image source={item.image} style={styles.image} />
+        <AppImage source={item.image} style={styles.image} priority="high" />
         <View style={styles.overlay} />
         <TouchableOpacity
           style={styles.favoriteButton}
@@ -378,7 +384,7 @@ const TrouverRestaurant = ({ navigation }) => {
         {/* Logo overlay */}
         {item.logo && (
           <View style={styles.logoContainer}>
-            <Image source={item.logo} style={styles.logoImage} />
+            <AppImage source={item.logo} style={styles.logoImage} />
           </View>
         )}
       </View>

@@ -12,6 +12,9 @@ import {
 } from 'lucide-react'
 import restaurantService from '../services/restaurantService'
 import firebaseService from '../services/firebaseService'
+import imageHostService, { isCloudinaryConfigured } from '../services/imageHostService'
+import coverFallback from '../assets/images/mayombe_1.jpg'
+import logoFallback from '../assets/images/logo_mayombe.jpg'
 
 const Restaurants = () => {
   const [restaurants, setRestaurants] = useState([])
@@ -19,6 +22,7 @@ const Restaurants = () => {
   const [editingRestaurant, setEditingRestaurant] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [dataSource, setDataSource] = useState('api')
   const [formData, setFormData] = useState({
     name: '',
     adresse: '',
@@ -31,23 +35,43 @@ const Restaurants = () => {
   })
 
   useEffect(() => {
-    // Charger les restaurants depuis l'API externe et fusionner avec les images Firebase
+    // Charger les restaurants : API en priorité, catalogue embarqué en secours,
+    // puis fusion avec les images Firebase (source temps réel).
     const loadRestaurants = async () => {
       try {
         setLoading(true)
-        
-        const [apiRestaurants, firebaseImages] = await Promise.all([
-          restaurantService.getAll(),
-          firebaseService.getAllRestaurantImages(),
-        ])
-        console.log('📡 Restaurants chargés depuis l\'API:', apiRestaurants.length)
-        console.log('📡 [DEBUG] Premier restaurant:', apiRestaurants[0])
+
+        // 1. Images Firebase (temps réel) — toujours disponible
+        let firebaseImages = {}
+        try {
+          firebaseImages = await firebaseService.getAllRestaurantImages()
+        } catch (firebaseError) {
+          console.warn('⚠️ Images Firebase indisponibles:', firebaseError.message)
+        }
         console.log('🖼️ Images chargées depuis Firebase:', Object.keys(firebaseImages).length, 'restaurants')
-        
-        // 3. Fusionner les données : priorité aux images Firebase
-        const mergedRestaurants = apiRestaurants.map(restaurant => {
+
+        // 2. Source principale : l'API (données live)
+        let baseRestaurants = []
+        let source = 'api'
+        try {
+          baseRestaurants = await restaurantService.getAll()
+        } catch (apiError) {
+          console.warn('⚠️ API indisponible:', apiError.message)
+          baseRestaurants = []
+        }
+
+        // 3. Repli : catalogue embarqué si l'API ne répond pas
+        if (!Array.isArray(baseRestaurants) || baseRestaurants.length === 0) {
+          baseRestaurants = await restaurantService.getFallbackCatalog()
+          source = baseRestaurants.length > 0 ? 'catalog' : 'none'
+        }
+
+        console.log(`📡 Restaurants chargés (source: ${source}):`, baseRestaurants.length)
+
+        // 4. Fusionner les données : priorité aux images Firebase
+        const mergedRestaurants = baseRestaurants.map(restaurant => {
           const firebaseImage = firebaseImages[restaurant.id] || firebaseImages[restaurant.id.toString()]
-          
+
           if (firebaseImage) {
             // Si on a des images Firebase, les utiliser en priorité
             return {
@@ -61,38 +85,16 @@ const Restaurants = () => {
               logo_original: firebaseImage.logo || restaurant.logo_original
             }
           }
-          
+
           // Sinon, utiliser les images de l'API
           return restaurant
         })
-        
-        console.log('✅ Restaurants fusionnés avec images Firebase')
+
         setRestaurants(mergedRestaurants)
+        setDataSource(source)
       } catch (error) {
         console.error('❌ Erreur lors du chargement des restaurants:', error)
-        console.error('Détails:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          config: error.config
-        })
-        
-        // Message d'erreur plus détaillé
-        let errorMessage = 'Erreur lors du chargement des restaurants\n\n'
-        if (error.response) {
-          errorMessage += `Status: ${error.response.status}\n`
-          errorMessage += `URL: ${error.config?.url}\n`
-          if (error.response.data) {
-            errorMessage += `Détails: ${JSON.stringify(error.response.data)}\n`
-          }
-        } else if (error.request) {
-          errorMessage += `Erreur réseau: Impossible de contacter le serveur\n`
-          errorMessage += `Vérifiez que la fonction proxy est déployée\n`
-        } else {
-          errorMessage += `Erreur: ${error.message}\n`
-        }
-        
-        alert(errorMessage)
+        setDataSource('none')
       } finally {
         setLoading(false)
       }
@@ -163,7 +165,7 @@ const Restaurants = () => {
             setUploading(false)
             alert("L'opération prend trop de temps. Veuillez vérifier votre connexion.")
         }
-    }, 30000) // 30 secondes max
+    }, 60000) // 60 secondes max (upload d'image inclus)
 
     try {
       if (editingRestaurant) {
@@ -178,28 +180,45 @@ const Restaurants = () => {
           const uploadPromises = []
           
           // Fonction helper pour ajouter un timeout à une promesse
-          const withTimeout = (promise, ms = 15000) => {
+          const withTimeout = (promise, ms = 45000) => {
               return Promise.race([
                   promise,
                   new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout upload image")), ms))
               ])
           }
 
+          // Cas 1 : une URL a été fournie directement (aucun upload requis).
+          // Indispensable tant que Firebase Storage est indisponible.
+          if (typeof formData.cover === 'string' && formData.cover.trim()) {
+            firebaseCoverUrl = formData.cover.trim()
+            console.log('🔗 Cover fourni par URL:', firebaseCoverUrl)
+          }
+          if (typeof formData.logo === 'string' && formData.logo.trim()) {
+            firebaseLogoUrl = formData.logo.trim()
+            console.log('🔗 Logo fourni par URL:', firebaseLogoUrl)
+          }
+
           if (formData.cover instanceof File) {
-            console.log('☁️ Upload cover vers Firebase Storage...', {
+            console.log('☁️ Upload cover...', {
                 name: formData.cover.name,
                 type: formData.cover.type,
                 size: formData.cover.size
             })
             uploadPromises.push(
-              withTimeout(firebaseService.uploadImage(formData.cover, `restaurants/${editingRestaurant.id}/cover_${Date.now()}`))
+              withTimeout(imageHostService.upload(formData.cover, {
+                folder: 'mayombe/restaurants',
+                firebasePath: `restaurants/${editingRestaurant.id}/cover_${Date.now()}`
+              }))
                 .then(url => { firebaseCoverUrl = url })
             )
           }
           if (formData.logo instanceof File) {
-            console.log('☁️ Upload logo vers Firebase Storage...')
+            console.log('☁️ Upload logo...')
             uploadPromises.push(
-              withTimeout(firebaseService.uploadImage(formData.logo, `restaurants/${editingRestaurant.id}/logo_${Date.now()}`))
+              withTimeout(imageHostService.upload(formData.logo, {
+                folder: 'mayombe/restaurants',
+                firebasePath: `restaurants/${editingRestaurant.id}/logo_${Date.now()}`
+              }))
                 .then(url => { firebaseLogoUrl = url })
             )
           }
@@ -208,40 +227,44 @@ const Restaurants = () => {
               await Promise.all(uploadPromises)
           }
         } catch (storageErr) {
-          console.error('❌ Erreur Firebase Storage critique:', storageErr)
+          console.error('❌ Erreur upload image:', storageErr)
           
-          // Message d'erreur plus détaillé
-          let errorMessage = `L'upload des images a échoué.\n\n`
-          errorMessage += `Erreur: ${storageErr.message}\n\n`
-          
-          // Conseils selon le type d'erreur
-          if (storageErr.message.includes('plan Blaze') || storageErr.message.includes('forfait supérieur') || storageErr.message.includes('billing')) {
-            errorMessage += `💡 ACTION REQUISE: Passer au plan Blaze\n\n`
-            errorMessage += `1. Allez sur https://console.firebase.google.com/\n`
-            errorMessage += `2. Sélectionnez votre projet mayombe-ba11b\n`
-            errorMessage += `3. Cliquez sur "Paramètres du projet" (icône ⚙️)\n`
-            errorMessage += `4. Allez dans "Utilisation et facturation"\n`
-            errorMessage += `5. Cliquez sur "Passer au plan Blaze"\n`
-            errorMessage += `6. Ajoutez une carte de crédit (requis mais gratuit dans les limites)\n\n`
-            errorMessage += `📊 Quotas gratuits Blaze:\n`
-            errorMessage += `   - 5 GB de stockage gratuit\n`
-            errorMessage += `   - 1 GB/jour de téléchargement gratuit\n`
-            errorMessage += `   - 0€ si vous restez dans ces limites\n\n`
-          } else if (storageErr.message.includes('Permission') || storageErr.message.includes('unauthorized')) {
-            errorMessage += `💡 Solution: Vérifiez les règles Firebase Storage.\n`
-            errorMessage += `   Firebase Console > Storage > Rules > allow read, write: if true;\n\n`
-          } else if (storageErr.message.includes('Timeout')) {
-            errorMessage += `💡 Solution: Vérifiez votre connexion internet et réessayez.\n\n`
-          } else {
-            errorMessage += `💡 Vérifiez:\n`
-            errorMessage += `   - Que Firebase Storage est activé (Storage > Get Started)\n`
-            errorMessage += `   - Que vous êtes sur le plan Blaze (nécessaire pour Storage)\n`
-            errorMessage += `   - Les règles de sécurité (Storage > Rules)\n`
-            errorMessage += `   - Votre connexion internet\n\n`
+          // Message d'erreur précis : la cause réelle est souvent un Storage
+          // indisponible (quota dépassé / facturation), et non des règles.
+          const msg = storageErr?.message || ''
+          let errorMessage = "L'envoi du fichier a échoué.\n\n"
+          errorMessage += `Erreur: ${msg}\n\n`
+
+          const storageUnavailable =
+            /quota/i.test(msg) ||
+            /exceeded/i.test(msg) ||
+            /billing/i.test(msg) ||
+            /delinquent/i.test(msg) ||
+            /plan Blaze/i.test(msg) ||
+            /forfait supérieur/i.test(msg)
+
+          if (storageUnavailable) {
+            errorMessage += `➡️ Firebase Storage est INDISPONIBLE (quota dépassé ou facturation en suspens).\n`
+            errorMessage += `   Ce n'est pas un problème de règles ni de connexion : les modifier ne servira à rien.\n\n`
+          } else if (/timeout/i.test(msg)) {
+            errorMessage += `➡️ Délai dépassé. Vérifiez votre connexion internet et réessayez.\n\n`
           }
-          
-          errorMessage += `Les autres modifications (nom, adresse, etc.) seront enregistrées.`
-          
+
+          if (!isCloudinaryConfigured) {
+            errorMessage += `✅ SOLUTION IMMÉDIATE, sans rien installer :\n`
+            errorMessage += `   Collez une URL d'image (https://...) dans le champ prévu plus haut.\n`
+            errorMessage += `   Elle est enregistrée directement, sans aucun upload.\n\n`
+            errorMessage += `✅ POUR ENVOYER DES FICHIERS : activez Cloudinary (gratuit, sans carte bancaire)\n`
+            errorMessage += `   1. Créez un compte sur https://cloudinary.com\n`
+            errorMessage += `   2. Settings > Upload > Add upload preset > Signing mode = Unsigned\n`
+            errorMessage += `   3. Renseignez VITE_CLOUDINARY_CLOUD_NAME et VITE_CLOUDINARY_UPLOAD_PRESET, puis redéployez\n`
+          } else {
+            errorMessage += `➡️ Cloudinary est configuré mais l'envoi a échoué.\n`
+            errorMessage += `   Vérifiez le nom du preset et que son "Signing mode" est bien "Unsigned".\n`
+          }
+
+          errorMessage += `\n\nLes autres modifications (nom, adresse, statut) restent enregistrées.`
+
           alert(errorMessage)
         }
 
@@ -291,8 +314,11 @@ const Restaurants = () => {
           const coverToSync = firebaseCoverUrl || editingRestaurant.cover_original
           const logoToSync = firebaseLogoUrl || editingRestaurant.logo_original
 
-          await firebaseService.syncRestaurantImages(editingRestaurant.id, coverToSync, logoToSync)
+          // Créer/mettre à jour le noeud de statut EN PREMIER : la règle Firebase
+          // de restaurant_status exige la présence de "isOpen" à l'écriture.
+          // Sinon l'écriture de cover/logo échouerait pour un restaurant sans noeud.
           await firebaseService.updateRestaurantStatus(editingRestaurant.id, formData.statut)
+          await firebaseService.syncRestaurantImages(editingRestaurant.id, coverToSync, logoToSync)
           
           // Mise à jour locale avec timestamp pour forcer le re-render
           const updateTimestamp = Date.now()
@@ -344,8 +370,15 @@ const Restaurants = () => {
 
       // Rechargement avec fusion des images Firebase
       try {
-        // restaurantService.getAll() retourne déjà un tableau normalisé
-        const apiRestaurants = await restaurantService.getAll()
+        // Rechargement résilient : API en priorité, catalogue embarqué en secours
+        let apiRestaurants = []
+        try {
+          apiRestaurants = await restaurantService.getAll()
+        } catch (apiErr) {
+          console.warn('⚠️ API indisponible au rechargement, catalogue de secours utilisé')
+          apiRestaurants = await restaurantService.getFallbackCatalog()
+          setDataSource(apiRestaurants.length > 0 ? 'catalog' : 'none')
+        }
         const firebaseImages = await firebaseService.getAllRestaurantImages()
         
         const mergedRestaurants = apiRestaurants.map(restaurant => {
@@ -370,8 +403,6 @@ const Restaurants = () => {
         console.log('✅ Restaurants rechargés avec nouvelles images Firebase')
       } catch (err) {
         console.error("Erreur rechargement:", err)
-        // Fallback simple si la fusion échoue
-        restaurantService.getAll().then(setRestaurants).catch(e => console.log("Reload fallback error", e))
       }
 
     } catch (error) {
@@ -435,6 +466,15 @@ const Restaurants = () => {
         <p className="text-gray-600 mt-1">Gérez vos restaurants, horaires et images</p>
       </div>
 
+      {dataSource === 'none' && (
+        <div className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold">❌ Aucune donnée disponible</p>
+          <p className="mt-1">
+            Ni l'API ni le catalogue de secours n'ont pu être chargés.
+          </p>
+        </div>
+      )}
+
       {/* Restaurants List */}
       {restaurants.length === 0 ? (
         <div className="card text-center py-12">
@@ -449,7 +489,7 @@ const Restaurants = () => {
             <div className="relative h-48 mb-4 rounded-lg overflow-hidden bg-gradient-to-br from-gray-200 to-gray-300 shadow-inner">
               <img 
                 src={(() => {
-                  const imageUrl = restaurant.cover || restaurant.cover_url || '/src/assets/images/mayombe_1.jpg'
+                  const imageUrl = restaurant.cover || restaurant.cover_url || coverFallback
                   // Ajouter un paramètre de cache-busting si c'est une URL Firebase
                   if (imageUrl.includes('firebasestorage.googleapis.com')) {
                     const timestamp = restaurant._lastUpdate || Date.now()
@@ -462,9 +502,11 @@ const Restaurants = () => {
                 key={`cover-${restaurant.id}-${restaurant.cover || restaurant.cover_url || ''}-${restaurant._lastUpdate || ''}`}
                 onError={(e) => {
                   // Si l'image ne charge pas, utiliser une image par défaut
-                  if (!e.target.src.includes('mayombe_1.jpg')) {
-                    e.target.src = '/src/assets/images/mayombe_1.jpg'
-                  }
+                  // (flag pour éviter toute boucle si le fallback échoue aussi)
+                  const img = e.target
+                  if (img.dataset.fallbackApplied) return
+                  img.dataset.fallbackApplied = '1'
+                  img.src = coverFallback
                 }}
               />
               <div className="absolute top-4 right-4">
@@ -483,7 +525,7 @@ const Restaurants = () => {
               <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200 bg-white flex items-center justify-center">
                 <img 
                   src={(() => {
-                    const imageUrl = restaurant.logo || restaurant.logo_url || '/src/assets/images/logo_mayombe.jpg'
+                    const imageUrl = restaurant.logo || restaurant.logo_url || logoFallback
                     // Ajouter un paramètre de cache-busting si c'est une URL Firebase
                     if (imageUrl.includes('firebasestorage.googleapis.com')) {
                       const timestamp = restaurant._lastUpdate || Date.now()
@@ -496,9 +538,11 @@ const Restaurants = () => {
                   key={`logo-${restaurant.id}-${restaurant.logo || restaurant.logo_url || ''}-${restaurant._lastUpdate || ''}`}
                   onError={(e) => {
                     // Si le logo ne charge pas, utiliser le logo par défaut
-                    if (!e.target.src.includes('logo_mayombe.jpg')) {
-                      e.target.src = '/src/assets/images/logo_mayombe.jpg'
-                    }
+                    // (flag pour éviter toute boucle si le fallback échoue aussi)
+                    const img = e.target
+                    if (img.dataset.fallbackApplied) return
+                    img.dataset.fallbackApplied = '1'
+                    img.src = logoFallback
                   }}
                 />
               </div>
@@ -652,30 +696,33 @@ const Restaurants = () => {
                     />
                   </label>
                 )}
-                {!formData.coverPreview && (
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      className="input-field"
-                      accept="image/*"
-                      onChange={handleCoverChange}
-                    />
-                    <div className="text-center text-sm text-gray-500">- OU -</div>
-                    <input
-                      type="text"
-                      placeholder="Coller une URL d'image (https://...)"
-                      className="input-field"
-                      value={typeof formData.cover === 'string' ? formData.cover : ''}
-                      onChange={(e) => {
-                          setFormData({
-                              ...formData,
-                              cover: e.target.value,
-                              coverPreview: e.target.value
-                          })
-                      }}
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <input
+                    type="file"
+                    className="input-field"
+                    accept="image/*"
+                    onChange={handleCoverChange}
+                  />
+                  <div className="text-center text-sm text-gray-500">- OU -</div>
+                  <input
+                    type="text"
+                    placeholder="Coller une URL d'image (https://...)"
+                    className="input-field"
+                    value={typeof formData.cover === 'string' ? formData.cover : ''}
+                    onChange={(e) => {
+                        setFormData({
+                            ...formData,
+                            cover: e.target.value,
+                            coverPreview: e.target.value || null
+                        })
+                    }}
+                  />
+                  <p className="text-xs text-gray-500">
+                    {isCloudinaryConfigured
+                      ? "Un fichier choisi est envoyé sur Cloudinary, puis l'URL est enregistrée dans Firebase."
+                      : "L'URL est enregistrée immédiatement. L'envoi de fichier nécessite Cloudinary (non configuré)."}
+                  </p>
+                </div>
               </div>
 
               {/* Logo */}
@@ -701,7 +748,7 @@ const Restaurants = () => {
                       <p className="text-sm text-gray-600">Logo actuel</p>
                       <button
                         type="button"
-                        onClick={() => document.getElementById('logo-input').click()}
+                        onClick={() => document.getElementById('logo-file-input').click()}
                         className="mt-2 text-sm text-primary-600 hover:text-primary-700"
                       >
                         Changer le logo
@@ -726,30 +773,29 @@ const Restaurants = () => {
                     />
                   </label>
                 )}
-                {!formData.logoPreview && (
-                  <div className="space-y-2">
-                    <input
-                      type="file"
-                      className="input-field"
-                      accept="image/*"
-                      onChange={handleLogoChange}
-                    />
-                    <div className="text-center text-sm text-gray-500">- OU -</div>
-                    <input
-                      type="text"
-                      placeholder="Coller une URL de logo (https://...)"
-                      className="input-field"
-                      value={typeof formData.logo === 'string' ? formData.logo : ''}
-                      onChange={(e) => {
-                          setFormData({
-                              ...formData,
-                              logo: e.target.value,
-                              logoPreview: e.target.value
-                          })
-                      }}
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <input
+                    id="logo-file-input"
+                    type="file"
+                    className="input-field"
+                    accept="image/*"
+                    onChange={handleLogoChange}
+                  />
+                  <div className="text-center text-sm text-gray-500">- OU -</div>
+                  <input
+                    type="text"
+                    placeholder="Coller une URL de logo (https://...)"
+                    className="input-field"
+                    value={typeof formData.logo === 'string' ? formData.logo : ''}
+                    onChange={(e) => {
+                        setFormData({
+                            ...formData,
+                            logo: e.target.value,
+                            logoPreview: e.target.value || null
+                        })
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Actions */}
