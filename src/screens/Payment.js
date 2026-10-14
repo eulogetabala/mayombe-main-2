@@ -3,9 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useCart } from '../context/CartContext';
 import { useLanguage } from '../context/LanguageContext';
 import translations from '../translations';
+import {
+  invokePaymentSuccess,
+  invokePaymentCancel,
+  hasPaymentSuccessHandler,
+} from '../navigation/paymentFlowBridge';
 
 const Payment = ({ navigation, route }) => {
-  const { orderDetails, onPaymentSuccess, onPaymentCancel } = route.params;
+  const { orderDetails } = route.params || {};
   const { completeOrder, clearCart } = useCart();
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
@@ -22,8 +27,11 @@ const Payment = ({ navigation, route }) => {
       console.log('💳 Payment - Paiement réussi, appel du callback...');
       
       // Appeler le callback de succès qui va gérer le vidage du panier
-      if (onPaymentSuccess) {
-        await onPaymentSuccess(orderDetails);
+      if (hasPaymentSuccessHandler()) {
+        const r = invokePaymentSuccess(orderDetails);
+        if (r != null && typeof r.then === 'function') {
+          await r;
+        }
       } else {
         // Fallback si pas de callback
         await completeOrder(true);
@@ -43,9 +51,7 @@ const Payment = ({ navigation, route }) => {
 
   const handleCancel = () => {
     console.log('💳 Payment - Annulation du paiement...');
-    if (onPaymentCancel) {
-      onPaymentCancel();
-    }
+    invokePaymentCancel();
     navigation.goBack();
   };
 

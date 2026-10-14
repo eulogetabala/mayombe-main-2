@@ -37,7 +37,7 @@ const scaleFont = (size) => Math.round(size * (width / 375));
 const PaymentScreen = ({ route, navigation }) => {
   const { currentLanguage } = useLanguage();
   const t = translations[currentLanguage];
-  const { orderDetails, onPaymentSuccess } = route.params;
+  const { orderDetails } = route.params || {};
   const [selectedMethod, setSelectedMethod] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [address, setAddress] = useState('');
@@ -318,7 +318,6 @@ const PaymentScreen = ({ route, navigation }) => {
           address: address,
           paymentMethod: selectedMethod, // 'cash'
         },
-        onPaymentSuccess: onPaymentSuccess,
       });
     } else {
       console.log('💳 Autre méthode de paiement, redirection vers ProcessPayment...');
@@ -333,7 +332,6 @@ const PaymentScreen = ({ route, navigation }) => {
           address: address,
           paymentMethod: selectedMethod, // Ajouter le paymentMethod sélectionné
         },
-        onPaymentSuccess: onPaymentSuccess,
       });
     }
   };

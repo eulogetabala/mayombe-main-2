@@ -24,6 +24,7 @@ import CountryPicker, {
 import CustomHeader from '../components/common/CustomHeader';
 import { getDistanceToRestaurant, formatDistance } from '../services/LocationService';
 import geocodingService from '../services/geocodingService';
+import { setPaymentFlowHandlers } from '../navigation/paymentFlowBridge';
 
 const { width, height } = Dimensions.get('window');
 const scaleFont = (size) => Math.round(size * (width / 375));
@@ -201,6 +202,13 @@ const CommanderLivreurContent = () => {
       console.log('📥 Réponse booking:', data);
 
       if (response.ok && (data.success || data.message?.includes('succès'))) {
+        setPaymentFlowHandlers({
+          onSuccess: () => {
+            Alert.alert('Succès', 'Votre livraison a été enregistrée.');
+            navigation.navigate('Home');
+          },
+          onCancel: () => {},
+        });
         navigation.navigate('PaymentLivreur', {
           orderDetails: {
             orderId: data.order_id || data.id,
@@ -220,10 +228,6 @@ const CommanderLivreurContent = () => {
               }
             ]
           },
-          onPaymentSuccess: () => {
-            Alert.alert('Succès', 'Votre livraison a été enregistrée.');
-            navigation.navigate('Home');
-          }
         });
       } else {
         Alert.alert('Erreur', data.message || 'Impossible de créer la commande');

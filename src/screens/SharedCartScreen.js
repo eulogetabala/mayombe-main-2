@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as Animatable from 'react-native-animatable';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setPaymentFlowHandlers } from '../navigation/paymentFlowBridge';
 import { useCart } from '../context/CartContext';
 import sharedCartService from '../services/sharedCartService';
 import { ref, set, get } from 'firebase/database';
@@ -205,8 +206,24 @@ const SharedCartScreen = () => {
       };
 
       console.log('💳 SharedCart - Redirection vers la page de paiement avec:', orderDetails);
-      
-      // Rediriger directement vers la page de paiement
+
+      setPaymentFlowHandlers({
+        onSuccess: async (updatedOrderDetails) => {
+          try {
+            await AsyncStorage.removeItem('cart');
+            setCartItems([]);
+            navigation.navigate('OrderSuccess', {
+              orderDetails: updatedOrderDetails || orderDetails,
+              showTracking: updatedOrderDetails?.payment_method === 'cash',
+            });
+          } catch (e) {
+            console.error('SharedCart — après paiement:', e);
+          }
+        },
+        onCancel: () => {
+          console.log('💳 Paiement annulé (panier partagé)');
+        },
+      });
       navigation.navigate('PaymentScreen', { orderDetails });
       
     } catch (error) {
